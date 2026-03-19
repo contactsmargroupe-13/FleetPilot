@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'models/tour.dart';
 
-class ManagerBillingPage extends StatefulWidget {
+class ManagerBillingPage extends ConsumerStatefulWidget {
   const ManagerBillingPage({super.key});
 
   @override
-  State<ManagerBillingPage> createState() => _ManagerBillingPageState();
+  ConsumerState<ManagerBillingPage> createState() => _ManagerBillingPageState();
 }
 
-class _ManagerBillingPageState extends State<ManagerBillingPage> {
+class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
   DateTime _selectedMonth =
       DateTime(DateTime.now().year, DateTime.now().month, 1);
 
@@ -26,14 +27,14 @@ class _ManagerBillingPageState extends State<ManagerBillingPage> {
   Widget build(BuildContext context) {
     final Map<String, _ClientBilling> billing = {};
 
-    for (final Tour tour in AppStore.tours) {
+    for (final Tour tour in ref.read(appStateProvider).tours) {
       if (tour.date.year != _selectedMonth.year ||
           tour.date.month != _selectedMonth.month) {
         continue;
       }
 
       final company = tour.companyName ?? '—';
-      final pricing = AppStore.getClientPricing(company);
+      final pricing = ref.read(appStateProvider).getClientPricing(company);
 
       billing.putIfAbsent(company, () => _ClientBilling(companyName: company));
       final client = billing[company]!;
@@ -158,7 +159,7 @@ class _ManagerBillingPageState extends State<ManagerBillingPage> {
   }
 
   Widget _clientCard(_ClientBilling c) {
-    final pricing = AppStore.getClientPricing(c.companyName);
+    final pricing = ref.read(appStateProvider).getClientPricing(c.companyName);
     final breakEven = pricing?.breakEvenAmount;
     final isAboveBreakEven = breakEven != null && c.total >= breakEven;
     final isBelowBreakEven = breakEven != null && c.total < breakEven;

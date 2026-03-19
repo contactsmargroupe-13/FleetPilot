@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/company_settings.dart';
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import 'driver_home.dart';
 import 'manager_dashboard.dart';
@@ -173,14 +174,14 @@ class _RoleCard extends StatelessWidget {
 
 // ── Page candidature publique ─────────────────────────────────────────────────
 
-class _PublicCandidatePage extends StatefulWidget {
+class _PublicCandidatePage extends ConsumerStatefulWidget {
   const _PublicCandidatePage();
 
   @override
-  State<_PublicCandidatePage> createState() => _PublicCandidatePageState();
+  ConsumerState<_PublicCandidatePage> createState() => _PublicCandidatePageState();
 }
 
-class _PublicCandidatePageState extends State<_PublicCandidatePage> {
+class _PublicCandidatePageState extends ConsumerState<_PublicCandidatePage> {
   final _formKey = GlobalKey<FormState>();
 
   final _firstNameCtrl = TextEditingController();
@@ -242,7 +243,7 @@ class _PublicCandidatePageState extends State<_PublicCandidatePage> {
       note: note.isEmpty ? null : note,
     );
 
-    AppStore.addCandidate(candidate);
+    ref.read(appStateProvider).addCandidate(candidate);
 
     showDialog(
       context: context,

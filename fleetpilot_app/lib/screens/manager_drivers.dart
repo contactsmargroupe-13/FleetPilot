@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'models/driver.dart';
 import 'models/driver_document.dart';
 
-class ManagerDriversPage extends StatefulWidget {
+class ManagerDriversPage extends ConsumerStatefulWidget {
   const ManagerDriversPage({super.key});
 
   @override
-  State<ManagerDriversPage> createState() => _ManagerDriversPageState();
+  ConsumerState<ManagerDriversPage> createState() => _ManagerDriversPageState();
 }
 
-class _ManagerDriversPageState extends State<ManagerDriversPage> {
+class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
 
   // ── Navigation vers page chauffeur ───────────────────────────────────────
 
@@ -26,10 +27,10 @@ class _ManagerDriversPageState extends State<ManagerDriversPage> {
 
     setState(() {
       if (existing == null) {
-        AppStore.addDriver(result);
+        ref.read(appStateProvider).addDriver(result);
         _msg('Chauffeur ajouté');
       } else {
-        AppStore.updateDriver(existing.name, result);
+        ref.read(appStateProvider).updateDriver(existing.name, result);
         _msg('Chauffeur modifié');
       }
     });
@@ -48,7 +49,7 @@ class _ManagerDriversPageState extends State<ManagerDriversPage> {
           ),
           FilledButton(
             onPressed: () {
-              setState(() => AppStore.deleteDriver(driver.name));
+              setState(() => ref.read(appStateProvider).deleteDriver(driver.name));
               Navigator.pop(context);
               _msg('Chauffeur supprimé');
             },
@@ -71,7 +72,7 @@ class _ManagerDriversPageState extends State<ManagerDriversPage> {
   }
 
   Widget? _alertBadge(String driverName) {
-    final docs = AppStore.documentsForDriver(driverName);
+    final docs = ref.read(appStateProvider).documentsForDriver(driverName);
     final expired = docs.where((d) => d.isExpired).length;
     final soon = docs.where((d) => d.isExpiringSoon).length;
 
@@ -98,7 +99,7 @@ class _ManagerDriversPageState extends State<ManagerDriversPage> {
 
   @override
   Widget build(BuildContext context) {
-    final drivers = [...AppStore.drivers]
+    final drivers = [...ref.read(appStateProvider).drivers]
       ..sort((a, b) =>
           a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
@@ -279,15 +280,15 @@ class _ManagerDriversPageState extends State<ManagerDriversPage> {
 
 // ── Page formulaire chauffeur ─────────────────────────────────────────────────
 
-class _DriverFormPage extends StatefulWidget {
+class _DriverFormPage extends ConsumerStatefulWidget {
   final Driver? driver;
   const _DriverFormPage({this.driver});
 
   @override
-  State<_DriverFormPage> createState() => _DriverFormPageState();
+  ConsumerState<_DriverFormPage> createState() => _DriverFormPageState();
 }
 
-class _DriverFormPageState extends State<_DriverFormPage> {
+class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;
@@ -345,7 +346,7 @@ class _DriverFormPageState extends State<_DriverFormPage> {
     final name = _nameCtrl.text.trim();
     final isEdit = widget.driver != null;
 
-    final duplicate = AppStore.drivers.any((d) =>
+    final duplicate = ref.read(appStateProvider).drivers.any((d) =>
         d.name.toLowerCase() == name.toLowerCase() &&
         d.name.toLowerCase() !=
             (widget.driver?.name ?? '').toLowerCase());
@@ -589,15 +590,15 @@ class _DateTile extends StatelessWidget {
 
 // ── Feuille documents ─────────────────────────────────────────────────────────
 
-class _DocumentsSheet extends StatefulWidget {
+class _DocumentsSheet extends ConsumerStatefulWidget {
   final String driverName;
   const _DocumentsSheet({required this.driverName});
 
   @override
-  State<_DocumentsSheet> createState() => _DocumentsSheetState();
+  ConsumerState<_DocumentsSheet> createState() => _DocumentsSheetState();
 }
 
-class _DocumentsSheetState extends State<_DocumentsSheet> {
+class _DocumentsSheetState extends ConsumerState<_DocumentsSheet> {
   // Types ordonnés par catégorie pour la sélection
   static const _orderedTypes = [
     DocumentType.permisB,
@@ -741,9 +742,9 @@ class _DocumentsSheetState extends State<_DocumentsSheet> {
                 );
                 setState(() {
                   if (existing == null) {
-                    AppStore.addDriverDocument(doc);
+                    ref.read(appStateProvider).addDriverDocument(doc);
                   } else {
-                    AppStore.updateDriverDocument(existing.id, doc);
+                    ref.read(appStateProvider).updateDriverDocument(existing.id, doc);
                   }
                 });
                 Navigator.pop(context);
@@ -769,7 +770,7 @@ class _DocumentsSheetState extends State<_DocumentsSheet> {
           ),
           FilledButton(
             onPressed: () {
-              setState(() => AppStore.deleteDriverDocument(doc.id));
+              setState(() => ref.read(appStateProvider).deleteDriverDocument(doc.id));
               Navigator.pop(context);
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -782,7 +783,7 @@ class _DocumentsSheetState extends State<_DocumentsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final allDocs = AppStore.documentsForDriver(widget.driverName);
+    final allDocs = ref.read(appStateProvider).documentsForDriver(widget.driverName);
 
     // Regrouper par catégorie
     final Map<String, List<DriverDocument>> grouped = {};

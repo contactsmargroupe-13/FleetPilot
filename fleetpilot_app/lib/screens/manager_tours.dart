@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'add_truck.dart';
 import 'models/tour.dart';
 
-class ManagerTours extends StatefulWidget {
+class ManagerTours extends ConsumerStatefulWidget {
   const ManagerTours({super.key});
 
   @override
-  State<ManagerTours> createState() => _ManagerToursState();
+  ConsumerState<ManagerTours> createState() => _ManagerToursState();
 }
 
-class _ManagerToursState extends State<ManagerTours> {
+class _ManagerToursState extends ConsumerState<ManagerTours> {
   String _searchText = '';
   String _selectedDriver = 'Tous';
   String _selectedTruck = 'Tous';
@@ -28,7 +29,7 @@ class _ManagerToursState extends State<ManagerTours> {
 
   @override
   Widget build(BuildContext context) {
-    final allTours = [...AppStore.tours]
+    final allTours = [...ref.read(appStateProvider).tours]
       ..sort((a, b) => b.date.compareTo(a.date));
 
     final driverNames = allTours.map((t) => t.driverName).toSet().toList()
@@ -367,9 +368,9 @@ class _ManagerToursState extends State<ManagerTours> {
 
     DateTime selectedDate = existing?.date ?? DateTime.now();
     String? selectedDriver = existing?.driverName ??
-        (AppStore.drivers.isNotEmpty ? AppStore.drivers.first.name : null);
+        (ref.read(appStateProvider).drivers.isNotEmpty ? ref.read(appStateProvider).drivers.first.name : null);
     String? selectedTruck = existing?.truckPlate ??
-        (AppStore.trucks.isNotEmpty ? AppStore.trucks.first.plate : null);
+        (ref.read(appStateProvider).trucks.isNotEmpty ? ref.read(appStateProvider).trucks.first.plate : null);
     String selectedStatus = existing?.status ?? 'planifiée';
 
     final tourNumberCtrl =
@@ -462,7 +463,7 @@ class _ManagerToursState extends State<ManagerTours> {
                           labelText: 'Chauffeur',
                           border: OutlineInputBorder(),
                         ),
-                        items: AppStore.drivers
+                        items: ref.read(appStateProvider).drivers
                             .map((d) => DropdownMenuItem<String>(
                                   value: d.name,
                                   child: Text(d.name),
@@ -480,7 +481,7 @@ class _ManagerToursState extends State<ManagerTours> {
                           labelText: 'Camion',
                           border: OutlineInputBorder(),
                         ),
-                        items: AppStore.trucks
+                        items: ref.read(appStateProvider).trucks
                             .map((t) => DropdownMenuItem<String>(
                                   value: t.plate,
                                   child: Text('${t.plate} • ${t.model}'),
@@ -692,10 +693,10 @@ class _ManagerToursState extends State<ManagerTours> {
 
                     setState(() {
                       if (isEdit) {
-                        AppStore.updateTour(existing.id, tour);
+                        ref.read(appStateProvider).updateTour(existing.id, tour);
                         _msg('Tournée modifiée');
                       } else {
-                        AppStore.addTour(tour);
+                        ref.read(appStateProvider).addTour(tour);
                         _msg('Tournée ajoutée');
                       }
                     });
@@ -728,7 +729,7 @@ class _ManagerToursState extends State<ManagerTours> {
             ),
             FilledButton(
               onPressed: () {
-                setState(() => AppStore.deleteTour(tour.id));
+                setState(() => ref.read(appStateProvider).deleteTour(tour.id));
                 Navigator.pop(context);
                 _msg('Tournée supprimée');
               },
@@ -743,7 +744,7 @@ class _ManagerToursState extends State<ManagerTours> {
   // ── Détail tournée ────────────────────────────────────────────────────────
 
   void _showTourDetails(Tour tour) {
-    final pricing = AppStore.getClientPricing(tour.companyName);
+    final pricing = ref.read(appStateProvider).getClientPricing(tour.companyName);
     final handlingBilling = _handlingBilling(tour);
     final extraKmBilling = _extraKmBilling(tour);
     final extraTourBilling = _extraTourBilling(tour);
@@ -818,7 +819,7 @@ class _ManagerToursState extends State<ManagerTours> {
   // ── Calculs facturation ───────────────────────────────────────────────────
 
   double _handlingBilling(Tour tour) {
-    final pricing = AppStore.getClientPricing(tour.companyName);
+    final pricing = ref.read(appStateProvider).getClientPricing(tour.companyName);
     if (pricing == null || !tour.hasHandling || !pricing.handlingEnabled) {
       return 0.0;
     }
@@ -826,13 +827,13 @@ class _ManagerToursState extends State<ManagerTours> {
   }
 
   double _extraKmBilling(Tour tour) {
-    final pricing = AppStore.getClientPricing(tour.companyName);
+    final pricing = ref.read(appStateProvider).getClientPricing(tour.companyName);
     if (pricing == null || !pricing.extraKmEnabled) return 0.0;
     return tour.extraKm * (pricing.extraKmPrice ?? 0.0);
   }
 
   double _extraTourBilling(Tour tour) {
-    final pricing = AppStore.getClientPricing(tour.companyName);
+    final pricing = ref.read(appStateProvider).getClientPricing(tour.companyName);
     if (pricing == null || !tour.extraTour || !pricing.extraTourEnabled) {
       return 0.0;
     }
@@ -1056,7 +1057,7 @@ class _ManagerToursState extends State<ManagerTours> {
 
 // ── Section camion (stateful pour les onglets) ────────────────────────────────
 
-class _TruckSection extends StatefulWidget {
+class _TruckSection extends ConsumerStatefulWidget {
   const _TruckSection({
     super.key,
     required this.plate,
@@ -1081,10 +1082,10 @@ class _TruckSection extends StatefulWidget {
   final VoidCallback onRefresh;
 
   @override
-  State<_TruckSection> createState() => _TruckSectionState();
+  ConsumerState<_TruckSection> createState() => _TruckSectionState();
 }
 
-class _TruckSectionState extends State<_TruckSection>
+class _TruckSectionState extends ConsumerState<_TruckSection>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   String? _pendingDriver;
@@ -1110,7 +1111,7 @@ class _TruckSectionState extends State<_TruckSection>
 
   Truck? get _truck {
     try {
-      return AppStore.trucks.firstWhere((t) => t.plate == widget.plate);
+      return ref.read(appStateProvider).trucks.firstWhere((t) => t.plate == widget.plate);
     } catch (_) {
       return null;
     }
@@ -1119,7 +1120,7 @@ class _TruckSectionState extends State<_TruckSection>
   void _saveAffectation() {
     final truck = _truck;
     if (truck == null) return;
-    AppStore.updateTruck(
+    ref.read(appStateProvider).updateTruck(
       truck.plate,
       truck.copyWith(assignedDriverName: _pendingDriver),
     );
@@ -1414,7 +1415,7 @@ class _TruckSectionState extends State<_TruckSection>
   }
 
   Widget _buildAffectation(Truck? truck) {
-    final drivers = AppStore.drivers.map((d) => d.name).toList()..sort();
+    final drivers = ref.read(appStateProvider).drivers.map((d) => d.name).toList()..sort();
 
     return Padding(
       padding: const EdgeInsets.all(20),

@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import 'models/client_pricing.dart';
 
-class ManagerClientPricingPage extends StatefulWidget {
+class ManagerClientPricingPage extends ConsumerStatefulWidget {
   const ManagerClientPricingPage({super.key});
 
   @override
-  State<ManagerClientPricingPage> createState() =>
+  ConsumerState<ManagerClientPricingPage> createState() =>
       _ManagerClientPricingPageState();
 }
 
-class _ManagerClientPricingPageState extends State<ManagerClientPricingPage> {
+class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingPage> {
   @override
   Widget build(BuildContext context) {
-    final List<ClientPricing> clientPricings = [...AppStore.clientPricings];
+    final List<ClientPricing> clientPricings = [...ref.read(appStateProvider).clientPricings];
 
     clientPricings.sort(
       (a, b) => a.companyName.toLowerCase().compareTo(
@@ -246,7 +247,7 @@ class _ManagerClientPricingPageState extends State<ManagerClientPricingPage> {
       MaterialPageRoute(
         builder: (_) => _ClientPricingFormPage(
           onSave: (pricing) {
-            final alreadyExists = AppStore.clientPricings.any(
+            final alreadyExists = ref.read(appStateProvider).clientPricings.any(
               (item) =>
                   item.companyName.toLowerCase() ==
                   pricing.companyName.toLowerCase(),
@@ -256,7 +257,7 @@ class _ManagerClientPricingPageState extends State<ManagerClientPricingPage> {
               return false;
             }
             setState(() {
-              AppStore.addClientPricing(pricing);
+              ref.read(appStateProvider).addClientPricing(pricing);
             });
             _showMessage('Contrat client ajouté');
             return true;
@@ -273,7 +274,7 @@ class _ManagerClientPricingPageState extends State<ManagerClientPricingPage> {
         builder: (_) => _ClientPricingFormPage(
           existing: pricing,
           onSave: (updated) {
-            final duplicateExists = AppStore.clientPricings.any(
+            final duplicateExists = ref.read(appStateProvider).clientPricings.any(
               (item) =>
                   item.companyName.toLowerCase() ==
                       updated.companyName.toLowerCase() &&
@@ -285,7 +286,7 @@ class _ManagerClientPricingPageState extends State<ManagerClientPricingPage> {
               return false;
             }
             setState(() {
-              AppStore.updateClientPricing(pricing.companyName, updated);
+              ref.read(appStateProvider).updateClientPricing(pricing.companyName, updated);
             });
             _showMessage('Contrat client modifié');
             return true;
@@ -312,7 +313,7 @@ class _ManagerClientPricingPageState extends State<ManagerClientPricingPage> {
             FilledButton(
               onPressed: () {
                 setState(() {
-                  AppStore.deleteClientPricing(pricing.companyName);
+                  ref.read(appStateProvider).deleteClientPricing(pricing.companyName);
                 });
                 Navigator.pop(context);
                 _showMessage('Contrat client supprimé');
@@ -364,7 +365,7 @@ class _OptionBadge extends StatelessWidget {
 
 // ── Formulaire complet contrat client ────────────────────────────────────────
 
-class _ClientPricingFormPage extends StatefulWidget {
+class _ClientPricingFormPage extends ConsumerStatefulWidget {
   final ClientPricing? existing;
   final bool Function(ClientPricing pricing) onSave;
 
@@ -374,10 +375,10 @@ class _ClientPricingFormPage extends StatefulWidget {
   });
 
   @override
-  State<_ClientPricingFormPage> createState() => _ClientPricingFormPageState();
+  ConsumerState<_ClientPricingFormPage> createState() => _ClientPricingFormPageState();
 }
 
-class _ClientPricingFormPageState extends State<_ClientPricingFormPage> {
+class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;

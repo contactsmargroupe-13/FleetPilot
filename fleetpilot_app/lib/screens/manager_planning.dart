@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'models/tour.dart';
 
-class ManagerPlanningPage extends StatefulWidget {
+class ManagerPlanningPage extends ConsumerStatefulWidget {
   const ManagerPlanningPage({super.key});
 
   @override
-  State<ManagerPlanningPage> createState() => _ManagerPlanningPageState();
+  ConsumerState<ManagerPlanningPage> createState() => _ManagerPlanningPageState();
 }
 
-class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
+class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
   late DateTime _selectedDate;
   bool _weekView = false;
 
@@ -87,7 +88,7 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
   // ── Filtrage ──────────────────────────────────────────────────────────────
 
   List<Tour> _filteredTours(bool forWeek) {
-    return AppStore.tours.where((tour) {
+    return ref.read(appStateProvider).tours.where((tour) {
       final date = DateTime(tour.date.year, tour.date.month, tour.date.day);
       final matchesPeriod = forWeek
           ? _isInsideSelectedWeek(date)
@@ -116,8 +117,8 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
     String status = tour.status;
     final sectorCtrl = TextEditingController(text: tour.sector ?? '');
 
-    final drivers = AppStore.drivers.map((d) => d.name).toList()..sort();
-    final trucks = AppStore.trucks.map((t) => t.plate).toList()..sort();
+    final drivers = ref.read(appStateProvider).drivers.map((d) => d.name).toList()..sort();
+    final trucks = ref.read(appStateProvider).trucks.map((t) => t.plate).toList()..sort();
 
     if (!drivers.contains(driver)) drivers.add(driver);
     if (!trucks.contains(truck)) trucks.add(truck);
@@ -210,7 +211,7 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
             ),
             FilledButton(
               onPressed: () {
-                AppStore.updateTour(
+                ref.read(appStateProvider).updateTour(
                   tour.id,
                   tour.copyWith(
                     driverName: driver,
@@ -236,10 +237,10 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
 
   @override
   Widget build(BuildContext context) {
-    final drivers = AppStore.drivers.map((d) => d.name).toSet().toList()
+    final drivers = ref.read(appStateProvider).drivers.map((d) => d.name).toSet().toList()
       ..sort();
     final trucks =
-        AppStore.trucks.map((t) => t.plate).toSet().toList()..sort();
+        ref.read(appStateProvider).trucks.map((t) => t.plate).toSet().toList()..sort();
 
     final tours = _filteredTours(_weekView);
     final planned = tours.where((t) => t.status == 'planifiée').length;
@@ -474,7 +475,7 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
         statusColors: _statusColors,
         onTap: () => _openEditDialog(t),
         onStatusChange: (s) {
-          AppStore.updateTour(t.id, t.copyWith(status: s));
+          ref.read(appStateProvider).updateTour(t.id, t.copyWith(status: s));
           setState(() {});
         },
         statusOptions: _statusOptions,
@@ -491,8 +492,8 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
 
     // Tous les chauffeurs qui ont des tournées cette semaine + liste complète
     final allDriverNames = {
-      ...AppStore.drivers.map((d) => d.name),
-      ...AppStore.tours
+      ...ref.read(appStateProvider).drivers.map((d) => d.name),
+      ...ref.read(appStateProvider).tours
           .where((t) => _isInsideSelectedWeek(
               DateTime(t.date.year, t.date.month, t.date.day)))
           .map((t) => t.driverName),
@@ -615,7 +616,7 @@ class _ManagerPlanningPageState extends State<ManagerPlanningPage> {
 
 // ── Widget ligne semaine (1 chauffeur × 7 jours) ──────────────────────────────
 
-class _WeekRow extends StatelessWidget {
+class _WeekRow extends ConsumerWidget {
   const _WeekRow({
     required this.driverName,
     required this.weekDays,
@@ -641,7 +642,7 @@ class _WeekRow extends StatelessWidget {
   final bool Function(DateTime, DateTime) isSameDay;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       decoration: const BoxDecoration(
         border: Border(
@@ -671,7 +672,7 @@ class _WeekRow extends StatelessWidget {
 
           // Cellules jours
           ...weekDays.map((day) {
-            final toursOnDay = AppStore.tours.where((t) {
+            final toursOnDay = ref.read(appStateProvider).tours.where((t) {
               if (t.driverName != driverName) return false;
               if (!isSameDay(
                   DateTime(t.date.year, t.date.month, t.date.day),

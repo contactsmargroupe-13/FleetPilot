@@ -5,16 +5,17 @@ import 'package:image_picker/image_picker.dart';
 
 import 'models/expense.dart';
 import '../services/ocr_service.dart';
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 
-class AddExpensePage extends StatefulWidget {
+class AddExpensePage extends ConsumerStatefulWidget {
   const AddExpensePage({super.key});
 
   @override
-  State<AddExpensePage> createState() => _AddExpensePageState();
+  ConsumerState<AddExpensePage> createState() => _AddExpensePageState();
 }
 
-class _AddExpensePageState extends State<AddExpensePage> {
+class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   final _formKey = GlobalKey<FormState>();
 
   String? _selectedPlate;
@@ -31,8 +32,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   void initState() {
     super.initState();
-    if (AppStore.trucks.isNotEmpty) {
-      _selectedPlate = AppStore.trucks.first.plate;
+    if (ref.read(appStateProvider).trucks.isNotEmpty) {
+      _selectedPlate = ref.read(appStateProvider).trucks.first.plate;
     }
   }
 
@@ -138,7 +139,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   @override
   Widget build(BuildContext context) {
-    final trucks = AppStore.trucks;
+    final trucks = ref.read(appStateProvider).trucks;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ajouter une dépense')),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'models/candidate.dart';
 import 'models/driver.dart';
 
@@ -41,18 +42,18 @@ const _licenses = ['B', 'C', 'CE', 'C1', 'D'];
 
 // ── Page principale ───────────────────────────────────────────────────────────
 
-class ManagerRecruitmentPage extends StatefulWidget {
+class ManagerRecruitmentPage extends ConsumerStatefulWidget {
   const ManagerRecruitmentPage({super.key});
 
   @override
-  State<ManagerRecruitmentPage> createState() => _ManagerRecruitmentPageState();
+  ConsumerState<ManagerRecruitmentPage> createState() => _ManagerRecruitmentPageState();
 }
 
-class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
+class _ManagerRecruitmentPageState extends ConsumerState<ManagerRecruitmentPage> {
   String? _filterStatus; // null = tous
 
   List<Candidate> get _filtered {
-    final all = List<Candidate>.from(AppStore.candidates)
+    final all = List<Candidate>.from(ref.read(appStateProvider).candidates)
       ..sort((a, b) => b.applyDate.compareTo(a.applyDate));
     if (_filterStatus == null) return all;
     return all.where((c) => c.status == _filterStatus).toList();
@@ -61,7 +62,7 @@ class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
   // ── Stats ─────────────────────────────────────────────────────────────────
 
   int _count(String status) =>
-      AppStore.candidates.where((c) => c.status == status).length;
+      ref.read(appStateProvider).candidates.where((c) => c.status == status).length;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -73,9 +74,9 @@ class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
         onSave: (c) {
           setState(() {
             if (candidate == null) {
-              AppStore.addCandidate(c);
+              ref.read(appStateProvider).addCandidate(c);
             } else {
-              AppStore.updateCandidate(c.id, c);
+              ref.read(appStateProvider).updateCandidate(c.id, c);
             }
           });
         },
@@ -84,7 +85,7 @@ class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
   }
 
   void _changeStatus(Candidate c, String newStatus) {
-    setState(() => AppStore.updateCandidate(c.id, c.copyWith(status: newStatus)));
+    setState(() => ref.read(appStateProvider).updateCandidate(c.id, c.copyWith(status: newStatus)));
   }
 
   void _delete(Candidate c) {
@@ -101,7 +102,7 @@ class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() => AppStore.deleteCandidate(c.id));
+              setState(() => ref.read(appStateProvider).deleteCandidate(c.id));
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Supprimer'),
@@ -112,7 +113,7 @@ class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
   }
 
   void _convertToDriver(Candidate c) {
-    final already = AppStore.drivers.any(
+    final already = ref.read(appStateProvider).drivers.any(
       (d) => d.name.toLowerCase() == c.name.toLowerCase(),
     );
     if (already) {
@@ -134,7 +135,7 @@ class _ManagerRecruitmentPageState extends State<ManagerRecruitmentPage> {
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              AppStore.addDriver(
+              ref.read(appStateProvider).addDriver(
                 Driver(name: c.name, fixedSalary: 0, bonus: 0),
               );
               ScaffoldMessenger.of(context).showSnackBar(
@@ -497,17 +498,17 @@ class _ActionChip extends StatelessWidget {
 
 // ── Dialog ajout / modification ───────────────────────────────────────────────
 
-class _CandidateDialog extends StatefulWidget {
+class _CandidateDialog extends ConsumerStatefulWidget {
   final Candidate? candidate;
   final ValueChanged<Candidate> onSave;
 
   const _CandidateDialog({this.candidate, required this.onSave});
 
   @override
-  State<_CandidateDialog> createState() => _CandidateDialogState();
+  ConsumerState<_CandidateDialog> createState() => _CandidateDialogState();
 }
 
-class _CandidateDialogState extends State<_CandidateDialog> {
+class _CandidateDialogState extends ConsumerState<_CandidateDialog> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();

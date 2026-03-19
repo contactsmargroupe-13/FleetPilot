@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'models/expense.dart';
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'add_expense.dart';
 
-class ManagerExpensesPage extends StatefulWidget {
+class ManagerExpensesPage extends ConsumerStatefulWidget {
   const ManagerExpensesPage({super.key});
 
   @override
-  State<ManagerExpensesPage> createState() => _ManagerExpensesPageState();
+  ConsumerState<ManagerExpensesPage> createState() => _ManagerExpensesPageState();
 }
 
-class _ManagerExpensesPageState extends State<ManagerExpensesPage> {
+class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
   DateTime _selectedMonth =
       DateTime(DateTime.now().year, DateTime.now().month, 1);
   String? _truckFilter;
@@ -30,7 +31,7 @@ class _ManagerExpensesPageState extends State<ManagerExpensesPage> {
       MaterialPageRoute(builder: (_) => const AddExpensePage()),
     );
     if (exp != null) {
-      setState(() => AppStore.addExpense(exp));
+      setState(() => ref.read(appStateProvider).addExpense(exp));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dépense ajoutée')),
@@ -52,7 +53,7 @@ class _ManagerExpensesPageState extends State<ManagerExpensesPage> {
           ),
           FilledButton(
             onPressed: () {
-              setState(() => AppStore.deleteExpense(e.id));
+              setState(() => ref.read(appStateProvider).deleteExpense(e.id));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Dépense supprimée')),
@@ -68,9 +69,9 @@ class _ManagerExpensesPageState extends State<ManagerExpensesPage> {
   @override
   Widget build(BuildContext context) {
     final trucks =
-        AppStore.trucks.map((t) => t.plate).toSet().toList()..sort();
+        ref.read(appStateProvider).trucks.map((t) => t.plate).toSet().toList()..sort();
 
-    final filtered = AppStore.expenses.where((e) {
+    final filtered = ref.read(appStateProvider).expenses.where((e) {
       final sameMonth = e.date.year == _selectedMonth.year &&
           e.date.month == _selectedMonth.month;
       final matchTruck = _truckFilter == null || e.truckPlate == _truckFilter;

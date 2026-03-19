@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'add_truck.dart';
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 
-class ManagerVehiclesPage extends StatefulWidget {
+class ManagerVehiclesPage extends ConsumerStatefulWidget {
   const ManagerVehiclesPage({super.key});
 
   @override
-  State<ManagerVehiclesPage> createState() => _ManagerVehiclesPageState();
+  ConsumerState<ManagerVehiclesPage> createState() => _ManagerVehiclesPageState();
 }
 
-class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
+class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
 
   Future<void> _addTruck() async {
     final result = await Navigator.push<Truck>(
@@ -17,7 +18,7 @@ class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
       MaterialPageRoute(builder: (_) => const AddTruckPage()),
     );
     if (result != null) {
-      setState(() => AppStore.addTruck(result));
+      setState(() => ref.read(appStateProvider).addTruck(result));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Camion ajouté : ${result.plate}')),
@@ -31,7 +32,7 @@ class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
       MaterialPageRoute(builder: (_) => AddTruckPage(truck: truck)),
     );
     if (result != null) {
-      setState(() => AppStore.updateTruck(truck.plate, result));
+      setState(() => ref.read(appStateProvider).updateTruck(truck.plate, result));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Camion mis à jour : ${result.plate}')),
@@ -59,7 +60,7 @@ class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
       ),
     );
     if (confirm == true) {
-      setState(() => AppStore.deleteTruck(truck.plate));
+      setState(() => ref.read(appStateProvider).deleteTruck(truck.plate));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Camion supprimé : ${truck.plate}')),
@@ -82,7 +83,7 @@ class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setSheet) {
-            final tours = AppStore.tours
+            final tours = ref.read(appStateProvider).tours
                 .where((t) =>
                     t.truckPlate == truck.plate &&
                     t.date.year == selectedMonth.year &&
@@ -234,7 +235,7 @@ class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final trucks = AppStore.trucks;
+    final trucks = ref.read(appStateProvider).trucks;
 
     // Alertes assurance
     final expiredCount = trucks
@@ -302,7 +303,7 @@ class _ManagerVehiclesPageState extends State<ManagerVehiclesPage> {
   }
 
   Widget _buildTruckCard(Truck t) {
-    final monthTours = AppStore.tours.where((tour) {
+    final monthTours = ref.read(appStateProvider).tours.where((tour) {
       final now = DateTime.now();
       return tour.truckPlate == t.plate &&
           tour.date.year == now.year &&

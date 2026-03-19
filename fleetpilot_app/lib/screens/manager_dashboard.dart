@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
 import 'manager_admin.dart';
 import 'manager_billing.dart';
@@ -14,14 +15,14 @@ import 'manager_vehicles.dart';
 import 'models/driver.dart';
 import 'models/expense.dart';
 
-class ManagerShell extends StatefulWidget {
+class ManagerShell extends ConsumerStatefulWidget {
   const ManagerShell({super.key});
 
   @override
-  State<ManagerShell> createState() => _ManagerShellState();
+  ConsumerState<ManagerShell> createState() => _ManagerShellState();
 }
 
-class _ManagerShellState extends State<ManagerShell> {
+class _ManagerShellState extends ConsumerState<ManagerShell> {
   int index = 0;
 
   @override
@@ -82,14 +83,14 @@ class _ManagerShellState extends State<ManagerShell> {
   }
 }
 
-class ManagerDashboardPage extends StatefulWidget {
+class ManagerDashboardPage extends ConsumerStatefulWidget {
   const ManagerDashboardPage({super.key});
 
   @override
-  State<ManagerDashboardPage> createState() => _ManagerDashboardPageState();
+  ConsumerState<ManagerDashboardPage> createState() => _ManagerDashboardPageState();
 }
 
-class _ManagerDashboardPageState extends State<ManagerDashboardPage> {
+class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
   String? _selectedPlate;
   late DateTime _selectedMonth;
 
@@ -120,7 +121,7 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> {
   }
 
   Iterable<Expense> _truckExpensesForMonth(String plate, DateTime month) {
-    return AppStore.expenses
+    return ref.read(appStateProvider).expenses
         .where((e) => e.truckPlate == plate)
         .where((e) => e.date.year == month.year && e.date.month == month.month);
   }
@@ -149,13 +150,13 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> {
   }
 
   double _sumKmForMonth(DateTime month) {
-    return AppStore.driverDayEntries
+    return ref.read(appStateProvider).driverDayEntries
         .where((e) => e.date.year == month.year && e.date.month == month.month)
         .fold(0.0, (sum, e) => sum + e.kmTotal);
   }
 
   double _sumKmForTruckInMonth(String plate, DateTime month) {
-    return AppStore.driverDayEntries
+    return ref.read(appStateProvider).driverDayEntries
         .where((e) => e.truckPlate == plate)
         .where((e) => e.date.year == month.year && e.date.month == month.month)
         .fold(0.0, (sum, e) => sum + e.kmTotal);
@@ -233,13 +234,13 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final allTrucks = AppStore.trucks;
+    final allTrucks = ref.read(appStateProvider).trucks;
 
     final trucks = _selectedPlate == null
         ? allTrucks
         : allTrucks.where((t) => t.plate == _selectedPlate).toList();
 
-    final List<Driver> drivers = AppStore.drivers;
+    final List<Driver> drivers = ref.read(appStateProvider).drivers;
 
     final double totalSalaries =
         drivers.fold<double>(0.0, (sum, d) => sum + d.totalSalary);

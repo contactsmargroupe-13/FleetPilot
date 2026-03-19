@@ -4,17 +4,18 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'models/admin_document.dart';
 
-class ManagerAdminPage extends StatefulWidget {
+class ManagerAdminPage extends ConsumerStatefulWidget {
   const ManagerAdminPage({super.key});
 
   @override
-  State<ManagerAdminPage> createState() => _ManagerAdminPageState();
+  ConsumerState<ManagerAdminPage> createState() => _ManagerAdminPageState();
 }
 
-class _ManagerAdminPageState extends State<ManagerAdminPage> {
+class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
   AdminDocCategory? _categoryFilter;
 
   static const _orderedCategories = [
@@ -27,7 +28,7 @@ class _ManagerAdminPageState extends State<ManagerAdminPage> {
   ];
 
   List<AdminDocument> get _filtered {
-    final docs = [...AppStore.adminDocuments];
+    final docs = [...ref.read(appStateProvider).adminDocuments];
     if (_categoryFilter != null) {
       return docs.where((d) => d.category == _categoryFilter).toList();
     }
@@ -44,9 +45,9 @@ class _ManagerAdminPageState extends State<ManagerAdminPage> {
     if (result == null) return;
     setState(() {
       if (existing == null) {
-        AppStore.addAdminDocument(result);
+        ref.read(appStateProvider).addAdminDocument(result);
       } else {
-        AppStore.updateAdminDocument(existing.id, result);
+        ref.read(appStateProvider).updateAdminDocument(existing.id, result);
       }
     });
   }
@@ -80,7 +81,7 @@ class _ManagerAdminPageState extends State<ManagerAdminPage> {
       } catch (_) {}
     }
 
-    setState(() => AppStore.deleteAdminDocument(doc.id));
+    setState(() => ref.read(appStateProvider).deleteAdminDocument(doc.id));
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -322,15 +323,15 @@ class _DocCard extends StatelessWidget {
 
 // ── Dialog ajout / modification ───────────────────────────────────────────────
 
-class _AdminDocDialog extends StatefulWidget {
+class _AdminDocDialog extends ConsumerStatefulWidget {
   const _AdminDocDialog({this.document});
   final AdminDocument? document;
 
   @override
-  State<_AdminDocDialog> createState() => _AdminDocDialogState();
+  ConsumerState<_AdminDocDialog> createState() => _AdminDocDialogState();
 }
 
-class _AdminDocDialogState extends State<_AdminDocDialog> {
+class _AdminDocDialogState extends ConsumerState<_AdminDocDialog> {
   final _titleCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
 
@@ -451,9 +452,9 @@ class _AdminDocDialogState extends State<_AdminDocDialog> {
   @override
   Widget build(BuildContext context) {
     final drivers =
-        AppStore.drivers.map((d) => d.name).toList()..sort();
+        ref.read(appStateProvider).drivers.map((d) => d.name).toList()..sort();
     final trucks =
-        AppStore.trucks.map((t) => t.plate).toList()..sort();
+        ref.read(appStateProvider).trucks.map((t) => t.plate).toList()..sort();
 
     return Dialog(
       child: SingleChildScrollView(

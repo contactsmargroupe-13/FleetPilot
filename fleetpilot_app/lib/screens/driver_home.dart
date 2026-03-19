@@ -3,18 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/driver_session.dart';
-import '../store/app_store.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
 import 'models/driver_day_entry.dart';
 import 'models/tour.dart';
 
-class DriverHomePage extends StatefulWidget {
+class DriverHomePage extends ConsumerStatefulWidget {
   const DriverHomePage({super.key});
 
   @override
-  State<DriverHomePage> createState() => _DriverHomePageState();
+  ConsumerState<DriverHomePage> createState() => _DriverHomePageState();
 }
 
-class _DriverHomePageState extends State<DriverHomePage> {
+class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   // ── Session ──────────────────────────────────────────────────────────────────
   String? _driverName;
   DateTime? _tourStart;
@@ -48,8 +49,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
       _loading = false;
     });
     if (_tourStart != null) _startTimer();
-    if (AppStore.trucks.isNotEmpty) {
-      _selectedTruck = AppStore.trucks.first.plate;
+    if (ref.read(appStateProvider).trucks.isNotEmpty) {
+      _selectedTruck = ref.read(appStateProvider).trucks.first.plate;
     }
   }
 
@@ -197,8 +198,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
       extraTour: _extraTour,
     );
 
-    AppStore.addDriverDayEntry(entry);
-    AppStore.addTour(tour);
+    ref.read(appStateProvider).addDriverDayEntry(entry);
+    ref.read(appStateProvider).addTour(tour);
 
     await DriverSession.endTour();
     _timer?.cancel();
@@ -231,7 +232,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     final now = DateTime.now();
     final name = _driverName!.toLowerCase();
 
-    final entries = AppStore.driverDayEntries
+    final entries = ref.read(appStateProvider).driverDayEntries
         .where((e) =>
             e.driverName.toLowerCase() == name &&
             e.date.year == now.year &&
@@ -239,7 +240,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
 
-    final allTours = AppStore.tours
+    final allTours = ref.read(appStateProvider).tours
         .where((t) =>
             t.driverName.toLowerCase() == name &&
             t.date.year == now.year &&
@@ -456,8 +457,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   // ── Vue : tournée en cours ───────────────────────────────────────────────
 
   Widget _buildActiveTour() {
-    final trucks = AppStore.trucks;
-    final clients = AppStore.clientPricings.map((c) => c.companyName).toList();
+    final trucks = ref.read(appStateProvider).trucks;
+    final clients = ref.read(appStateProvider).clientPricings.map((c) => c.companyName).toList();
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -650,7 +651,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   // ── Sélection du profil (premier lancement) ──────────────────────────────
 
   Widget _buildProfileSelector() {
-    final drivers = AppStore.drivers;
+    final drivers = ref.read(appStateProvider).drivers;
 
     return Scaffold(
       appBar: AppBar(title: const Text('FleetPilot — Chauffeur')),
