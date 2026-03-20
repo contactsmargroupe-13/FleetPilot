@@ -8,6 +8,7 @@ import '../screens/models/client_pricing.dart';
 import '../screens/models/driver.dart';
 import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
+import '../screens/models/driver_notification.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/tour.dart';
 import '../services/database_service.dart';
@@ -34,6 +35,7 @@ class AppState extends ChangeNotifier {
   List<DriverDocument> driverDocuments = [];
   List<Candidate> candidates = [];
   List<AdminDocument> adminDocuments = [];
+  List<DriverNotification> driverNotifications = [];
 
   AppState(this._db);
 
@@ -47,6 +49,7 @@ class AppState extends ChangeNotifier {
     driverDocuments = await _db.loadDriverDocuments();
     candidates = await _db.loadCandidates();
     adminDocuments = await _db.loadAdminDocuments();
+    driverNotifications = await _db.loadDriverNotifications();
     notifyListeners();
   }
 
@@ -353,5 +356,42 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  // ─── Notifications chauffeur ────────────────────────────────────────────
+
+  List<DriverNotification> notificationsForDriver(String driverName) {
+    return driverNotifications
+        .where((n) => n.driverName.toLowerCase() == driverName.toLowerCase())
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  int unreadCountForDriver(String driverName) {
+    return driverNotifications
+        .where((n) =>
+            n.driverName.toLowerCase() == driverName.toLowerCase() && !n.read)
+        .length;
+  }
+
+  void addDriverNotification(DriverNotification n) {
+    driverNotifications.add(n);
+    _db.saveDriverNotification(n);
+    notifyListeners();
+  }
+
+  void markNotificationRead(String id) {
+    final i = driverNotifications.indexWhere((n) => n.id == id);
+    if (i != -1) {
+      driverNotifications[i] = driverNotifications[i].copyWith(read: true);
+      _db.saveDriverNotification(driverNotifications[i]);
+      notifyListeners();
+    }
+  }
+
+  void deleteDriverNotification(String id) {
+    driverNotifications.removeWhere((n) => n.id == id);
+    _db.deleteDriverNotification(id);
+    notifyListeners();
   }
 }

@@ -11,6 +11,7 @@ import '../screens/models/client_pricing.dart';
 import '../screens/models/driver.dart';
 import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
+import '../screens/models/driver_notification.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/tour.dart';
 import 'company_settings.dart';
@@ -29,7 +30,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         final batch = db.batch();
         batch.execute(
@@ -50,7 +51,15 @@ class DatabaseService {
             'CREATE TABLE candidates (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         batch.execute(
             'CREATE TABLE admin_documents (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        batch.execute(
+            'CREATE TABLE driver_notifications (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         await batch.commit();
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS driver_notifications (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
       },
     );
 
@@ -346,4 +355,15 @@ class DatabaseService {
     }
     await batch.commit(noResult: true);
   }
+
+  // ── Driver Notifications ─────────────────────────────────────────────────
+
+  Future<List<DriverNotification>> loadDriverNotifications() =>
+      _loadAll('driver_notifications', DriverNotification.fromJson);
+
+  Future<void> saveDriverNotification(DriverNotification n) =>
+      _upsert('driver_notifications', 'id', n.id, n.toJson());
+
+  Future<void> deleteDriverNotification(String id) =>
+      _delete('driver_notifications', 'id', id);
 }

@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/driver_session.dart';
+import '../services/gps_tracking_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import 'driver_dashboard.dart';
+import 'driver_documents.dart';
 import 'models/driver.dart';
 import 'models/driver_day_entry.dart';
 import 'models/tour.dart';
@@ -22,6 +25,15 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   DateTime? _tourStart;
   Timer? _timer;
   bool _loading = true;
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
+  int _tabIndex = 0;
+
+  // ── GPS ─────────────────────────────────────────────────────────────────────
+  final _gps = GpsTrackingService();
+  double _gpsKm = 0.0;
+  bool _gpsActive = false;
+  bool _kmManuallyEdited = false;
 
   // ── Formulaire tournée ───────────────────────────────────────────────────────
   String? _selectedTruck;
@@ -49,7 +61,18 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       _tourStart = DriverSession.tourStartTime;
       _loading = false;
     });
-    if (_tourStart != null) _startTimer();
+    if (_tourStart != null) {
+      _startTimer();
+      // Reprendre le GPS si l'app a été tuée pendant une tournée
+      _gps.onKmUpdate = _onGpsKmUpdate;
+      final resumed = await _gps.resumeIfNeeded();
+      if (resumed && mounted) {
+        setState(() {
+          _gpsActive = true;
+          _gpsKm = _gps.currentKm;
+        });
+      }
+    }
     if (ref.read(appStateProvider).trucks.isNotEmpty) {
       _selectedTruck = ref.read(appStateProvider).trucks.first.plate;
     }
@@ -92,6 +115,17 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
   double? _d(String s) => double.tryParse(s.replaceAll(',', '.').trim());
 
+  void _onGpsKmUpdate(double km) {
+    if (!mounted) return;
+    setState(() {
+      _gpsKm = km;
+      // Pré-remplir le champ km si pas édité manuellement
+      if (!_kmManuallyEdited) {
+        _kmCtrl.text = km.toStringAsFixed(1);
+      }
+    });
+  }
+
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   Future<void> _selectProfile(Driver driver) async {
@@ -119,8 +153,22 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
   Future<void> _demarrer() async {
     await DriverSession.startTour();
-    setState(() => _tourStart = DriverSession.tourStartTime);
+    setState(() {
+      _tourStart = DriverSession.tourStartTime;
+      _kmManuallyEdited = false;
+      _gpsKm = 0.0;
+    });
     _startTimer();
+
+    // Démarrer le GPS en arrière-plan
+    _gps.onKmUpdate = _onGpsKmUpdate;
+    final started = await _gps.startTracking();
+    if (mounted) {
+      setState(() => _gpsActive = started);
+      if (!started) {
+        _snack('GPS indisponible — saisis les km manuellement.');
+      }
+    }
   }
 
   Future<void> _annuler() async {
@@ -145,6 +193,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     );
     if (confirm != true) return;
 
+    // Arrêter le GPS
+    await _gps.stopTracking();
+
     await DriverSession.endTour();
     _timer?.cancel();
     _tourNumberCtrl.clear();
@@ -157,10 +208,21 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       _tourStart = null;
       _hasHandling = false;
       _extraTour = false;
+      _gpsActive = false;
+      _gpsKm = 0.0;
+      _kmManuallyEdited = false;
     });
   }
 
   Future<void> _terminer() async {
+    // Arrêter le GPS et récupérer le total
+    final gpsTotal = await _gps.stopTracking();
+
+    // Utiliser le GPS si pas édité manuellement, sinon la valeur saisie
+    if (!_kmManuallyEdited && gpsTotal > 0) {
+      _kmCtrl.text = gpsTotal.toStringAsFixed(1);
+    }
+
     final km = _d(_kmCtrl.text);
     final clients = int.tryParse(_clientsCtrl.text.trim());
 
@@ -235,6 +297,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       _tourStart = null;
       _hasHandling = false;
       _extraTour = false;
+      _gpsActive = false;
+      _gpsKm = 0.0;
+      _kmManuallyEdited = false;
     });
 
     _snack('Tournée ${tour.tourNumber} enregistrée — ${_fmtTime(start)} → ${_fmtTime(now)}');
@@ -394,6 +459,15 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       return _buildProfileSelector();
     }
 
+    final unreadCount =
+        ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
+
+    final pages = [
+      _tourStart == null ? _buildIdle() : _buildActiveTour(),
+      DriverDocumentsPage(driverName: _driverName!),
+      DriverDashboardPage(driverName: _driverName!),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Bonjour $_driverName'),
@@ -420,13 +494,38 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               );
               if (confirm == true) {
                 await DriverSession.clearDriverName();
-                setState(() => _driverName = null);
+                setState(() {
+                  _driverName = null;
+                  _tabIndex = 0;
+                });
               }
             },
           ),
         ],
       ),
-      body: _tourStart == null ? _buildIdle() : _buildActiveTour(),
+      body: pages[_tabIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tabIndex,
+        onDestinationSelected: (i) => setState(() => _tabIndex = i),
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.route_outlined),
+            label: 'Tournée',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.folder_outlined),
+            ),
+            label: 'Documents',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            label: 'Dashboard',
+          ),
+        ],
+      ),
     );
   }
 
@@ -436,6 +535,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     final now = DateTime.now();
     final day = now.day.toString().padLeft(2, '0');
     final month = _monthLabel(now.month);
+    final trucks = ref.read(appStateProvider).trucks;
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -447,11 +547,29 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         ),
         const SizedBox(height: 24),
 
+        // Sélection camion obligatoire
+        DropdownButtonFormField<String>(
+          value: _selectedTruck,
+          decoration: const InputDecoration(
+            labelText: 'Camion *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.local_shipping_outlined),
+          ),
+          items: trucks
+              .map((t) => DropdownMenuItem(
+                    value: t.plate,
+                    child: Text('${t.plate} • ${t.model}'),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedTruck = v),
+        ),
+        const SizedBox(height: 16),
+
         // Bouton démarrer
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: _demarrer,
+            onPressed: _selectedTruck == null ? null : _demarrer,
             icon: const Icon(Icons.play_arrow_rounded, size: 28),
             label: const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
@@ -510,6 +628,82 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
             ],
           ),
         ),
+
+        const SizedBox(height: 12),
+
+        // GPS live km
+        if (_gpsActive)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.gps_fixed, color: Colors.green.shade700, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_gpsKm.toStringAsFixed(1)} km',
+                        style: TextStyle(
+                          color: Colors.green.shade800,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Suivi GPS en cours',
+                        style: TextStyle(
+                          color: Colors.green.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Pastille pulsante
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withValues(alpha: 0.4),
+                        blurRadius: 6,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.gps_off, color: Colors.grey.shade500, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  'GPS inactif — saisis les km manuellement',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
 
         const SizedBox(height: 20),
 
@@ -571,9 +765,24 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           controller: _kmCtrl,
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Kilomètres parcourus *',
-            border: OutlineInputBorder(),
+          onChanged: (_) => _kmManuallyEdited = true,
+          decoration: InputDecoration(
+            labelText: _gpsActive
+                ? 'Km (GPS auto — modifiable)'
+                : 'Kilomètres parcourus *',
+            border: const OutlineInputBorder(),
+            suffixIcon: _gpsActive && _kmManuallyEdited
+                ? IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    tooltip: 'Remettre la valeur GPS',
+                    onPressed: () {
+                      setState(() {
+                        _kmManuallyEdited = false;
+                        _kmCtrl.text = _gpsKm.toStringAsFixed(1);
+                      });
+                    },
+                  )
+                : null,
           ),
         ),
         const SizedBox(height: 12),

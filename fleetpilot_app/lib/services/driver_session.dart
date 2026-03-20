@@ -37,4 +37,15 @@ class DriverSession {
   static Future<void> endTour() async {
     await _prefs?.remove(_keyTourStart);
   }
+
+  // ── GPS tracking ──────────────────────────────────────────────────────────
+
+  static const _keyGpsEnabled = 'session_gps_enabled';
+
+  /// True si le chauffeur a activé le suivi GPS
+  static bool get isGpsEnabled => _prefs?.getBool(_keyGpsEnabled) ?? true;
+
+  static Future<void> setGpsEnabled(bool enabled) async {
+    await _prefs?.setBool(_keyGpsEnabled, enabled);
+  }
 }
