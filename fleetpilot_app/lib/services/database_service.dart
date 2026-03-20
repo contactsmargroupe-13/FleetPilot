@@ -20,6 +20,9 @@ class DatabaseService {
 
   DatabaseService._(this._db);
 
+  /// Test-only constructor: wrap an already-opened Database.
+  factory DatabaseService.fromDatabase(Database db) => DatabaseService._(db);
+
   static Future<DatabaseService> init() async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'fleetpilot.db');

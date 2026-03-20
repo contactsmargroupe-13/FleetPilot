@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 class Driver {
   final String name;
   final double fixedSalary;
@@ -16,6 +20,9 @@ class Driver {
   // Numéro de tournée attribué par le manager
   final String? assignedTourNumber;
 
+  // PIN hashé (SHA-256) pour l'authentification chauffeur
+  final String? pinHash;
+
   const Driver({
     required this.name,
     required this.fixedSalary,
@@ -27,9 +34,18 @@ class Driver {
     this.hasPermisC = false,
     this.hasPermisCE = false,
     this.assignedTourNumber,
+    this.pinHash,
   });
 
   double get totalSalary => fixedSalary + bonus;
+
+  bool get hasPinSet => pinHash != null && pinHash!.isNotEmpty;
+
+  /// Vérifie le PIN saisi contre le hash stocké
+  bool checkPin(String pin) {
+    if (!hasPinSet) return false;
+    return _hashPin(pin) == pinHash;
+  }
 
   /// Liste des permis détenus
   String get permisLabel {
@@ -51,6 +67,7 @@ class Driver {
     bool? hasPermisC,
     bool? hasPermisCE,
     String? assignedTourNumber,
+    String? pinHash,
   }) {
     return Driver(
       name: name ?? this.name,
@@ -64,6 +81,29 @@ class Driver {
       hasPermisC: hasPermisC ?? this.hasPermisC,
       hasPermisCE: hasPermisCE ?? this.hasPermisCE,
       assignedTourNumber: assignedTourNumber ?? this.assignedTourNumber,
+      pinHash: pinHash ?? this.pinHash,
+    );
+  }
+
+  /// Crée une copie avec un nouveau PIN (hashé automatiquement)
+  Driver withPin(String pin) {
+    return copyWith(pinHash: _hashPin(pin));
+  }
+
+  /// Crée une copie sans PIN
+  Driver withoutPin() {
+    return Driver(
+      name: name,
+      fixedSalary: fixedSalary,
+      bonus: bonus,
+      birthDate: birthDate,
+      socialSecurityNumber: socialSecurityNumber,
+      phone: phone,
+      hasPermisB: hasPermisB,
+      hasPermisC: hasPermisC,
+      hasPermisCE: hasPermisCE,
+      assignedTourNumber: assignedTourNumber,
+      pinHash: null,
     );
   }
 
@@ -78,6 +118,7 @@ class Driver {
         'hasPermisC': hasPermisC,
         'hasPermisCE': hasPermisCE,
         'assignedTourNumber': assignedTourNumber,
+        'pinHash': pinHash,
       };
 
   factory Driver.fromJson(Map<String, dynamic> json) => Driver(
@@ -93,5 +134,11 @@ class Driver {
         hasPermisC: json['hasPermisC'] as bool? ?? false,
         hasPermisCE: json['hasPermisCE'] as bool? ?? false,
         assignedTourNumber: json['assignedTourNumber'] as String?,
+        pinHash: json['pinHash'] as String?,
       );
+
+  static String _hashPin(String pin) {
+    final bytes = utf8.encode(pin);
+    return sha256.convert(bytes).toString();
+  }
 }

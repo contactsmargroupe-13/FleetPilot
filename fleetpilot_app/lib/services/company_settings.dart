@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CompanySettings {
@@ -6,13 +10,47 @@ class CompanySettings {
   static const _keySiret = 'company_siret';
   static const _keyPhone = 'company_phone';
   static const _keyEmail = 'company_email';
-  static const _keyClaudeApiKey = 'claude_api_key';
-  static const _keyManagerPin = 'manager_pin';
+  static const _keyManagerPinHash = 'manager_pin_hash';
+
+  // Secure storage for API key
+  static const _secureKeyClaudeApiKey = 'claude_api_key';
+  static const _secureStorage = FlutterSecureStorage();
 
   static SharedPreferences? _prefs;
 
+  // Cached API key (loaded once at init)
+  static String _claudeApiKey = '';
+
   static Future<void> init(SharedPreferences prefs) async {
     _prefs = prefs;
+
+    // Migrate plaintext API key from SharedPreferences to secure storage
+    await _migrateApiKey(prefs);
+
+    // Migrate plaintext PIN to hashed PIN
+    _migratePinToHash(prefs);
+
+    // Load API key from secure storage
+    _claudeApiKey = await _secureStorage.read(key: _secureKeyClaudeApiKey) ?? '';
+  }
+
+  /// Migrate plaintext API key → FlutterSecureStorage (one-time)
+  static Future<void> _migrateApiKey(SharedPreferences prefs) async {
+    final oldKey = prefs.getString('claude_api_key');
+    if (oldKey != null && oldKey.isNotEmpty) {
+      await _secureStorage.write(key: _secureKeyClaudeApiKey, value: oldKey);
+      await prefs.remove('claude_api_key');
+    }
+  }
+
+  /// Migrate plaintext PIN → SHA-256 hash (one-time)
+  static void _migratePinToHash(SharedPreferences prefs) {
+    final oldPin = prefs.getString('manager_pin');
+    if (oldPin != null && oldPin.isNotEmpty) {
+      final hash = _hashPin(oldPin);
+      prefs.setString(_keyManagerPinHash, hash);
+      prefs.remove('manager_pin');
+    }
   }
 
   static String get name => _prefs?.getString(_keyName) ?? '';
@@ -20,9 +58,9 @@ class CompanySettings {
   static String get siret => _prefs?.getString(_keySiret) ?? '';
   static String get phone => _prefs?.getString(_keyPhone) ?? '';
   static String get email => _prefs?.getString(_keyEmail) ?? '';
-  static String get claudeApiKey => _prefs?.getString(_keyClaudeApiKey) ?? '';
-  static String get managerPin => _prefs?.getString(_keyManagerPin) ?? '';
-  static bool get hasPinSet => managerPin.isNotEmpty;
+  static String get claudeApiKey => _claudeApiKey;
+  static bool get hasPinSet =>
+      (_prefs?.getString(_keyManagerPinHash) ?? '').isNotEmpty;
 
   static Future<void> save({
     required String name,
@@ -39,16 +77,27 @@ class CompanySettings {
   }
 
   static Future<void> saveClaudeApiKey(String key) async {
-    await _prefs!.setString(_keyClaudeApiKey, key);
+    await _secureStorage.write(key: _secureKeyClaudeApiKey, value: key);
+    _claudeApiKey = key;
   }
 
   static Future<void> saveManagerPin(String pin) async {
-    await _prefs!.setString(_keyManagerPin, pin);
+    await _prefs!.setString(_keyManagerPinHash, _hashPin(pin));
   }
 
   static Future<void> removeManagerPin() async {
-    await _prefs!.remove(_keyManagerPin);
+    await _prefs!.remove(_keyManagerPinHash);
   }
 
-  static bool checkPin(String pin) => pin == managerPin;
+  static bool checkPin(String pin) {
+    final storedHash = _prefs?.getString(_keyManagerPinHash) ?? '';
+    if (storedHash.isEmpty) return false;
+    return _hashPin(pin) == storedHash;
+  }
+
+  /// SHA-256 hash of the PIN
+  static String _hashPin(String pin) {
+    final bytes = utf8.encode(pin);
+    return sha256.convert(bytes).toString();
+  }
 }

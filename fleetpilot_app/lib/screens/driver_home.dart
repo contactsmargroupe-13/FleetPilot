@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/driver_session.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import 'models/driver.dart';
 import 'models/driver_day_entry.dart';
 import 'models/tour.dart';
 
@@ -93,9 +94,27 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
-  Future<void> _selectProfile(String name) async {
-    await DriverSession.setDriverName(name);
-    setState(() => _driverName = name);
+  Future<void> _selectProfile(Driver driver) async {
+    if (driver.hasPinSet) {
+      // Driver has a PIN → verify it
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DriverPinDialog(driver: driver, mode: _DriverPinMode.verify),
+      );
+      if (ok != true) return;
+    } else {
+      // No PIN → create one
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DriverPinDialog(driver: driver, mode: _DriverPinMode.create),
+      );
+      if (ok != true) return;
+    }
+
+    await DriverSession.setDriverName(driver.name);
+    setState(() => _driverName = driver.name);
   }
 
   Future<void> _demarrer() async {
@@ -680,7 +699,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                 const Padding(
                   padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
                   child: Text(
-                    'Sélectionne ton nom — ce choix sera mémorisé.',
+                    'Sélectionne ton nom et saisis ton code PIN.',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ),
@@ -701,9 +720,20 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
                           ),
-                          trailing:
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (d.hasPinSet)
+                                const Icon(Icons.lock_outline,
+                                    size: 16, color: Colors.green)
+                              else
+                                const Icon(Icons.lock_open_outlined,
+                                    size: 16, color: Colors.orange),
+                              const SizedBox(width: 8),
                               const Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: () => _selectProfile(d.name),
+                            ],
+                          ),
+                          onTap: () => _selectProfile(d),
                         ),
                       );
                     },
@@ -743,6 +773,218 @@ class _StatBox extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Dialog PIN chauffeur ──────────────────────────────────────────────────────
+
+enum _DriverPinMode { create, verify }
+
+class _DriverPinDialog extends StatefulWidget {
+  const _DriverPinDialog({required this.driver, required this.mode});
+  final Driver driver;
+  final _DriverPinMode mode;
+
+  @override
+  State<_DriverPinDialog> createState() => _DriverPinDialogState();
+}
+
+class _DriverPinDialogState extends State<_DriverPinDialog> {
+  String _pin = '';
+  String _confirmPin = '';
+  bool _confirming = false;
+  String? _error;
+
+  void _onKey(String digit) {
+    setState(() {
+      _error = null;
+      if (_confirming) {
+        if (_confirmPin.length < 4) _confirmPin += digit;
+        if (_confirmPin.length == 4) _validate();
+      } else {
+        if (_pin.length < 4) _pin += digit;
+        if (widget.mode == _DriverPinMode.verify && _pin.length == 4) {
+          _validate();
+        }
+        if (widget.mode == _DriverPinMode.create && _pin.length == 4) {
+          _confirming = true;
+        }
+      }
+    });
+  }
+
+  void _onDelete() {
+    setState(() {
+      _error = null;
+      if (_confirming) {
+        if (_confirmPin.isNotEmpty) {
+          _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1);
+        }
+      } else {
+        if (_pin.isNotEmpty) {
+          _pin = _pin.substring(0, _pin.length - 1);
+        }
+      }
+    });
+  }
+
+  void _validate() {
+    if (widget.mode == _DriverPinMode.verify) {
+      if (widget.driver.checkPin(_pin)) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() {
+          _pin = '';
+          _error = 'Code incorrect, réessayez';
+        });
+      }
+    } else {
+      // Création
+      if (_pin == _confirmPin) {
+        // Save the PIN hash on the driver via AppState
+        final container = ProviderScope.containerOf(context);
+        final appState = container.read(appStateProvider);
+        final updated = widget.driver.withPin(_pin);
+        appState.updateDriver(widget.driver.name, updated);
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() {
+          _confirmPin = '';
+          _confirming = false;
+          _pin = '';
+          _error = 'Les codes ne correspondent pas, recommencez';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentPin = _confirming ? _confirmPin : _pin;
+
+    String title;
+    String subtitle;
+    if (widget.mode == _DriverPinMode.verify) {
+      title = widget.driver.name;
+      subtitle = 'Entrez votre code PIN';
+    } else if (_confirming) {
+      title = 'Confirmer le code';
+      subtitle = 'Saisissez à nouveau le code';
+    } else {
+      title = 'Créer votre code PIN';
+      subtitle = '${widget.driver.name} — choisissez 4 chiffres';
+    }
+
+    return Dialog(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icône
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline, color: Colors.green, size: 28),
+            ),
+            const SizedBox(height: 16),
+
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                textAlign: TextAlign.center),
+
+            const SizedBox(height: 28),
+
+            // Indicateurs chiffres
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(4, (i) {
+                final filled = i < currentPin.length;
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: filled ? Colors.green : Colors.transparent,
+                    border: Border.all(
+                      color: filled ? Colors.green : Colors.grey,
+                      width: 2,
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: const TextStyle(fontSize: 12, color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            ],
+
+            const SizedBox(height: 28),
+
+            // Pavé numérique
+            for (final row in [
+              ['1', '2', '3'],
+              ['4', '5', '6'],
+              ['7', '8', '9'],
+              ['', '0', '⌫'],
+            ])
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: row.map((k) {
+                  if (k.isEmpty) return const SizedBox(width: 68, height: 52);
+                  return GestureDetector(
+                    onTap: () => k == '⌫' ? _onDelete() : _onKey(k),
+                    child: Container(
+                      width: 68,
+                      height: 52,
+                      margin: const EdgeInsets.all(5),
+                      decoration: k == '⌫'
+                          ? null
+                          : BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Theme.of(context).dividerColor),
+                            ),
+                      alignment: Alignment.center,
+                      child: k == '⌫'
+                          ? const Icon(Icons.backspace_outlined,
+                              color: Colors.grey, size: 20)
+                          : Text(k,
+                              style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold)),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+            const SizedBox(height: 16),
+
+            // Annuler
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Annuler',
+                  style: TextStyle(color: Colors.grey)),
             ),
           ],
         ),
