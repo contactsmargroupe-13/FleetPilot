@@ -356,6 +356,50 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
             ),
           ),
         ),
+
+        const SizedBox(height: 32),
+
+        // ── Déconnexion ──────────────────────────────────────────────────
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Retour à l\'accueil ?'),
+                  content: const Text(
+                      'Tu seras redirigé vers l\'écran de sélection Manager / Chauffeur.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Annuler'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.pop(context); // fermer dialog
+                        Navigator.of(context).popUntil((route) => route.isFirst);
+                      },
+                      style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('Se déconnecter'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+            ),
+            icon: const Icon(Icons.logout),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text('Se déconnecter'),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 20),
       ],
     );
   }

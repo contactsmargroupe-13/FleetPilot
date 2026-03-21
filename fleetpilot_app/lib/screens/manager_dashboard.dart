@@ -141,6 +141,16 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerSettingsPage()));
             }),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Retour accueil',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(context); // fermer drawer
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+            ),
           ],
         ),
       ),
