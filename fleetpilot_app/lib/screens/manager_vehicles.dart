@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'add_truck.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import 'models/equipment.dart';
 
 class ManagerVehiclesPage extends ConsumerStatefulWidget {
   const ManagerVehiclesPage({super.key});
@@ -442,6 +443,51 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
             ],
 
             const SizedBox(height: 12),
+
+            // Matériel affecté
+            Builder(builder: (_) {
+              final equip = ref.read(appStateProvider).equipment
+                  .where((e) => e.assignedTruckPlate == t.plate)
+                  .toList();
+              if (equip.isEmpty) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.build_outlined, size: 16, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      Text('Matériel à bord (${equip.length})',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: equip.map((e) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.build, size: 12, color: Colors.blue),
+                          const SizedBox(width: 4),
+                          Text(e.name,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue)),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              );
+            }),
 
             // Actions
             Wrap(

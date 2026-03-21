@@ -26,6 +26,7 @@ class Equipment {
   final DateTime purchaseDate;
   final int amortMonths;
   final String? note;
+  final String? assignedTruckPlate;
 
   const Equipment({
     required this.id,
@@ -35,6 +36,7 @@ class Equipment {
     required this.purchaseDate,
     required this.amortMonths,
     this.note,
+    this.assignedTruckPlate,
   });
 
   /// Valeur résiduelle (amortissement linéaire)
@@ -69,6 +71,7 @@ class Equipment {
         'purchaseDate': purchaseDate.toIso8601String(),
         'amortMonths': amortMonths,
         'note': note,
+        'assignedTruckPlate': assignedTruckPlate,
       };
 
   factory Equipment.fromJson(Map<String, dynamic> json) => Equipment(
@@ -82,5 +85,6 @@ class Equipment {
         purchaseDate: DateTime.parse(json['purchaseDate'] as String),
         amortMonths: json['amortMonths'] as int,
         note: json['note'] as String?,
+        assignedTruckPlate: json['assignedTruckPlate'] as String?,
       );
 }

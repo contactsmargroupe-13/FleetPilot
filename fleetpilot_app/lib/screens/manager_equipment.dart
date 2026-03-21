@@ -77,8 +77,19 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
                       Text(e.name,
                           style: const TextStyle(
                               fontWeight: FontWeight.w700, fontSize: 15)),
-                      Text(equipmentCategoryLabel(e.category),
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Row(
+                        children: [
+                          Text(equipmentCategoryLabel(e.category),
+                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          if (e.assignedTruckPlate != null) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.local_shipping, size: 12, color: Colors.grey.shade500),
+                            const SizedBox(width: 3),
+                            Text(e.assignedTruckPlate!,
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -165,6 +176,8 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
     final noteCtrl = TextEditingController(text: existing?.note ?? '');
     var category = existing?.category ?? EquipmentCategory.autre;
     var purchaseDate = existing?.purchaseDate ?? DateTime.now();
+    String? assignedTruck = existing?.assignedTruckPlate;
+    final trucks = ref.read(appStateProvider).trucks;
 
     showDialog(
       context: context,
@@ -243,6 +256,26 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
                       border: OutlineInputBorder(),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: assignedTruck,
+                    decoration: const InputDecoration(
+                      labelText: 'Affecté au camion',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.local_shipping_outlined),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('— Non affecté —'),
+                      ),
+                      ...trucks.map((t) => DropdownMenuItem(
+                            value: t.plate,
+                            child: Text('${t.plate} • ${t.model}'),
+                          )),
+                    ],
+                    onChanged: (v) => setDialog(() => assignedTruck = v),
+                  ),
                 ],
               ),
             ),
@@ -273,6 +306,7 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
                   purchaseDate: purchaseDate,
                   amortMonths: amort,
                   note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+                  assignedTruckPlate: assignedTruck,
                 );
 
                 setState(() {

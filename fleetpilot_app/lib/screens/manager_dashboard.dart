@@ -202,11 +202,6 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
 
   final Map<String, TextEditingController> _daysCtrls = {};
 
-  // Sections personnalisables (pliables)
-  final Set<String> _visibleSections = {
-    'kpi', 'rentabilite', 'sante', 'resume', 'classement', 'cartes',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -346,11 +341,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final allTrucks = ref.read(appStateProvider).trucks;
-
-    final trucks = _selectedPlate == null
-        ? allTrucks
-        : allTrucks.where((t) => t.plate == _selectedPlate).toList();
-
+    final trucks = allTrucks;
     final List<Driver> drivers = ref.read(appStateProvider).drivers;
 
     final double totalSalaries =
@@ -650,474 +641,317 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
 
     // Seuil de rentabilité
     final totalCosts = totalExpenses + totalFixed + totalSalaries;
-    final avgDailyRevenue = allTrucks.fold(0.0, (s, t) => s + t.dailyRate);
-    final seuilJours = avgDailyRevenue > 0 ? totalCosts / avgDailyRevenue : 0.0;
     final seuilAtteint = totalRevenue >= totalCosts;
+
+    // Prev month trends
+    final prevMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+    double prevRevenue = 0;
+    double prevExpenses = 0;
+    double prevFixed = 0;
+    for (final t in allTrucks) {
+      final days = _parseDays(_daysCtrlFor(t.plate, prevMonth).text);
+      prevRevenue += (t.dailyRate as num).toDouble() * days;
+      prevExpenses += _sumExpensesForTruckInMonth(t.plate, prevMonth);
+      prevFixed += _truckFixedMonthlyCost(t);
+    }
+    final prevCosts = prevExpenses + prevFixed + totalSalaries;
+    final prevProfit = prevRevenue - prevCosts;
+    final profitTrend = totalProfit - prevProfit;
+
+    // Sorted trucks for ranking
+    final sortedByProfit = [...computedTrucks]
+      ..sort((a, b) => b.profit.compareTo(a.profit));
+    final maxAbsProfit = sortedByProfit.isEmpty
+        ? 1.0
+        : sortedByProfit.map((t) => t.profit.abs()).reduce((a, b) => a > b ? a : b).clamp(1.0, double.infinity);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── En-tête + personnalisation
+        // ── 1. Header + month selector ──────────────────────────────────
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                "Dashboard",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-              ),
+            const Text("Dashboard",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.chevron_left, size: 20),
+              onPressed: () => setState(() {
+                _selectedMonth = DateTime(
+                    _selectedMonth.year, _selectedMonth.month - 1);
+              }),
+            ),
+            Text(
+              '${['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][_selectedMonth.month - 1]} ${_selectedMonth.year}',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
             IconButton(
-              icon: const Icon(Icons.tune, size: 20),
-              tooltip: 'Personnaliser',
-              onPressed: _showCustomizeDialog,
+              icon: const Icon(Icons.chevron_right, size: 20),
+              onPressed: () => setState(() {
+                _selectedMonth = DateTime(
+                    _selectedMonth.year, _selectedMonth.month + 1);
+              }),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
 
-        // ── Sélecteur mois ────────────────────────────────────────────────
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => setState(() {
-                    _selectedMonth = DateTime(
-                        _selectedMonth.year, _selectedMonth.month - 1);
-                  }),
-                ),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      '${['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][_selectedMonth.month - 1]} ${_selectedMonth.year}',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => setState(() {
-                    _selectedMonth = DateTime(
-                        _selectedMonth.year, _selectedMonth.month + 1);
-                  }),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Vue d'ensemble rapide ─────────────────────────────────────────
+        // ── 2. Big profit/loss card with trend ──────────────────────────
         Card(
           color: totalProfit >= 0
-              ? Colors.green.withValues(alpha: 0.06)
-              : Colors.red.withValues(alpha: 0.06),
+              ? Colors.green.withValues(alpha: 0.07)
+              : Colors.red.withValues(alpha: 0.07),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Profit principal
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        totalProfit >= 0 ? 'Profit' : 'Perte',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${totalProfit >= 0 ? '+' : ''}${totalProfit.toStringAsFixed(0)} €',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: totalProfit >= 0 ? Colors.green : Colors.red,
                       ),
-                      Text(
-                        '${totalProfit >= 0 ? '+' : ''}${totalProfit.toStringAsFixed(0)} €',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: totalProfit >= 0 ? Colors.green : Colors.red,
-                        ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      totalProfit >= 0 ? 'Profit' : 'Perte',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: totalProfit >= 0 ? Colors.green : Colors.red,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                // Mini stats
-                Expanded(
-                  flex: 3,
-                  child: Row(
-                    children: [
-                      _overviewMini('CA', '${totalRevenue.toStringAsFixed(0)} €', Colors.blue),
-                      const SizedBox(width: 8),
-                      _overviewMini('Coûts', '${totalCosts.toStringAsFixed(0)} €', Colors.orange),
-                      const SizedBox(width: 8),
-                      _overviewMini('Camions', '${allTrucks.length}', Colors.teal),
-                      const SizedBox(width: 8),
-                      _overviewMini('Chauffeurs', '${drivers.length}', Colors.indigo),
-                    ],
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      profitTrend >= 0 ? Icons.trending_up : Icons.trending_down,
+                      size: 16,
+                      color: profitTrend >= 0 ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${profitTrend >= 0 ? '+' : ''}${profitTrend.toStringAsFixed(0)} € vs mois précédent',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: profitTrend >= 0 ? Colors.green.shade700 : Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _kpiMini('CA', '${totalRevenue.toStringAsFixed(0)} €', Colors.blue),
+                    _kpiMini('Coûts', '${totalCosts.toStringAsFixed(0)} €', Colors.orange),
+                    _kpiMini('Camions', '${allTrucks.length}', Colors.teal),
+                    _kpiMini('Chauffeurs', '${drivers.length}', Colors.indigo),
+                  ],
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        // ── Seuil de rentabilité ──────────────────────────────────────────
-        if (_visibleSections.contains('rentabilite')) ...[
-          _buildCollapsibleHeader('rentabilite', 'Seuil de rentabilité'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        seuilAtteint ? Icons.check_circle : Icons.flag_outlined,
+        // ── 3. Seuil de rentabilité (compact) ───────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      seuilAtteint ? Icons.check_circle : Icons.flag_outlined,
+                      color: seuilAtteint ? Colors.green : Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      seuilAtteint
+                          ? 'Seuil atteint'
+                          : '${(totalCosts - totalRevenue).toStringAsFixed(0)} € restants',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
                         color: seuilAtteint ? Colors.green : Colors.orange,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              seuilAtteint
-                                  ? 'Seuil atteint !'
-                                  : '${(totalCosts - totalRevenue).toStringAsFixed(0)} € restants',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: seuilAtteint ? Colors.green : Colors.orange,
-                              ),
-                            ),
-                            Text(
-                              'Seuil : ${seuilJours.toStringAsFixed(0)} jours de CA pour couvrir les coûts',
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: totalCosts > 0
-                          ? (totalRevenue / totalCosts).clamp(0.0, 1.0)
-                          : 0.0,
-                      minHeight: 14,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation(
-                        seuilAtteint ? Colors.green : Colors.orange,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('CA : ${totalRevenue.toStringAsFixed(0)} €',
-                          style: const TextStyle(fontSize: 12)),
-                      Text(
-                        '${totalCosts > 0 ? (totalRevenue / totalCosts * 100).toStringAsFixed(0) : 0}%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: seuilAtteint ? Colors.green : Colors.orange,
-                        ),
+                    const Spacer(),
+                    Text(
+                      '${totalCosts > 0 ? (totalRevenue / totalCosts * 100).toStringAsFixed(0) : 0}%',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: seuilAtteint ? Colors.green : Colors.orange,
                       ),
-                      Text('Coûts : ${totalCosts.toStringAsFixed(0)} €',
-                          style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(8),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: totalCosts > 0
+                        ? (totalRevenue / totalCosts).clamp(0.0, 1.0)
+                        : 0.0,
+                    minHeight: 10,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation(
+                      seuilAtteint ? Colors.green : Colors.orange,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _costLine('Fixes', totalFixed),
+                    const SizedBox(width: 12),
+                    _costLine('Dépenses', totalExpenses),
+                    const SizedBox(width: 12),
+                    _costLine('Salaires', totalSalaries),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // ── 4. Health row: 3 chips ──────────────────────────────────────
+        Row(
+          children: [
+            _healthChip('Rentables', profitableCount, Colors.green),
+            const SizedBox(width: 8),
+            _healthChip('À surveiller', warningCount, Colors.orange),
+            const SizedBox(width: 8),
+            _healthChip('En perte', lossCount, Colors.red),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // ── 5. Classement camions (compact list with profit bars) ───────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Classement camions',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                if (sortedByProfit.isEmpty)
+                  const Text('Aucun camion',
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                ...sortedByProfit.map((t) {
+                  final barRatio = (t.profit / maxAbsProfit).clamp(-1.0, 1.0);
+                  final isPositive = t.profit >= 0;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
                     child: Row(
                       children: [
-                        Expanded(child: _miniLine('Charges fixes', '${totalFixed.toStringAsFixed(0)} €')),
-                        Expanded(child: _miniLine('Dépenses', '${totalExpenses.toStringAsFixed(0)} €')),
-                        Expanded(child: _miniLine('Salaires', '${totalSalaries.toStringAsFixed(0)} €')),
+                        SizedBox(
+                          width: 80,
+                          child: Text(t.plate,
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              Container(
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              FractionallySizedBox(
+                                widthFactor: barRatio.abs(),
+                                child: Container(
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: isPositive
+                                        ? Colors.green.withValues(alpha: 0.6)
+                                        : Colors.red.withValues(alpha: 0.6),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 70,
+                          child: Text(
+                            '${t.profit >= 0 ? '+' : ''}${t.profit.toStringAsFixed(0)} €',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isPositive ? Colors.green : Colors.red,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // ── KPI globaux ──────────────────────────────────────────────────
-        if (_visibleSections.contains('kpi')) ...[
-          _buildCollapsibleHeader('kpi', 'Indicateurs clés'),
-        SizedBox(
-          height: 110,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              _KpiCard(
-                label: "CA mois",
-                value: "${totalRevenue.toStringAsFixed(0)} €",
-                icon: Icons.payments_outlined,
-                color: Colors.blue,
-              ),
-              _KpiCard(
-                label: "Dépenses mois",
-                value: "${totalExpenses.toStringAsFixed(0)} €",
-                icon: Icons.receipt_long_outlined,
-                color: Colors.orange,
-              ),
-              _KpiCard(
-                label: "Profit global",
-                value: "${totalProfit.toStringAsFixed(0)} €",
-                icon: Icons.account_balance_wallet_outlined,
-                color: totalProfit >= 0 ? Colors.green : Colors.red,
-              ),
-              _KpiCard(
-                label: "Km mois",
-                value: "${totalKmMonth.toStringAsFixed(0)} km",
-                icon: Icons.route_outlined,
-                color: Colors.blueGrey,
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 12),
-        ], // fin KPI
-
-        // ── Santé flotte ──────────────────────────────────────────────────
-        if (_visibleSections.contains('sante')) ...[
-        _buildCollapsibleHeader('sante', 'Santé de la flotte'),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _HealthBox(
-                    label: "Rentables",
-                    value: profitableCount.toString(),
-                    icon: Icons.check_circle_outline,
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _HealthBox(
-                    label: "À surveiller",
-                    value: warningCount.toString(),
-                    icon: Icons.visibility_outlined,
-                    color: Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _HealthBox(
-                    label: "En perte",
-                    value: lossCount.toString(),
-                    icon: Icons.warning_amber_rounded,
-                    color: Colors.red,
-                  ),
-                ),
+                  );
+                }),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        ], // fin santé
+        const SizedBox(height: 10),
 
-        // ── Résumé financier ──────────────────────────────────────────────
-        if (_visibleSections.contains('resume')) ...[
-        _buildCollapsibleHeader('resume', 'Résumé financier'),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _DashboardSummaryBox(
-                  label: "Revenus flotte",
-                  value: "${totalRevenue.toStringAsFixed(0)} €",
-                  icon: Icons.payments_outlined,
-                ),
-                _DashboardSummaryBox(
-                  label: "Dépenses flotte",
-                  value: "${totalExpenses.toStringAsFixed(0)} €",
-                  icon: Icons.receipt_long_outlined,
-                ),
-                _DashboardSummaryBox(
-                  label: "Profit global",
-                  value: "${totalProfit.toStringAsFixed(0)} €",
-                  icon: Icons.account_balance_wallet_outlined,
-                ),
-                _DashboardSummaryBox(
-                  label: "Coût/km flotte",
-                  value: totalCostPerKm > 0
-                      ? "${totalCostPerKm.toStringAsFixed(2)} €"
-                      : "-",
-                  icon: Icons.speed_outlined,
-                ),
-                _DashboardSummaryBox(
-                  label: "Conso flotte",
-                  value: totalLitersPer100 > 0
-                      ? "${totalLitersPer100.toStringAsFixed(1)} L/100"
-                      : "-",
-                  icon: Icons.local_gas_station_outlined,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        ], // fin résumé
-
-        // ── Classement ──────────────────────────────────────────────────
-        if (_visibleSections.contains('classement')) ...[
-        _buildCollapsibleHeader('classement', 'Classement flotte'),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        // ── 6. Coût/km + Consommation (side by side) ────────────────────
+        Row(
           children: [
-            _RankingSummaryCard(
-              title: "Meilleur camion",
-              value: bestTruck == null
-                  ? "-"
-                  : "${bestTruck.plate} • ${bestTruck.profit.toStringAsFixed(0)} €",
-              color: Colors.green,
-              icon: Icons.emoji_events_outlined,
+            Expanded(
+              child: _metricCard(
+                'Coût / km',
+                totalCostPerKm > 0
+                    ? '${totalCostPerKm.toStringAsFixed(2)} €'
+                    : '-',
+                Icons.speed_outlined,
+                Colors.blueGrey,
+              ),
             ),
-            _RankingSummaryCard(
-              title: "Pire camion",
-              value: worstTruck == null
-                  ? "-"
-                  : "${worstTruck.plate} • ${worstTruck.profit.toStringAsFixed(0)} €",
-              color: Colors.red,
-              icon: Icons.report_problem_outlined,
-            ),
-            _RankingSummaryCard(
-              title: "Camions analysés",
-              value: computedTrucks.length.toString(),
-              color: Colors.blueGrey,
-              icon: Icons.local_shipping_outlined,
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metricCard(
+                'Consommation',
+                totalLitersPer100 > 0
+                    ? '${totalLitersPer100.toStringAsFixed(1)} L/100'
+                    : '-',
+                Icons.local_gas_station_outlined,
+                Colors.deepOrange,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        _FleetRankingSection(
-          title: "Top rentables",
-          color: Colors.green,
-          icon: Icons.trending_up,
-          items: profitableTrucks.take(5).toList(),
-          severityColorBuilder: _severityColor,
-          severityLabelBuilder: _severityLabel,
-          severityGetter: _analysisSeverity,
-          reasonsGetter: _analysisReasons,
-          actionsGetter: _analysisActions,
-        ),
-        const SizedBox(height: 12),
-        _FleetRankingSection(
-          title: "À surveiller",
-          color: Colors.orange,
-          icon: Icons.visibility_outlined,
-          items: warningTrucks.take(5).toList(),
-          severityColorBuilder: _severityColor,
-          severityLabelBuilder: _severityLabel,
-          severityGetter: _analysisSeverity,
-          reasonsGetter: _analysisReasons,
-          actionsGetter: _analysisActions,
-        ),
-        const SizedBox(height: 12),
-        _FleetRankingSection(
-          title: "En perte",
-          color: Colors.red,
-          icon: Icons.warning_amber_rounded,
-          items: lossTrucks.take(5).toList(),
-          severityColorBuilder: _severityColor,
-          severityLabelBuilder: _severityLabel,
-          severityGetter: _analysisSeverity,
-          reasonsGetter: _analysisReasons,
-          actionsGetter: _analysisActions,
-        ),
-        const SizedBox(height: 12),
-        ], // fin classement
-
-        // ── Cartes profits ──────────────────────────────────────────────
-        if (_visibleSections.contains('cartes')) ...[
-        _buildCollapsibleHeader('cartes', 'Cartes profits camion'),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: computedTrucks
-              .map(
-                (truck) => _ProfitTruckCard(
-                  truck: truck,
-                  severity: _analysisSeverity(truck.analysis),
-                  severityColor: _severityColor(_analysisSeverity(truck.analysis)),
-                  severityLabel: _severityLabel(_analysisSeverity(truck.analysis)),
-                  reasons: _analysisReasons(truck.analysis),
-                  actions: _analysisActions(truck.analysis),
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 12),
-        ...cards,
-        ], // fin cartes
       ],
     );
   }
 
-  Widget _buildCollapsibleHeader(String key, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          ),
-          IconButton(
-            icon: Icon(
-              _visibleSections.contains(key)
-                  ? Icons.visibility
-                  : Icons.visibility_off,
-              size: 18,
-              color: Colors.grey,
-            ),
-            onPressed: () {
-              setState(() {
-                if (_visibleSections.contains(key)) {
-                  _visibleSections.remove(key);
-                } else {
-                  _visibleSections.add(key);
-                }
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  // ── Helper widgets ──────────────────────────────────────────────────────
 
-  Widget _overviewMini(String label, String value, Color color) {
+  Widget _kpiMini(String label, String value, Color color) {
     return Expanded(
       child: Column(
         children: [
           Text(value,
               style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+                  fontSize: 13, fontWeight: FontWeight.w700, color: color)),
           Text(label,
               style: const TextStyle(fontSize: 10, color: Colors.grey)),
         ],
@@ -1125,65 +959,55 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     );
   }
 
-  Widget _miniLine(String label, String value) {
-    return Column(
-      children: [
-        Text(value,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-        Text(label,
-            style: const TextStyle(fontSize: 10, color: Colors.grey)),
-      ],
+  Widget _healthChip(String label, int count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Text('$count',
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+            Text(label,
+                style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.8))),
+          ],
+        ),
+      ),
     );
   }
 
-  void _showCustomizeDialog() {
-    final sections = {
-      'rentabilite': 'Seuil de rentabilité',
-      'kpi': 'Indicateurs clés (KPI)',
-      'sante': 'Santé de la flotte',
-      'resume': 'Résumé financier',
-      'classement': 'Classement flotte',
-      'cartes': 'Cartes profits camion',
-    };
+  Widget _costLine(String label, double amount) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text('${amount.toStringAsFixed(0)} €',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
 
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setDialog) => AlertDialog(
-          title: const Text('Personnaliser le dashboard'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: sections.entries.map((e) {
-              return CheckboxListTile(
-                title: Text(e.value),
-                value: _visibleSections.contains(e.key),
-                onChanged: (v) {
-                  setDialog(() {
-                    if (v == true) {
-                      _visibleSections.add(e.key);
-                    } else {
-                      _visibleSections.remove(e.key);
-                    }
-                  });
-                  setState(() {});
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _visibleSections.addAll(sections.keys);
-                });
-                setDialog(() {});
-              },
-              child: const Text('Tout afficher'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
+  Widget _metricCard(String label, String value, IconData icon, Color color) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
       ),
