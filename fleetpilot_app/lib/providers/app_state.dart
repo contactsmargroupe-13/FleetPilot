@@ -10,6 +10,7 @@ import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
 import '../screens/models/driver_notification.dart';
 import '../screens/models/expense.dart';
+import '../screens/models/manager_alert.dart';
 import '../screens/models/tour.dart';
 import '../services/database_service.dart';
 
@@ -36,6 +37,7 @@ class AppState extends ChangeNotifier {
   List<Candidate> candidates = [];
   List<AdminDocument> adminDocuments = [];
   List<DriverNotification> driverNotifications = [];
+  List<ManagerAlert> managerAlerts = [];
 
   AppState(this._db);
 
@@ -50,6 +52,7 @@ class AppState extends ChangeNotifier {
     candidates = await _db.loadCandidates();
     adminDocuments = await _db.loadAdminDocuments();
     driverNotifications = await _db.loadDriverNotifications();
+    managerAlerts = await _db.loadManagerAlerts();
     notifyListeners();
   }
 
@@ -392,6 +395,32 @@ class AppState extends ChangeNotifier {
   void deleteDriverNotification(String id) {
     driverNotifications.removeWhere((n) => n.id == id);
     _db.deleteDriverNotification(id);
+    notifyListeners();
+  }
+
+  // ─── Alertes manager ──────────────────────────────────────────────────
+
+  int get unreadManagerAlertCount =>
+      managerAlerts.where((a) => !a.read).length;
+
+  void addManagerAlert(ManagerAlert alert) {
+    managerAlerts.add(alert);
+    _db.saveManagerAlert(alert);
+    notifyListeners();
+  }
+
+  void markManagerAlertRead(String id) {
+    final i = managerAlerts.indexWhere((a) => a.id == id);
+    if (i != -1) {
+      managerAlerts[i] = managerAlerts[i].copyWith(read: true);
+      _db.saveManagerAlert(managerAlerts[i]);
+      notifyListeners();
+    }
+  }
+
+  void deleteManagerAlert(String id) {
+    managerAlerts.removeWhere((a) => a.id == id);
+    _db.deleteManagerAlert(id);
     notifyListeners();
   }
 }

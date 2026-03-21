@@ -8,8 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import 'driver_dashboard.dart';
 import 'driver_documents.dart';
+import 'add_truck.dart';
 import 'models/driver.dart';
 import 'models/driver_day_entry.dart';
+import 'models/manager_alert.dart';
 import 'models/tour.dart';
 
 class DriverHomePage extends ConsumerStatefulWidget {
@@ -43,6 +45,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   final _clientsCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
   final _handlingCtrl = TextEditingController();
+  final _handlingCountCtrl = TextEditingController();
   bool _hasHandling = false;
   bool _extraTour = false;
 
@@ -94,6 +97,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     _clientsCtrl.dispose();
     _weightCtrl.dispose();
     _handlingCtrl.dispose();
+    _handlingCountCtrl.dispose();
     super.dispose();
   }
 
@@ -204,6 +208,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     _clientsCtrl.clear();
     _weightCtrl.clear();
     _handlingCtrl.clear();
+    _handlingCountCtrl.clear();
     setState(() {
       _tourStart = null;
       _hasHandling = false;
@@ -244,6 +249,12 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     }
     if (_hasHandling && _handlingCtrl.text.trim().isEmpty) {
       _snack('Nom du client manutention obligatoire.');
+      return;
+    }
+    if (_hasHandling &&
+        (int.tryParse(_handlingCountCtrl.text.trim()) == null ||
+            int.parse(_handlingCountCtrl.text.trim()) <= 0)) {
+      _snack('Nombre de manutentions invalide.');
       return;
     }
 
@@ -292,6 +303,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     _clientsCtrl.clear();
     _weightCtrl.clear();
     _handlingCtrl.clear();
+    _handlingCountCtrl.clear();
 
     setState(() {
       _tourStart = null;
@@ -303,6 +315,81 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     });
 
     _snack('Tournée ${tour.tourNumber} enregistrée — ${_fmtTime(start)} → ${_fmtTime(now)}');
+  }
+
+  Future<void> _changerCamion(List<Truck> trucks) async {
+    // Étape 1 : choisir le nouveau camion
+    final newTruck = await showDialog<String>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Changer de camion'),
+        children: trucks
+            .where((t) => t.plate != _selectedTruck)
+            .map((t) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(context, t.plate),
+                  child: ListTile(
+                    leading: const Icon(Icons.local_shipping_outlined),
+                    title: Text(t.plate),
+                    subtitle: Text(t.model),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+    if (newTruck == null || !mounted) return;
+
+    final truckModel = trucks.where((t) => t.plate == newTruck).firstOrNull?.model ?? '';
+
+    // Étape 2 : confirmation
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Confirmer le changement'),
+        content: Text(
+          'Tu vas passer du camion $_selectedTruck au camion $newTruck ($truckModel).\n\nEs-tu sûr ? Cette action est liée à une panne ou un remplacement.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Confirmer le changement'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final oldTruck = _selectedTruck;
+    setState(() => _selectedTruck = newTruck);
+
+    // Créer une alerte manager
+    final now = DateTime.now();
+    final alert = ManagerAlert(
+      id: '${now.microsecondsSinceEpoch}_truck_change',
+      type: ManagerAlertType.truckChange,
+      title: '$_driverName a changé de camion',
+      message: 'Changement temporaire : $oldTruck → $newTruck ($truckModel). '
+          'Motif probable : panne ou remplacement.',
+      date: now,
+      driverName: _driverName,
+      oldTruckPlate: oldTruck,
+      newTruckPlate: newTruck,
+    );
+    ref.read(appStateProvider).addManagerAlert(alert);
+
+    // Mettre à jour les day entries du jour pour ce chauffeur
+    ref.read(appStateProvider).updateDriverDayEntryTruck(
+      driverName: _driverName!,
+      date: now,
+      newTruckPlate: newTruck,
+    );
+
+    _snack('Camion changé → $newTruck ($truckModel)');
   }
 
   void _snack(String msg) {
@@ -459,73 +546,231 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       return _buildProfileSelector();
     }
 
-    final unreadCount =
-        ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
-
     final pages = [
       _tourStart == null ? _buildIdle() : _buildActiveTour(),
-      DriverDocumentsPage(driverName: _driverName!),
       DriverDashboardPage(driverName: _driverName!),
+      _buildSettings(),
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Bonjour $_driverName'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Changer de chauffeur',
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Changer de chauffeur ?'),
-                  content: const Text(
-                      'Tu quitteras ton profil actuel.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Annuler')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Changer')),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await DriverSession.clearDriverName();
-                setState(() {
-                  _driverName = null;
-                  _tabIndex = 0;
-                });
-              }
-            },
-          ),
-        ],
       ),
       body: pages[_tabIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (i) => setState(() => _tabIndex = i),
-        destinations: [
-          const NavigationDestination(
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.route_outlined),
             label: 'Tournée',
           ),
           NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text('$unreadCount'),
-              child: const Icon(Icons.folder_outlined),
-            ),
-            label: 'Documents',
-          ),
-          const NavigationDestination(
             icon: Icon(Icons.analytics_outlined),
             label: 'Dashboard',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: 'Paramètres',
+          ),
         ],
       ),
+    );
+  }
+
+  // ── Vue : Paramètres ───────────────────────────────────────────────────
+
+  Widget _buildSettings() {
+    final unreadCount =
+        ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // Avatar + nom
+        Center(
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 36,
+                child: Text(
+                  _driverName![0].toUpperCase(),
+                  style: const TextStyle(fontSize: 28),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _driverName!,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Builder(builder: (_) {
+                final driver = ref.read(appStateProvider).drivers
+                    .where((d) => d.name == _driverName)
+                    .firstOrNull;
+                if (driver == null) return const SizedBox.shrink();
+                final colorStr = driverStatusColor(driver.status);
+                final Color color;
+                switch (colorStr) {
+                  case 'green':
+                    color = Colors.green;
+                    break;
+                  case 'blue':
+                    color = Colors.blue;
+                    break;
+                  case 'orange':
+                    color = Colors.orange;
+                    break;
+                  case 'red':
+                    color = Colors.red;
+                    break;
+                  default:
+                    color = Colors.grey;
+                }
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    driverStatusLabel(driver.status),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // Section Documents
+        const Text(
+          'Documents',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.folder_outlined,
+          title: 'Mes documents',
+          subtitle: 'Permis, fiches de paie, contrats',
+          badge: unreadCount,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DriverDocumentsPage(driverName: _driverName!),
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(height: 20),
+
+        // Section Compte
+        const Text(
+          'Compte',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.swap_horiz,
+          title: 'Changer de chauffeur',
+          onTap: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Changer de chauffeur ?'),
+                content: const Text('Tu quitteras ton profil actuel.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Annuler'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Changer'),
+                  ),
+                ],
+              ),
+            );
+            if (confirm == true) {
+              await DriverSession.clearDriverName();
+              setState(() {
+                _driverName = null;
+                _tabIndex = 0;
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.lock_reset,
+          title: 'Modifier mon PIN',
+          onTap: () async {
+            final driver = ref.read(appStateProvider).drivers
+                .where((d) => d.name == _driverName)
+                .firstOrNull;
+            if (driver == null) return;
+            await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => _DriverPinDialog(
+                driver: driver,
+                mode: _DriverPinMode.change,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.logout,
+          title: 'Se déconnecter',
+          color: Colors.red,
+          onTap: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Se déconnecter ?'),
+                content: const Text(
+                  'Tu seras redirigé vers la sélection de profil.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Annuler'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                    child: const Text('Se déconnecter'),
+                  ),
+                ],
+              ),
+            );
+            if (confirm == true) {
+              await DriverSession.clearDriverName();
+              setState(() {
+                _driverName = null;
+                _tabIndex = 0;
+              });
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -707,20 +952,42 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
         const SizedBox(height: 20),
 
-        // Camion
-        DropdownButtonFormField<String>(
-          value: _selectedTruck,
-          decoration: const InputDecoration(
-            labelText: 'Camion *',
-            border: OutlineInputBorder(),
+        // Camion (verrouillé pendant la tournée, changeable via bouton)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(4),
           ),
-          items: trucks
-              .map((t) => DropdownMenuItem(
-                    value: t.plate,
-                    child: Text('${t.plate} • ${t.model}'),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _selectedTruck = v),
+          child: Row(
+            children: [
+              const Icon(Icons.local_shipping_outlined, color: Colors.grey),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Camion',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                    Text(
+                      _selectedTruck != null
+                          ? '${_selectedTruck!} • ${trucks.where((t) => t.plate == _selectedTruck).firstOrNull?.model ?? ''}'
+                          : 'Aucun',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _changerCamion(trucks),
+                icon: const Icon(Icons.swap_horiz, size: 18),
+                label: const Text('Changer'),
+                style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -819,10 +1086,21 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         ),
         if (_hasHandling) ...[
           TextField(
+            controller: _handlingCountCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Nombre de manutentions *',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.numbers),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
             controller: _handlingCtrl,
             decoration: const InputDecoration(
-              labelText: 'Client manutention',
+              labelText: 'Nom du client manutention *',
               border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.business),
             ),
           ),
           const SizedBox(height: 8),
@@ -990,9 +1268,68 @@ class _StatBox extends StatelessWidget {
   }
 }
 
+// ── Tuile paramètres ─────────────────────────────────────────────────────────
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final int badge;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.badge = 0,
+    this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? Theme.of(context).colorScheme.onSurface;
+    return Card(
+      child: ListTile(
+        leading: Icon(icon, color: c),
+        title: Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w600, color: c),
+        ),
+        subtitle: subtitle != null ? Text(subtitle!) : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (badge > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, color: Colors.grey.shade400),
+          ],
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
 // ── Dialog PIN chauffeur ──────────────────────────────────────────────────────
 
-enum _DriverPinMode { create, verify }
+enum _DriverPinMode { create, verify, change }
 
 class _DriverPinDialog extends StatefulWidget {
   const _DriverPinDialog({required this.driver, required this.mode});
@@ -1009,9 +1346,20 @@ class _DriverPinDialogState extends State<_DriverPinDialog> {
   bool _confirming = false;
   String? _error;
 
+  // Pour le mode change : étape 0 = ancien PIN, étape 1 = nouveau, étape 2 = confirmer
+  int _changeStep = 0;
+  String _oldPin = '';
+  String _newPin = '';
+
   void _onKey(String digit) {
     setState(() {
       _error = null;
+
+      if (widget.mode == _DriverPinMode.change) {
+        _onKeyChange(digit);
+        return;
+      }
+
       if (_confirming) {
         if (_confirmPin.length < 4) _confirmPin += digit;
         if (_confirmPin.length == 4) _validate();
@@ -1027,9 +1375,59 @@ class _DriverPinDialogState extends State<_DriverPinDialog> {
     });
   }
 
+  void _onKeyChange(String digit) {
+    if (_changeStep == 0) {
+      if (_oldPin.length < 4) _oldPin += digit;
+      if (_oldPin.length == 4) {
+        if (widget.driver.checkPin(_oldPin)) {
+          _changeStep = 1;
+        } else {
+          _oldPin = '';
+          _error = 'Code actuel incorrect';
+        }
+      }
+    } else if (_changeStep == 1) {
+      if (_newPin.length < 4) _newPin += digit;
+      if (_newPin.length == 4) {
+        _changeStep = 2;
+      }
+    } else {
+      if (_confirmPin.length < 4) _confirmPin += digit;
+      if (_confirmPin.length == 4) {
+        if (_newPin == _confirmPin) {
+          final container = ProviderScope.containerOf(context);
+          final appState = container.read(appStateProvider);
+          final updated = widget.driver.withPin(_newPin);
+          appState.updateDriver(widget.driver.name, updated);
+          Navigator.of(context).pop(true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('PIN modifié avec succès')),
+          );
+        } else {
+          _confirmPin = '';
+          _changeStep = 1;
+          _newPin = '';
+          _error = 'Les codes ne correspondent pas, recommencez';
+        }
+      }
+    }
+  }
+
   void _onDelete() {
     setState(() {
       _error = null;
+
+      if (widget.mode == _DriverPinMode.change) {
+        if (_changeStep == 0) {
+          if (_oldPin.isNotEmpty) _oldPin = _oldPin.substring(0, _oldPin.length - 1);
+        } else if (_changeStep == 1) {
+          if (_newPin.isNotEmpty) _newPin = _newPin.substring(0, _newPin.length - 1);
+        } else {
+          if (_confirmPin.isNotEmpty) _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1);
+        }
+        return;
+      }
+
       if (_confirming) {
         if (_confirmPin.isNotEmpty) {
           _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1);
@@ -1074,11 +1472,27 @@ class _DriverPinDialogState extends State<_DriverPinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final currentPin = _confirming ? _confirmPin : _pin;
+    String currentPin;
+    if (widget.mode == _DriverPinMode.change) {
+      currentPin = _changeStep == 0 ? _oldPin : (_changeStep == 1 ? _newPin : _confirmPin);
+    } else {
+      currentPin = _confirming ? _confirmPin : _pin;
+    }
 
     String title;
     String subtitle;
-    if (widget.mode == _DriverPinMode.verify) {
+    if (widget.mode == _DriverPinMode.change) {
+      if (_changeStep == 0) {
+        title = 'Modifier le PIN';
+        subtitle = 'Entrez votre code actuel';
+      } else if (_changeStep == 1) {
+        title = 'Nouveau code PIN';
+        subtitle = 'Choisissez 4 chiffres';
+      } else {
+        title = 'Confirmer le nouveau code';
+        subtitle = 'Saisissez à nouveau le code';
+      }
+    } else if (widget.mode == _DriverPinMode.verify) {
       title = widget.driver.name;
       subtitle = 'Entrez votre code PIN';
     } else if (_confirming) {

@@ -2,6 +2,54 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
+enum DriverStatus {
+  cdi,
+  cdd,
+  interim,
+  finDeMission,
+  miseAPied,
+  vire,
+  demission,
+}
+
+String driverStatusLabel(DriverStatus status) {
+  switch (status) {
+    case DriverStatus.cdi:
+      return 'CDI';
+    case DriverStatus.cdd:
+      return 'CDD';
+    case DriverStatus.interim:
+      return 'Intérim';
+    case DriverStatus.finDeMission:
+      return 'Fin de mission';
+    case DriverStatus.miseAPied:
+      return 'Mise à pied';
+    case DriverStatus.vire:
+      return 'Viré';
+    case DriverStatus.demission:
+      return 'Démission';
+  }
+}
+
+String driverStatusColor(DriverStatus status) {
+  switch (status) {
+    case DriverStatus.cdi:
+      return 'green';
+    case DriverStatus.cdd:
+      return 'blue';
+    case DriverStatus.interim:
+      return 'orange';
+    case DriverStatus.finDeMission:
+      return 'grey';
+    case DriverStatus.miseAPied:
+      return 'red';
+    case DriverStatus.vire:
+      return 'red';
+    case DriverStatus.demission:
+      return 'grey';
+  }
+}
+
 class Driver {
   final String name;
   final double fixedSalary;
@@ -23,6 +71,9 @@ class Driver {
   // PIN hashé (SHA-256) pour l'authentification chauffeur
   final String? pinHash;
 
+  // Statut contractuel
+  final DriverStatus status;
+
   const Driver({
     required this.name,
     required this.fixedSalary,
@@ -35,6 +86,7 @@ class Driver {
     this.hasPermisCE = false,
     this.assignedTourNumber,
     this.pinHash,
+    this.status = DriverStatus.cdi,
   });
 
   double get totalSalary => fixedSalary + bonus;
@@ -68,6 +120,7 @@ class Driver {
     bool? hasPermisCE,
     String? assignedTourNumber,
     String? pinHash,
+    DriverStatus? status,
   }) {
     return Driver(
       name: name ?? this.name,
@@ -82,6 +135,7 @@ class Driver {
       hasPermisCE: hasPermisCE ?? this.hasPermisCE,
       assignedTourNumber: assignedTourNumber ?? this.assignedTourNumber,
       pinHash: pinHash ?? this.pinHash,
+      status: status ?? this.status,
     );
   }
 
@@ -104,6 +158,7 @@ class Driver {
       hasPermisCE: hasPermisCE,
       assignedTourNumber: assignedTourNumber,
       pinHash: null,
+      status: status,
     );
   }
 
@@ -119,6 +174,7 @@ class Driver {
         'hasPermisCE': hasPermisCE,
         'assignedTourNumber': assignedTourNumber,
         'pinHash': pinHash,
+        'status': status.name,
       };
 
   factory Driver.fromJson(Map<String, dynamic> json) => Driver(
@@ -135,6 +191,12 @@ class Driver {
         hasPermisCE: json['hasPermisCE'] as bool? ?? false,
         assignedTourNumber: json['assignedTourNumber'] as String?,
         pinHash: json['pinHash'] as String?,
+        status: json['status'] != null
+            ? DriverStatus.values.firstWhere(
+                (e) => e.name == json['status'],
+                orElse: () => DriverStatus.cdi,
+              )
+            : DriverStatus.cdi,
       );
 
   static String _hashPin(String pin) {

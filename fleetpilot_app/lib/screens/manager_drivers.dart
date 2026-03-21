@@ -155,6 +155,8 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 17)),
+                          const SizedBox(width: 8),
+                          _statusBadge(driver.status),
                           if (alert != null) ...[
                             const SizedBox(width: 8),
                             alert,
@@ -272,6 +274,43 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
     );
   }
 
+  Widget _statusBadge(DriverStatus status) {
+    final colorStr = driverStatusColor(status);
+    final Color color;
+    switch (colorStr) {
+      case 'green':
+        color = Colors.green;
+        break;
+      case 'blue':
+        color = Colors.blue;
+        break;
+      case 'orange':
+        color = Colors.orange;
+        break;
+      case 'red':
+        color = Colors.red;
+        break;
+      default:
+        color = Colors.grey;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        driverStatusLabel(status),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   void _msg(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
@@ -301,6 +340,7 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
   late bool _permisB;
   late bool _permisC;
   late bool _permisCE;
+  late DriverStatus _status;
 
   @override
   void initState() {
@@ -322,6 +362,7 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
     _permisB = d?.hasPermisB ?? false;
     _permisC = d?.hasPermisC ?? false;
     _permisCE = d?.hasPermisCE ?? false;
+    _status = d?.status ?? DriverStatus.cdi;
   }
 
   @override
@@ -373,6 +414,8 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
         hasPermisB: _permisB,
         hasPermisC: _permisC,
         hasPermisCE: _permisCE,
+        status: _status,
+        pinHash: widget.driver?.pinHash,
       ),
     );
   }
@@ -444,6 +487,26 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
                 prefixIcon: Icon(Icons.badge_outlined),
                 border: OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Statut contractuel ──────────────────────────────────────
+            _sectionTitle('Statut contractuel'),
+
+            DropdownButtonFormField<DriverStatus>(
+              value: _status,
+              decoration: const InputDecoration(
+                labelText: 'Statut *',
+                prefixIcon: Icon(Icons.work_outline),
+                border: OutlineInputBorder(),
+              ),
+              items: DriverStatus.values
+                  .map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(driverStatusLabel(s)),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _status = v ?? _status),
             ),
             const SizedBox(height: 20),
 

@@ -14,6 +14,7 @@ import 'manager_tours.dart';
 import 'manager_vehicles.dart';
 import 'models/driver.dart';
 import 'models/expense.dart';
+import 'models/manager_alert.dart';
 
 class ManagerShell extends ConsumerStatefulWidget {
   const ManagerShell({super.key});
@@ -27,6 +28,8 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
 
   @override
   Widget build(BuildContext context) {
+    final alertCount = ref.watch(appStateProvider).unreadManagerAlertCount;
+
     final pages = [
       const ManagerDashboardPage(),
       const ManagerPlanningPage(),
@@ -39,14 +42,49 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text("FleetPilot Manager")),
+      appBar: AppBar(
+        title: const Text("FleetPilot Manager"),
+        actions: [
+          if (alertCount > 0)
+            IconButton(
+              icon: Badge(
+                label: Text('$alertCount'),
+                child: const Icon(Icons.notifications_outlined),
+              ),
+              tooltip: 'Alertes',
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => _ManagerAlertsSheet(ref: ref),
+                );
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.notifications_none),
+              tooltip: 'Alertes',
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => _ManagerAlertsSheet(ref: ref),
+                );
+              },
+            ),
+        ],
+      ),
       body: pages[index],
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => setState(() => index = i),
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.analytics_outlined),
+            icon: Badge(
+              isLabelVisible: alertCount > 0,
+              label: Text('$alertCount'),
+              child: const Icon(Icons.analytics_outlined),
+            ),
             label: "Dashboard",
           ),
           NavigationDestination(
@@ -1593,6 +1631,190 @@ class _AdminMenuPage extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ── Tuile de menu ─────────────────────────────────────────────────────────────
+
+// ── Sheet alertes manager ──────────────────────────────────────────────────────
+
+class _ManagerAlertsSheet extends StatelessWidget {
+  final WidgetRef ref;
+
+  const _ManagerAlertsSheet({required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final alerts = ref.watch(appStateProvider).managerAlerts
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      minChildSize: 0.3,
+      expand: false,
+      builder: (context, scrollController) => Column(
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.notifications_active, color: Colors.orange),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Alertes',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (alerts.any((a) => !a.read))
+                  TextButton(
+                    onPressed: () {
+                      for (final a in alerts.where((a) => !a.read)) {
+                        ref.read(appStateProvider).markManagerAlertRead(a.id);
+                      }
+                    },
+                    child: const Text('Tout marquer lu'),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: alerts.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text(
+                        'Aucune alerte',
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: alerts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final alert = alerts[i];
+                      return _ManagerAlertTile(alert: alert, ref: ref);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManagerAlertTile extends StatelessWidget {
+  final ManagerAlert alert;
+  final WidgetRef ref;
+
+  const _ManagerAlertTile({required this.alert, required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final isUnread = !alert.read;
+    final color = alert.type == ManagerAlertType.truckChange
+        ? Colors.orange
+        : alert.type == ManagerAlertType.documentExpire
+            ? Colors.red
+            : Colors.blue;
+    final icon = alert.type == ManagerAlertType.truckChange
+        ? Icons.swap_horiz
+        : alert.type == ManagerAlertType.documentExpire
+            ? Icons.warning_amber_rounded
+            : Icons.info_outline;
+
+    final timeAgo = _formatTimeAgo(alert.date);
+
+    return Container(
+      color: isUnread ? color.withOpacity(0.04) : null,
+      child: ListTile(
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                alert.title,
+                style: TextStyle(
+                  fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (isUnread)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (alert.message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  alert.message!,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                timeAgo,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
+            ),
+          ],
+        ),
+        onTap: () {
+          if (isUnread) {
+            ref.read(appStateProvider).markManagerAlertRead(alert.id);
+          }
+        },
+        trailing: IconButton(
+          icon: const Icon(Icons.close, size: 18),
+          onPressed: () {
+            ref.read(appStateProvider).deleteManagerAlert(alert.id);
+          },
+        ),
+      ),
+    );
+  }
+
+  String _formatTimeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 1) return "À l'instant";
+    if (diff.inMinutes < 60) return "Il y a ${diff.inMinutes} min";
+    if (diff.inHours < 24) return "Il y a ${diff.inHours}h";
+    if (diff.inDays < 7) return "Il y a ${diff.inDays}j";
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
   }
 }
 

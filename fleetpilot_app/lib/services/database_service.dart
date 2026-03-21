@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,7 @@ import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
 import '../screens/models/driver_notification.dart';
 import '../screens/models/expense.dart';
+import '../screens/models/manager_alert.dart';
 import '../screens/models/tour.dart';
 import 'company_settings.dart';
 
@@ -25,40 +27,49 @@ class DatabaseService {
   factory DatabaseService.fromDatabase(Database db) => DatabaseService._(db);
 
   static Future<DatabaseService> init() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'fleetpilot.db');
+    final String path;
+    if (kIsWeb) {
+      path = 'fleetpilot.db';
+    } else {
+      final dbPath = await getDatabasesPath();
+      path = p.join(dbPath, 'fleetpilot.db');
+    }
 
     final db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
-        final batch = db.batch();
-        batch.execute(
+        await db.execute(
             'CREATE TABLE drivers (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE trucks (plate TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE tours (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE expenses (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE driver_day_entries (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE client_pricings (company_name TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE driver_documents (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE candidates (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE admin_documents (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        batch.execute(
+        await db.execute(
             'CREATE TABLE driver_notifications (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
-        await batch.commit();
+        await db.execute(
+            'CREATE TABLE manager_alerts (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute(
               'CREATE TABLE IF NOT EXISTS driver_notifications (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS manager_alerts (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         }
       },
     );
@@ -80,22 +91,24 @@ class DatabaseService {
   Future<void> _migrateFromSharedPreferences(SharedPreferences prefs) async {
     if (prefs.getBool('_migrated_to_sqlite') == true) return;
 
-    await _db.transaction((txn) async {
-      _migrateJsonList(txn, prefs, 'drivers', 'drivers', 'name');
-      _migrateJsonList(txn, prefs, 'trucks', 'trucks', 'plate');
-      _migrateJsonList(txn, prefs, 'tours', 'tours', 'id');
-      _migrateJsonList(txn, prefs, 'expenses', 'expenses', 'id');
-      _migrateJsonList(
-          txn, prefs, 'driverDayEntries', 'driver_day_entries', 'id');
-      _migrateJsonList(txn, prefs, 'clientPricings', 'client_pricings',
-          'company_name',
-          jsonKeyField: 'companyName');
-      _migrateJsonList(
-          txn, prefs, 'driverDocuments', 'driver_documents', 'id');
-      _migrateJsonList(txn, prefs, 'candidates', 'candidates', 'id');
-      _migrateJsonList(
-          txn, prefs, 'adminDocuments', 'admin_documents', 'id');
-    });
+    if (!kIsWeb) {
+      await _db.transaction((txn) async {
+        _migrateJsonList(txn, prefs, 'drivers', 'drivers', 'name');
+        _migrateJsonList(txn, prefs, 'trucks', 'trucks', 'plate');
+        _migrateJsonList(txn, prefs, 'tours', 'tours', 'id');
+        _migrateJsonList(txn, prefs, 'expenses', 'expenses', 'id');
+        _migrateJsonList(
+            txn, prefs, 'driverDayEntries', 'driver_day_entries', 'id');
+        _migrateJsonList(txn, prefs, 'clientPricings', 'client_pricings',
+            'company_name',
+            jsonKeyField: 'companyName');
+        _migrateJsonList(
+            txn, prefs, 'driverDocuments', 'driver_documents', 'id');
+        _migrateJsonList(txn, prefs, 'candidates', 'candidates', 'id');
+        _migrateJsonList(
+            txn, prefs, 'adminDocuments', 'admin_documents', 'id');
+      });
+    }
 
     // Seed default data if database is empty
     await _seedDefaults();
@@ -329,31 +342,25 @@ class DatabaseService {
   // ── Batch save (for cascading updates) ─────────────────────────────────────
 
   Future<void> saveAllTours(List<Tour> tours) async {
-    final batch = _db.batch();
-    batch.delete('tours');
+    await _db.delete('tours');
     for (final t in tours) {
-      batch.insert('tours', {'id': t.id, 'data': jsonEncode(t.toJson())});
+      await _db.insert('tours', {'id': t.id, 'data': jsonEncode(t.toJson())});
     }
-    await batch.commit(noResult: true);
   }
 
   Future<void> saveAllDayEntries(List<DriverDayEntry> entries) async {
-    final batch = _db.batch();
-    batch.delete('driver_day_entries');
+    await _db.delete('driver_day_entries');
     for (final e in entries) {
-      batch.insert(
+      await _db.insert(
           'driver_day_entries', {'id': e.id, 'data': jsonEncode(e.toJson())});
     }
-    await batch.commit(noResult: true);
   }
 
   Future<void> saveAllDrivers(List<Driver> drivers) async {
-    final batch = _db.batch();
-    batch.delete('drivers');
+    await _db.delete('drivers');
     for (final d in drivers) {
-      batch.insert('drivers', {'name': d.name, 'data': jsonEncode(d.toJson())});
+      await _db.insert('drivers', {'name': d.name, 'data': jsonEncode(d.toJson())});
     }
-    await batch.commit(noResult: true);
   }
 
   // ── Driver Notifications ─────────────────────────────────────────────────
@@ -366,4 +373,15 @@ class DatabaseService {
 
   Future<void> deleteDriverNotification(String id) =>
       _delete('driver_notifications', 'id', id);
+
+  // ── Manager Alerts ──────────────────────────────────────────────────────
+
+  Future<List<ManagerAlert>> loadManagerAlerts() =>
+      _loadAll('manager_alerts', ManagerAlert.fromJson);
+
+  Future<void> saveManagerAlert(ManagerAlert a) =>
+      _upsert('manager_alerts', 'id', a.id, a.toJson());
+
+  Future<void> deleteManagerAlert(String id) =>
+      _delete('manager_alerts', 'id', id);
 }
