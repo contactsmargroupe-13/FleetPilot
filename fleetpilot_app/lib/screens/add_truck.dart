@@ -4,6 +4,28 @@ import 'package:flutter/material.dart';
 
 enum OwnershipType { achat, location }
 
+enum TruckStatus { fonctionnel, enPanne, enReparation, hs, vendu }
+
+String truckStatusLabel(TruckStatus s) {
+  switch (s) {
+    case TruckStatus.fonctionnel: return 'Fonctionnel';
+    case TruckStatus.enPanne: return 'En panne';
+    case TruckStatus.enReparation: return 'En réparation';
+    case TruckStatus.hs: return 'HS';
+    case TruckStatus.vendu: return 'Vendu';
+  }
+}
+
+Color truckStatusColor(TruckStatus s) {
+  switch (s) {
+    case TruckStatus.fonctionnel: return const Color(0xFF2E7D32);
+    case TruckStatus.enPanne: return const Color(0xFFE65100);
+    case TruckStatus.enReparation: return const Color(0xFF1565C0);
+    case TruckStatus.hs: return const Color(0xFFB71C1C);
+    case TruckStatus.vendu: return const Color(0xFF616161);
+  }
+}
+
 enum VehicleType { vl, vl6m3, vl10m3, vl12m3, vl16m3, vl20m3, t75, t12, t19, t26, semi }
 
 String vehicleTypeLabel(VehicleType type) {
@@ -101,6 +123,9 @@ class Truck {
   // Chauffeur assigné
   final String? assignedDriverName;
 
+  // Statut du camion
+  final TruckStatus truckStatus;
+
   const Truck({
     required this.plate,
     required this.model,
@@ -121,6 +146,7 @@ class Truck {
     this.maintenances = const [],
     this.monthlyKmThreshold,
     this.assignedDriverName,
+    this.truckStatus = TruckStatus.fonctionnel,
   });
 
   double? get monthlyCost {
@@ -171,6 +197,7 @@ class Truck {
     List<ServiceEntry>? maintenances,
     double? monthlyKmThreshold,
     Object? assignedDriverName = _sentinel,
+    TruckStatus? truckStatus,
   }) =>
       Truck(
         plate: plate ?? this.plate,
@@ -194,6 +221,7 @@ class Truck {
         assignedDriverName: assignedDriverName == _sentinel
             ? this.assignedDriverName
             : assignedDriverName as String?,
+        truckStatus: truckStatus ?? this.truckStatus,
       );
 
 static const Object _sentinel = Object();
@@ -218,6 +246,7 @@ static const Object _sentinel = Object();
         'maintenances': maintenances.map((e) => e.toJson()).toList(),
         'monthlyKmThreshold': monthlyKmThreshold,
         'assignedDriverName': assignedDriverName,
+        'truckStatus': truckStatus.name,
       };
 
   factory Truck.fromJson(Map<String, dynamic> json) => Truck(
@@ -261,6 +290,12 @@ static const Object _sentinel = Object();
             ? (json['monthlyKmThreshold'] as num).toDouble()
             : null,
         assignedDriverName: json['assignedDriverName'] as String?,
+        truckStatus: json['truckStatus'] != null
+            ? TruckStatus.values.firstWhere(
+                (e) => e.name == json['truckStatus'],
+                orElse: () => TruckStatus.fonctionnel,
+              )
+            : TruckStatus.fonctionnel,
       );
 }
 
@@ -293,6 +328,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
 
   late OwnershipType _ownershipType;
   late VehicleType _vehicleType;
+  late TruckStatus _truckStatus;
   DateTime? _insuranceStart;
   DateTime? _insuranceExpiry;
 
@@ -332,6 +368,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
     );
     _ownershipType = t?.ownershipType ?? OwnershipType.achat;
     _vehicleType = t?.vehicleType ?? VehicleType.vl;
+    _truckStatus = t?.truckStatus ?? TruckStatus.fonctionnel;
     _insuranceStart = t?.insuranceStart;
     _insuranceExpiry = t?.insuranceExpiry;
     _repairs = List.from(t?.repairs ?? []);
@@ -430,6 +467,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
           repairs: _repairs,
           maintenances: _maintenances,
           monthlyKmThreshold: monthlyKmThreshold,
+          truckStatus: _truckStatus,
         ),
       );
     } else {
@@ -465,6 +503,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
           repairs: _repairs,
           maintenances: _maintenances,
           monthlyKmThreshold: monthlyKmThreshold,
+          truckStatus: _truckStatus,
         ),
       );
     }
@@ -577,6 +616,37 @@ class _AddTruckPageState extends State<AddTruckPage> {
                   .toList(),
               onChanged: (v) =>
                   setState(() => _vehicleType = v ?? VehicleType.vl),
+            ),
+            const SizedBox(height: 12),
+
+            DropdownButtonFormField<TruckStatus>(
+              value: _truckStatus,
+              decoration: const InputDecoration(
+                labelText: 'Statut du camion',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.build_circle_outlined),
+              ),
+              items: TruckStatus.values
+                  .map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: truckStatusColor(s),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(truckStatusLabel(s)),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => _truckStatus = v ?? TruckStatus.fonctionnel),
             ),
             const SizedBox(height: 12),
 

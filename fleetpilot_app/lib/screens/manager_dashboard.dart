@@ -88,8 +88,8 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             label: "Dashboard",
           ),
           NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            label: "Planning",
+            icon: Icon(Icons.today_outlined),
+            label: "Suivi",
           ),
           NavigationDestination(
             icon: Icon(Icons.groups_outlined),
@@ -133,6 +133,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
   late DateTime _selectedMonth;
 
   final Map<String, TextEditingController> _daysCtrls = {};
+
+  // Sections personnalisables (pliables)
+  final Set<String> _visibleSections = {
+    'kpi', 'rentabilite', 'sante', 'resume', 'classement', 'cartes',
+  };
 
   @override
   void initState() {
@@ -575,16 +580,130 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         ? null
         : ([...computedTrucks]..sort((a, b) => a.profit.compareTo(b.profit))).first;
 
+    // Seuil de rentabilité
+    final totalCosts = totalExpenses + totalFixed + totalSalaries;
+    final avgDailyRevenue = allTrucks.fold(0.0, (s, t) => s + t.dailyRate);
+    final seuilJours = avgDailyRevenue > 0 ? totalCosts / avgDailyRevenue : 0.0;
+    final seuilAtteint = totalRevenue >= totalCosts;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          "Dashboard",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        // ── En-tête + personnalisation
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                "Dashboard",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.tune, size: 20),
+              tooltip: 'Personnaliser',
+              onPressed: _showCustomizeDialog,
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
+        // ── Seuil de rentabilité ──────────────────────────────────────────
+        if (_visibleSections.contains('rentabilite')) ...[
+          _buildCollapsibleHeader('rentabilite', 'Seuil de rentabilité'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        seuilAtteint ? Icons.check_circle : Icons.flag_outlined,
+                        color: seuilAtteint ? Colors.green : Colors.orange,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              seuilAtteint
+                                  ? 'Seuil atteint !'
+                                  : '${(totalCosts - totalRevenue).toStringAsFixed(0)} € restants',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: seuilAtteint ? Colors.green : Colors.orange,
+                              ),
+                            ),
+                            Text(
+                              'Seuil : ${seuilJours.toStringAsFixed(0)} jours de CA pour couvrir les coûts',
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: totalCosts > 0
+                          ? (totalRevenue / totalCosts).clamp(0.0, 1.0)
+                          : 0.0,
+                      minHeight: 14,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation(
+                        seuilAtteint ? Colors.green : Colors.orange,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('CA : ${totalRevenue.toStringAsFixed(0)} €',
+                          style: const TextStyle(fontSize: 12)),
+                      Text(
+                        '${totalCosts > 0 ? (totalRevenue / totalCosts * 100).toStringAsFixed(0) : 0}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: seuilAtteint ? Colors.green : Colors.orange,
+                        ),
+                      ),
+                      Text('Coûts : ${totalCosts.toStringAsFixed(0)} €',
+                          style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(child: _miniLine('Charges fixes', '${totalFixed.toStringAsFixed(0)} €')),
+                        Expanded(child: _miniLine('Dépenses', '${totalExpenses.toStringAsFixed(0)} €')),
+                        Expanded(child: _miniLine('Salaires', '${totalSalaries.toStringAsFixed(0)} €')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         // ── KPI globaux ──────────────────────────────────────────────────
+        if (_visibleSections.contains('kpi')) ...[
+          _buildCollapsibleHeader('kpi', 'Indicateurs clés'),
         SizedBox(
           height: 110,
           child: ListView(
@@ -619,6 +738,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         ),
 
         const SizedBox(height: 12),
+        ], // fin KPI
+
+        // ── Santé flotte ──────────────────────────────────────────────────
+        if (_visibleSections.contains('sante')) ...[
+        _buildCollapsibleHeader('sante', 'Santé de la flotte'),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -655,38 +779,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           ),
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                const Icon(Icons.calendar_month_outlined),
-                const Text(
-                  "Nouveau : Planning exploitation V2 disponible",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ManagerPlanningPage(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text("Ouvrir le planning"),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
+        ], // fin santé
+
+        // ── Résumé financier ──────────────────────────────────────────────
+        if (_visibleSections.contains('resume')) ...[
+        _buildCollapsibleHeader('resume', 'Résumé financier'),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -728,10 +825,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          "Classement flotte",
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        ], // fin résumé
+
+        // ── Classement ──────────────────────────────────────────────────
+        if (_visibleSections.contains('classement')) ...[
+        _buildCollapsibleHeader('classement', 'Classement flotte'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,
@@ -798,10 +896,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           actionsGetter: _analysisActions,
         ),
         const SizedBox(height: 12),
-        Text(
-          "Cartes profits camion",
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        ], // fin classement
+
+        // ── Cartes profits ──────────────────────────────────────────────
+        if (_visibleSections.contains('cartes')) ...[
+        _buildCollapsibleHeader('cartes', 'Cartes profits camion'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,
@@ -821,7 +920,105 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         ),
         const SizedBox(height: 12),
         ...cards,
+        ], // fin cartes
       ],
+    );
+  }
+
+  Widget _buildCollapsibleHeader(String key, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ),
+          IconButton(
+            icon: Icon(
+              _visibleSections.contains(key)
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+              size: 18,
+              color: Colors.grey,
+            ),
+            onPressed: () {
+              setState(() {
+                if (_visibleSections.contains(key)) {
+                  _visibleSections.remove(key);
+                } else {
+                  _visibleSections.add(key);
+                }
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniLine(String label, String value) {
+    return Column(
+      children: [
+        Text(value,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        Text(label,
+            style: const TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
+    );
+  }
+
+  void _showCustomizeDialog() {
+    final sections = {
+      'rentabilite': 'Seuil de rentabilité',
+      'kpi': 'Indicateurs clés (KPI)',
+      'sante': 'Santé de la flotte',
+      'resume': 'Résumé financier',
+      'classement': 'Classement flotte',
+      'cartes': 'Cartes profits camion',
+    };
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Personnaliser le dashboard'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: sections.entries.map((e) {
+              return CheckboxListTile(
+                title: Text(e.value),
+                value: _visibleSections.contains(e.key),
+                onChanged: (v) {
+                  setDialog(() {
+                    if (v == true) {
+                      _visibleSections.add(e.key);
+                    } else {
+                      _visibleSections.remove(e.key);
+                    }
+                  });
+                  setState(() {});
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _visibleSections.addAll(sections.keys);
+                });
+                setDialog(() {});
+              },
+              child: const Text('Tout afficher'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

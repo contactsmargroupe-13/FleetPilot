@@ -172,6 +172,16 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         ),
         const SizedBox(height: 20),
 
+        // ── Chronologie paie ──────────────────────────────────────────
+        _sectionTitle('Ma paie — $_monthLabel'),
+        _buildSalaryProgress(joursT, driver, salaireMois),
+        const SizedBox(height: 20),
+
+        // ── Absences ──────────────────────────────────────────────────
+        _sectionTitle('Absences — $_monthLabel'),
+        _buildAbsences(joursT),
+        const SizedBox(height: 20),
+
         // ── Activité du mois ────────────────────────────────────────────
         _sectionTitle('Activité — $_monthLabel'),
         Row(
@@ -239,6 +249,253 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
 
         const SizedBox(height: 80),
       ],
+    );
+  }
+
+  Widget _buildSalaryProgress(int joursT, Driver driver, double salaireMois) {
+    const joursBase = 22; // jours ouvrés par mois
+    final progress = joursT / joursBase;
+    final progressClamped = progress.clamp(0.0, 1.0);
+    final salaireAccumule = salaireMois * progressClamped;
+    final reste = (salaireMois - salaireAccumule).clamp(0.0, salaireMois);
+
+    // Emoji ludique selon progression
+    final String emoji;
+    final String message;
+    if (progress >= 1.0) {
+      emoji = '🎉';
+      message = 'Objectif atteint ! Salaire complet gagné.';
+    } else if (progress >= 0.75) {
+      emoji = '🔥';
+      message = 'Presque ! Plus que ${joursBase - joursT} jours.';
+    } else if (progress >= 0.5) {
+      emoji = '💪';
+      message = 'Mi-parcours passé, continue !';
+    } else if (progress > 0) {
+      emoji = '🚀';
+      message = 'C\'est parti ! ${joursBase - joursT} jours restants.';
+    } else {
+      emoji = '⏳';
+      message = 'Aucun jour travaillé ce mois.';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête avec emoji
+            Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 28)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${salaireAccumule.toStringAsFixed(0)} € / ${salaireMois.toStringAsFixed(0)} €',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        message,
+                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Barre de progression
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: progressClamped,
+                minHeight: 16,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  progress >= 1.0
+                      ? Colors.green
+                      : progress >= 0.75
+                          ? Colors.orange
+                          : Colors.blue,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Détail jours
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$joursT jours travaillés',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '${(progressClamped * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: progress >= 1.0 ? Colors.green : Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Détails ligne par ligne
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  _detailLine('Jours travaillés', '$joursT / $joursBase'),
+                  _detailLine('Accumulé', '${salaireAccumule.toStringAsFixed(0)} €'),
+                  _detailLine(
+                    'Reste à gagner',
+                    '${reste.toStringAsFixed(0)} €',
+                  ),
+                  _detailLine(
+                    'Salaire / jour',
+                    '${(salaireMois / joursBase).toStringAsFixed(0)} €',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAbsences(int joursT) {
+    const joursBase = 22;
+    final now = DateTime.now();
+    final isCurrentMonth = _selectedMonth.year == now.year &&
+        _selectedMonth.month == now.month;
+
+    // Jours écoulés dans le mois (ouvrés approximatifs)
+    int joursOuvresEcoules;
+    if (isCurrentMonth) {
+      // Compter les jours ouvrés écoulés (lundi-vendredi)
+      int count = 0;
+      for (int d = 1; d <= now.day; d++) {
+        final date = DateTime(_selectedMonth.year, _selectedMonth.month, d);
+        if (date.weekday <= 5) count++;
+      }
+      joursOuvresEcoules = count;
+    } else {
+      joursOuvresEcoules = joursBase;
+    }
+
+    final joursAbsents = (joursOuvresEcoules - joursT).clamp(0, joursBase);
+
+    if (joursAbsents == 0) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.check_circle_outline, color: Colors.green),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Aucune absence ce mois. Présence parfaite !',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.event_busy, color: Colors.orange),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$joursAbsents jour${joursAbsents > 1 ? 's' : ''} d\'absence',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Sur $joursOuvresEcoules jours ouvrés écoulés',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                children: [
+                  _detailLine('Jours ouvrés écoulés', '$joursOuvresEcoules'),
+                  _detailLine('Jours travaillés', '$joursT'),
+                  _detailLine('Jours absents', '$joursAbsents'),
+                  _detailLine(
+                    'Taux de présence',
+                    joursOuvresEcoules > 0
+                        ? '${(joursT / joursOuvresEcoules * 100).toStringAsFixed(0)}%'
+                        : '—',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Motif non renseigné — contacte ton manager pour justifier tes absences.',
+              style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

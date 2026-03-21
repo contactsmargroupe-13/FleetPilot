@@ -79,6 +79,15 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     if (ref.read(appStateProvider).trucks.isNotEmpty) {
       _selectedTruck = ref.read(appStateProvider).trucks.first.plate;
     }
+    // Pré-remplir avec les dernières valeurs
+    final lastTour = DriverSession.lastTourNumber;
+    final lastCompany = DriverSession.lastCompany;
+    if (lastTour != null && lastTour.isNotEmpty) {
+      _tourNumberCtrl.text = lastTour;
+    }
+    if (lastCompany != null && lastCompany.isNotEmpty) {
+      _companyCtrl.text = lastCompany;
+    }
   }
 
   void _startTimer() {
@@ -202,8 +211,6 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
     await DriverSession.endTour();
     _timer?.cancel();
-    _tourNumberCtrl.clear();
-    _companyCtrl.clear();
     _kmCtrl.clear();
     _clientsCtrl.clear();
     _weightCtrl.clear();
@@ -293,12 +300,16 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     ref.read(appStateProvider).addDriverDayEntry(entry);
     ref.read(appStateProvider).addTour(tour);
 
+    // Sauvegarder n° tournée et client pour la prochaine fois
+    await DriverSession.saveLastTour(
+      _tourNumberCtrl.text.trim(),
+      _companyCtrl.text.trim(),
+    );
+
     await DriverSession.endTour();
     _timer?.cancel();
 
-    // Reset formulaire
-    _tourNumberCtrl.clear();
-    _companyCtrl.clear();
+    // Reset formulaire (garder tourNumber et company pré-remplis)
     _kmCtrl.clear();
     _clientsCtrl.clear();
     _weightCtrl.clear();
@@ -546,6 +557,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       return _buildProfileSelector();
     }
 
+    final unreadCount =
+        ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
+
     final pages = [
       _tourStart == null ? _buildIdle() : _buildActiveTour(),
       DriverDashboardPage(driverName: _driverName!),
@@ -555,22 +569,44 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Bonjour $_driverName'),
+        actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            tooltip: 'Notifications',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DriverDocumentsPage(driverName: _driverName!),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: pages[_tabIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (i) => setState(() => _tabIndex = i),
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.route_outlined),
             label: 'Tournée',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.analytics_outlined),
             label: 'Dashboard',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.settings_outlined),
+            ),
             label: 'Paramètres',
           ),
         ],
@@ -649,6 +685,36 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         ),
         const SizedBox(height: 28),
 
+        // Section Mes informations
+        const Text(
+          'Mon profil',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.person_outline,
+          title: 'Mes informations',
+          subtitle: 'Identité, adresse, permis, contact',
+          onTap: () {
+            final driver = ref.read(appStateProvider).drivers
+                .where((d) => d.name == _driverName)
+                .firstOrNull;
+            if (driver == null) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => _DriverInfoPage(driver: driver),
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(height: 20),
+
         // Section Documents
         const Text(
           'Documents',
@@ -662,7 +728,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         _SettingsTile(
           icon: Icons.folder_outlined,
           title: 'Mes documents',
-          subtitle: 'Permis, fiches de paie, contrats',
+          subtitle: 'FIMO, FCO, ADR, formations',
           badge: unreadCount,
           onTap: () {
             Navigator.push(
@@ -1262,6 +1328,167 @@ class _StatBox extends StatelessWidget {
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Page Mes informations (lecture seule) ─────────────────────────────────────
+
+class _DriverInfoPage extends StatelessWidget {
+  final Driver driver;
+  const _DriverInfoPage({required this.driver});
+
+  String _fmt(DateTime? d) {
+    if (d == null) return 'Non renseigné';
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Mes informations')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Identité
+          _section('Identité'),
+          _infoRow(Icons.person_outline, 'Nom', driver.name),
+          _infoRow(Icons.person_outline, 'Prénom', driver.firstName ?? 'Non renseigné'),
+          _infoRow(Icons.cake_outlined, 'Date de naissance', _fmt(driver.birthDate)),
+          _infoRow(Icons.flag_outlined, 'Nationalité', driver.nationality ?? 'Non renseignée'),
+          const SizedBox(height: 16),
+
+          // ── Contact
+          _section('Contact'),
+          _infoRow(Icons.phone_outlined, 'Téléphone', driver.phone ?? 'Non renseigné'),
+          _infoRow(Icons.email_outlined, 'Email', driver.email ?? 'Non renseigné'),
+          _infoRow(Icons.home_outlined, 'Adresse', driver.address ?? 'Non renseignée'),
+          const SizedBox(height: 16),
+
+          // ── Administratif
+          _section('Administratif'),
+          _infoRow(Icons.badge_outlined, 'N° Sécurité sociale', driver.socialSecurityNumber ?? 'Non renseigné'),
+          _infoRow(Icons.work_outline, 'Statut', driverStatusLabel(driver.status)),
+          _infoRow(Icons.calendar_today_outlined, 'Date d\'embauche', _fmt(driver.hireDate)),
+          const SizedBox(height: 16),
+
+          // ── Permis de conduire
+          _section('Permis de conduire'),
+          _infoRow(Icons.credit_card_outlined, 'N° de permis', driver.licenseNumber ?? 'Non renseigné'),
+          _infoRow(Icons.event_busy_outlined, 'Expiration permis', _fmt(driver.licenseExpiryDate)),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Catégories détenues',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _permitChip('B', driver.hasPermisB),
+                      _permitChip('C', driver.hasPermisC),
+                      _permitChip('CE', driver.hasPermisCE),
+                      _permitChip('D', driver.hasPermisD),
+                      _permitChip('EB', driver.hasPermisEB),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Contact d'urgence
+          _section('Contact d\'urgence'),
+          _infoRow(Icons.emergency_outlined, 'Nom', driver.emergencyContact ?? 'Non renseigné'),
+          _infoRow(Icons.phone_outlined, 'Téléphone', driver.emergencyPhone ?? 'Non renseigné'),
+
+          const SizedBox(height: 24),
+
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Pour modifier tes informations, contacte ton manager.',
+                    style: TextStyle(fontSize: 12, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(title,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w700)),
+      );
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    final isDefault = value == 'Non renseigné' || value == 'Non renseignée';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 140,
+            child: Text(label,
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDefault ? Colors.grey : null,
+                fontStyle: isDefault ? FontStyle.italic : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _permitChip(String label, bool has) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: has ? Colors.green.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: has ? Colors.green.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: has ? Colors.green : Colors.grey,
         ),
       ),
     );

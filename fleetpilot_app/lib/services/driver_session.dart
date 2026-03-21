@@ -48,4 +48,17 @@ class DriverSession {
   static Future<void> setGpsEnabled(bool enabled) async {
     await _prefs?.setBool(_keyGpsEnabled, enabled);
   }
+
+  // ── Dernière tournée (persistance entre tournées) ─────────────────────
+
+  static const _keyLastTourNumber = 'session_last_tour_number';
+  static const _keyLastCompany = 'session_last_company';
+
+  static String? get lastTourNumber => _prefs?.getString(_keyLastTourNumber);
+  static String? get lastCompany => _prefs?.getString(_keyLastCompany);
+
+  static Future<void> saveLastTour(String tourNumber, String company) async {
+    await _prefs?.setString(_keyLastTourNumber, tourNumber);
+    await _prefs?.setString(_keyLastCompany, company);
+  }
 }

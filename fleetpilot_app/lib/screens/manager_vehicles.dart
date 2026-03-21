@@ -354,6 +354,24 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: truckStatusColor(t.truckStatus).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: truckStatusColor(t.truckStatus).withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    truckStatusLabel(t.truckStatus),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      color: truckStatusColor(t.truckStatus),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color:

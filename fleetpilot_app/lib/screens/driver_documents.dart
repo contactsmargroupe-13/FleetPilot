@@ -7,7 +7,8 @@ import 'models/driver_notification.dart';
 
 class DriverDocumentsPage extends ConsumerStatefulWidget {
   final String driverName;
-  const DriverDocumentsPage({super.key, required this.driverName});
+  final bool showAppBar;
+  const DriverDocumentsPage({super.key, required this.driverName, this.showAppBar = true});
 
   @override
   ConsumerState<DriverDocumentsPage> createState() =>
@@ -47,35 +48,40 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
       filteredNotifs = [];
     }
 
-    return ListView(
+    final body = ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Mes documents',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 16),
+        if (!widget.showAppBar) ...[
+          const Text(
+            'Mes documents',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // ── Filtres rapides ──────────────────────────────────────────────
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _filterChip('tous', 'Tous'),
-              const SizedBox(width: 8),
-              _filterChip('amendes', 'Amendes',
-                  count: amendes.length, color: Colors.red),
-              const SizedBox(width: 8),
-              _filterChip('fiches', 'Fiches de paie',
-                  count: notifs
-                      .where((n) => n.type == DriverNotifType.fichePaie)
-                      .length),
-              const SizedBox(width: 8),
-              _filterChip('contrats', 'Contrats',
-                  count: notifs
-                      .where((n) => n.type == DriverNotifType.contrat)
-                      .length),
-            ],
+        Material(
+          type: MaterialType.transparency,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _filterChip('tous', 'Tous'),
+                const SizedBox(width: 8),
+                _filterChip('amendes', 'Amendes',
+                    count: amendes.length, color: Colors.red),
+                const SizedBox(width: 8),
+                _filterChip('fiches', 'Fiches de paie',
+                    count: notifs
+                        .where((n) => n.type == DriverNotifType.fichePaie)
+                        .length),
+                const SizedBox(width: 8),
+                _filterChip('contrats', 'Contrats',
+                    count: notifs
+                        .where((n) => n.type == DriverNotifType.contrat)
+                        .length),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -148,6 +154,14 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
         const SizedBox(height: 80),
       ],
     );
+
+    if (widget.showAppBar) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Mes documents')),
+        body: body,
+      );
+    }
+    return body;
   }
 
   Widget _filterChip(String key, String label, {int count = 0, Color? color}) {

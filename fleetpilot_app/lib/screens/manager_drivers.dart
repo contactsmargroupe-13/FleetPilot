@@ -331,15 +331,26 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;
+  late final TextEditingController _firstNameCtrl;
   late final TextEditingController _salaryCtrl;
   late final TextEditingController _bonusCtrl;
   late final TextEditingController _phoneCtrl;
+  late final TextEditingController _emailCtrl;
   late final TextEditingController _ssCtrl;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _nationalityCtrl;
+  late final TextEditingController _emergencyContactCtrl;
+  late final TextEditingController _emergencyPhoneCtrl;
+  late final TextEditingController _licenseNumberCtrl;
 
   DateTime? _birthDate;
+  DateTime? _hireDate;
+  DateTime? _licenseExpiryDate;
   late bool _permisB;
   late bool _permisC;
   late bool _permisCE;
+  late bool _permisD;
+  late bool _permisEB;
   late DriverStatus _status;
 
   @override
@@ -347,6 +358,7 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
     super.initState();
     final d = widget.driver;
     _nameCtrl = TextEditingController(text: d?.name ?? '');
+    _firstNameCtrl = TextEditingController(text: d?.firstName ?? '');
     _salaryCtrl = TextEditingController(
         text: d?.fixedSalary != null
             ? d!.fixedSalary.toStringAsFixed(0)
@@ -356,22 +368,38 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
             ? d.bonus.toStringAsFixed(0)
             : '');
     _phoneCtrl = TextEditingController(text: d?.phone ?? '');
-    _ssCtrl =
-        TextEditingController(text: d?.socialSecurityNumber ?? '');
+    _emailCtrl = TextEditingController(text: d?.email ?? '');
+    _ssCtrl = TextEditingController(text: d?.socialSecurityNumber ?? '');
+    _addressCtrl = TextEditingController(text: d?.address ?? '');
+    _nationalityCtrl = TextEditingController(text: d?.nationality ?? '');
+    _emergencyContactCtrl = TextEditingController(text: d?.emergencyContact ?? '');
+    _emergencyPhoneCtrl = TextEditingController(text: d?.emergencyPhone ?? '');
+    _licenseNumberCtrl = TextEditingController(text: d?.licenseNumber ?? '');
     _birthDate = d?.birthDate;
+    _hireDate = d?.hireDate;
+    _licenseExpiryDate = d?.licenseExpiryDate;
     _permisB = d?.hasPermisB ?? false;
     _permisC = d?.hasPermisC ?? false;
     _permisCE = d?.hasPermisCE ?? false;
+    _permisD = d?.hasPermisD ?? false;
+    _permisEB = d?.hasPermisEB ?? false;
     _status = d?.status ?? DriverStatus.cdi;
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _firstNameCtrl.dispose();
     _salaryCtrl.dispose();
     _bonusCtrl.dispose();
     _phoneCtrl.dispose();
+    _emailCtrl.dispose();
     _ssCtrl.dispose();
+    _addressCtrl.dispose();
+    _nationalityCtrl.dispose();
+    _emergencyContactCtrl.dispose();
+    _emergencyPhoneCtrl.dispose();
+    _licenseNumberCtrl.dispose();
     super.dispose();
   }
 
@@ -403,17 +431,25 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
       context,
       Driver(
         name: name,
+        firstName: _firstNameCtrl.text.trim().isEmpty ? null : _firstNameCtrl.text.trim(),
         fixedSalary: _parseDouble(_salaryCtrl.text),
         bonus: _parseDouble(_bonusCtrl.text),
-        phone: _phoneCtrl.text.trim().isEmpty
-            ? null
-            : _phoneCtrl.text.trim(),
-        socialSecurityNumber:
-            _ssCtrl.text.trim().isEmpty ? null : _ssCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        socialSecurityNumber: _ssCtrl.text.trim().isEmpty ? null : _ssCtrl.text.trim(),
+        address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+        nationality: _nationalityCtrl.text.trim().isEmpty ? null : _nationalityCtrl.text.trim(),
+        emergencyContact: _emergencyContactCtrl.text.trim().isEmpty ? null : _emergencyContactCtrl.text.trim(),
+        emergencyPhone: _emergencyPhoneCtrl.text.trim().isEmpty ? null : _emergencyPhoneCtrl.text.trim(),
+        licenseNumber: _licenseNumberCtrl.text.trim().isEmpty ? null : _licenseNumberCtrl.text.trim(),
+        licenseExpiryDate: _licenseExpiryDate,
         birthDate: _birthDate,
+        hireDate: _hireDate,
         hasPermisB: _permisB,
         hasPermisC: _permisC,
         hasPermisCE: _permisCE,
+        hasPermisD: _permisD,
+        hasPermisEB: _permisEB,
         status: _status,
         pinHash: widget.driver?.pinHash,
       ),
@@ -437,15 +473,31 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
             // ── Identité ────────────────────────────────────────────────
             _sectionTitle('Identité'),
 
-            TextFormField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Nom complet *',
-                prefixIcon: Icon(Icons.person_outline),
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Nom obligatoire' : null,
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _firstNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Prénom',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nom *',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) =>
+                        (v ?? '').trim().isEmpty ? 'Nom obligatoire' : null,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
 
@@ -455,6 +507,28 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
               decoration: const InputDecoration(
                 labelText: 'Téléphone',
                 prefixIcon: Icon(Icons.phone_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.email_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
+              controller: _addressCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Adresse',
+                prefixIcon: Icon(Icons.home_outlined),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -480,11 +554,45 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
             const SizedBox(height: 12),
 
             TextFormField(
+              controller: _nationalityCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nationalité',
+                prefixIcon: Icon(Icons.flag_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
               controller: _ssCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'N° Sécurité sociale',
                 prefixIcon: Icon(Icons.badge_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Contact d'urgence ───────────────────────────────────────
+            _sectionTitle('Contact d\'urgence'),
+
+            TextFormField(
+              controller: _emergencyContactCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nom du contact',
+                prefixIcon: Icon(Icons.emergency_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
+              controller: _emergencyPhoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Téléphone d\'urgence',
+                prefixIcon: Icon(Icons.phone_outlined),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -513,29 +621,81 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
             // ── Permis ──────────────────────────────────────────────────
             _sectionTitle('Permis de conduire'),
 
+            TextFormField(
+              controller: _licenseNumberCtrl,
+              decoration: const InputDecoration(
+                labelText: 'N° de permis',
+                prefixIcon: Icon(Icons.credit_card_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            _DateTile(
+              label: 'Date d\'expiration du permis',
+              date: _licenseExpiryDate,
+              onTap: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: _licenseExpiryDate ?? DateTime.now().add(const Duration(days: 365 * 5)),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2050),
+                );
+                if (d != null) setState(() => _licenseExpiryDate = d);
+              },
+              onClear: () => setState(() => _licenseExpiryDate = null),
+            ),
+            const SizedBox(height: 12),
+
             Card(
               child: Column(
                 children: [
                   CheckboxListTile(
                     title: const Text('Permis B'),
                     value: _permisB,
-                    onChanged: (v) =>
-                        setState(() => _permisB = v ?? false),
+                    onChanged: (v) => setState(() => _permisB = v ?? false),
                   ),
                   CheckboxListTile(
                     title: const Text('Permis C'),
                     value: _permisC,
-                    onChanged: (v) =>
-                        setState(() => _permisC = v ?? false),
+                    onChanged: (v) => setState(() => _permisC = v ?? false),
                   ),
                   CheckboxListTile(
-                    title: const Text('Permis CE'),
+                    title: const Text('Permis CE (Super lourd)'),
                     value: _permisCE,
-                    onChanged: (v) =>
-                        setState(() => _permisCE = v ?? false),
+                    onChanged: (v) => setState(() => _permisCE = v ?? false),
+                  ),
+                  CheckboxListTile(
+                    title: const Text('Permis D (Transport de personnes)'),
+                    value: _permisD,
+                    onChanged: (v) => setState(() => _permisD = v ?? false),
+                  ),
+                  CheckboxListTile(
+                    title: const Text('Permis EB (Remorque)'),
+                    value: _permisEB,
+                    onChanged: (v) => setState(() => _permisEB = v ?? false),
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Emploi ──────────────────────────────────────────────────
+            _sectionTitle('Emploi'),
+
+            _DateTile(
+              label: 'Date d\'embauche',
+              date: _hireDate,
+              onTap: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: _hireDate ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now(),
+                );
+                if (d != null) setState(() => _hireDate = d);
+              },
+              onClear: () => setState(() => _hireDate = null),
             ),
             const SizedBox(height: 20),
 
