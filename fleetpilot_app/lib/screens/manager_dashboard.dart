@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
 import 'manager_admin.dart';
+import 'manager_assets.dart';
 import 'manager_billing.dart';
 import 'manager_drivers.dart';
+import 'manager_equipment.dart';
 import 'manager_expenses.dart';
 import 'manager_planning.dart';
 import 'manager_recruitment.dart';
@@ -101,7 +103,17 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                     body: const ManagerVehiclesPage(),
                   )));
             }),
+            _drawerTile(Icons.build_outlined, 'Matériel', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerEquipmentPage()));
+            }),
             const Divider(),
+            _drawerTile(Icons.account_balance_outlined, 'Actifs', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerAssetsPage()));
+            }),
             _drawerTile(Icons.receipt_long_outlined, 'Dépenses', () {
               Navigator.pop(context);
               Navigator.push(context,

@@ -9,6 +9,7 @@ import '../screens/models/driver.dart';
 import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
 import '../screens/models/driver_notification.dart';
+import '../screens/models/equipment.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/tour.dart';
@@ -38,6 +39,7 @@ class AppState extends ChangeNotifier {
   List<AdminDocument> adminDocuments = [];
   List<DriverNotification> driverNotifications = [];
   List<ManagerAlert> managerAlerts = [];
+  List<Equipment> equipment = [];
 
   AppState(this._db);
 
@@ -53,6 +55,7 @@ class AppState extends ChangeNotifier {
     adminDocuments = await _db.loadAdminDocuments();
     driverNotifications = await _db.loadDriverNotifications();
     managerAlerts = await _db.loadManagerAlerts();
+    equipment = await _db.loadEquipment();
     notifyListeners();
   }
 
@@ -421,6 +424,27 @@ class AppState extends ChangeNotifier {
   void deleteManagerAlert(String id) {
     managerAlerts.removeWhere((a) => a.id == id);
     _db.deleteManagerAlert(id);
+    notifyListeners();
+  }
+
+  // ─── Matériel ─────────────────────────────────────────────────────────
+
+  void addEquipment(Equipment e) {
+    equipment.add(e);
+    _db.saveEquipment(e);
+    notifyListeners();
+  }
+
+  void updateEquipment(String id, Equipment updated) {
+    final i = equipment.indexWhere((e) => e.id == id);
+    if (i != -1) equipment[i] = updated;
+    _db.saveEquipment(updated);
+    notifyListeners();
+  }
+
+  void deleteEquipment(String id) {
+    equipment.removeWhere((e) => e.id == id);
+    _db.deleteEquipment(id);
     notifyListeners();
   }
 }

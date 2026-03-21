@@ -14,6 +14,7 @@ import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
 import '../screens/models/driver_notification.dart';
 import '../screens/models/expense.dart';
+import '../screens/models/equipment.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/tour.dart';
 import 'company_settings.dart';
@@ -37,7 +38,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute(
             'CREATE TABLE drivers (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
@@ -61,6 +62,8 @@ class DatabaseService {
             'CREATE TABLE driver_notifications (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         await db.execute(
             'CREATE TABLE manager_alerts (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE equipment (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -70,6 +73,10 @@ class DatabaseService {
         if (oldVersion < 3) {
           await db.execute(
               'CREATE TABLE IF NOT EXISTS manager_alerts (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 4) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS equipment (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         }
       },
     );
@@ -384,4 +391,15 @@ class DatabaseService {
 
   Future<void> deleteManagerAlert(String id) =>
       _delete('manager_alerts', 'id', id);
+
+  // ── Equipment ───────────────────────────────────────────────────────
+
+  Future<List<Equipment>> loadEquipment() =>
+      _loadAll('equipment', Equipment.fromJson);
+
+  Future<void> saveEquipment(Equipment e) =>
+      _upsert('equipment', 'id', e.id, e.toJson());
+
+  Future<void> deleteEquipment(String id) =>
+      _delete('equipment', 'id', id);
 }
