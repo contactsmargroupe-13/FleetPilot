@@ -33,46 +33,104 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     final pages = [
       const ManagerDashboardPage(),
       const ManagerPlanningPage(),
-      const ManagerDriversPage(),
-      const ManagerVehiclesPage(),
       const ManagerTours(),
-      const _FinancesMenuPage(),
-      const _AdminMenuPage(),
-      const ManagerSettingsPage(),
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("FleetPilot Manager"),
         actions: [
-          if (alertCount > 0)
-            IconButton(
-              icon: Badge(
-                label: Text('$alertCount'),
-                child: const Icon(Icons.notifications_outlined),
-              ),
-              tooltip: 'Alertes',
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => _ManagerAlertsSheet(ref: ref),
-                );
-              },
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.notifications_none),
-              tooltip: 'Alertes',
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => _ManagerAlertsSheet(ref: ref),
-                );
-              },
+          IconButton(
+            icon: Badge(
+              isLabelVisible: alertCount > 0,
+              label: Text('$alertCount'),
+              child: const Icon(Icons.notifications_outlined),
             ),
+            tooltip: 'Alertes',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => _ManagerAlertsSheet(ref: ref),
+              );
+            },
+          ),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(Icons.local_shipping,
+                      size: 36,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer),
+                  const SizedBox(height: 8),
+                  Text('FleetPilot',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer)),
+                  Text('Gestion de flotte',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7))),
+                ],
+              ),
+            ),
+            _drawerTile(Icons.groups_outlined, 'Chauffeurs', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Chauffeurs')),
+                    body: const ManagerDriversPage(),
+                  )));
+            }),
+            _drawerTile(Icons.local_shipping_outlined, 'Camions', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Camions')),
+                    body: const ManagerVehiclesPage(),
+                  )));
+            }),
+            const Divider(),
+            _drawerTile(Icons.receipt_long_outlined, 'Dépenses', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerExpensesPage()));
+            }),
+            _drawerTile(Icons.request_page_outlined, 'Facturation', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerBillingPage()));
+            }),
+            const Divider(),
+            _drawerTile(Icons.folder_outlined, 'Administratif', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerAdminPage()));
+            }),
+            _drawerTile(Icons.badge_outlined, 'Recrutement', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerRecruitmentPage()));
+            }),
+            const Divider(),
+            _drawerTile(Icons.settings_outlined, 'Paramètres', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerSettingsPage()));
+            }),
+          ],
+        ),
       ),
       body: pages[index],
       bottomNavigationBar: NavigationBar(
@@ -87,36 +145,24 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             ),
             label: "Dashboard",
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.today_outlined),
             label: "Suivi",
           ),
-          NavigationDestination(
-            icon: Icon(Icons.groups_outlined),
-            label: "Chauffeurs",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.local_shipping_outlined),
-            label: "Camions",
-          ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.route_outlined),
             label: "Tournées",
           ),
-          NavigationDestination(
-            icon: Icon(Icons.euro_outlined),
-            label: "Finances",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.folder_outlined),
-            label: "Admin & RH",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: "Paramètres",
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _drawerTile(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      onTap: onTap,
     );
   }
 }
@@ -605,6 +651,92 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             ),
           ],
         ),
+        const SizedBox(height: 4),
+
+        // ── Sélecteur mois ────────────────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () => setState(() {
+                    _selectedMonth = DateTime(
+                        _selectedMonth.year, _selectedMonth.month - 1);
+                  }),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      '${['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][_selectedMonth.month - 1]} ${_selectedMonth.year}',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () => setState(() {
+                    _selectedMonth = DateTime(
+                        _selectedMonth.year, _selectedMonth.month + 1);
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Vue d'ensemble rapide ─────────────────────────────────────────
+        Card(
+          color: totalProfit >= 0
+              ? Colors.green.withValues(alpha: 0.06)
+              : Colors.red.withValues(alpha: 0.06),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Profit principal
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        totalProfit >= 0 ? 'Profit' : 'Perte',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      Text(
+                        '${totalProfit >= 0 ? '+' : ''}${totalProfit.toStringAsFixed(0)} €',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: totalProfit >= 0 ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Mini stats
+                Expanded(
+                  flex: 3,
+                  child: Row(
+                    children: [
+                      _overviewMini('CA', '${totalRevenue.toStringAsFixed(0)} €', Colors.blue),
+                      const SizedBox(width: 8),
+                      _overviewMini('Coûts', '${totalCosts.toStringAsFixed(0)} €', Colors.orange),
+                      const SizedBox(width: 8),
+                      _overviewMini('Camions', '${allTrucks.length}', Colors.teal),
+                      const SizedBox(width: 8),
+                      _overviewMini('Chauffeurs', '${drivers.length}', Colors.indigo),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
 
         // ── Seuil de rentabilité ──────────────────────────────────────────
@@ -952,6 +1084,20 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
               });
             },
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _overviewMini(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value,
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Colors.grey)),
         ],
       ),
     );
