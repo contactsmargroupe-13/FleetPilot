@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
 import 'manager_admin.dart';
+import 'manager_ai_chat.dart';
+import 'manager_ai_report.dart';
 import 'manager_assignments.dart';
+import 'smart_scan_page.dart';
 import 'manager_assets.dart';
 import 'manager_billing.dart';
 import 'manager_drivers.dart';
@@ -146,6 +149,22 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               Navigator.pop(context);
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerRecruitmentPage()));
+            }),
+            const Divider(),
+            _drawerTile(Icons.auto_awesome, 'Assistant IA', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerAiChatPage()));
+            }),
+            _drawerTile(Icons.document_scanner_outlined, 'Scan intelligent', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const SmartScanPage()));
+            }),
+            _drawerTile(Icons.analytics_outlined, 'Rapport IA', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerAiReportPage()));
             }),
             const Divider(),
             _drawerTile(Icons.settings_outlined, 'Paramètres', () {
