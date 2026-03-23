@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
 import 'manager_admin.dart';
+import 'manager_assignments.dart';
 import 'manager_assets.dart';
 import 'manager_billing.dart';
 import 'manager_drivers.dart';
@@ -88,6 +89,11 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                 ],
               ),
             ),
+            _drawerTile(Icons.assignment_ind_outlined, 'Affectations', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerAssignmentsPage()));
+            }),
             _drawerTile(Icons.groups_outlined, 'Chauffeurs', () {
               Navigator.pop(context);
               Navigator.push(context,

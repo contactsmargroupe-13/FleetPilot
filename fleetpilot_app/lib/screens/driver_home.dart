@@ -82,13 +82,25 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     if (ref.read(appStateProvider).trucks.isNotEmpty) {
       _selectedTruck = ref.read(appStateProvider).trucks.first.plate;
     }
-    // Pré-remplir avec les dernières valeurs
+
+    // Pré-remplir selon l'affectation permanente du chauffeur
+    if (_driverName != null) {
+      final assignment = ref.read(appStateProvider).getAssignment(_driverName!);
+      if (assignment != null) {
+        _selectedTruck = assignment.truckPlate;
+        if (assignment.companyName != null && assignment.companyName!.isNotEmpty) {
+          _companyCtrl.text = assignment.companyName!;
+        }
+      }
+    }
+
+    // Sinon, pré-remplir avec les dernières valeurs
     final lastTour = DriverSession.lastTourNumber;
     final lastCompany = DriverSession.lastCompany;
     if (lastTour != null && lastTour.isNotEmpty) {
       _tourNumberCtrl.text = lastTour;
     }
-    if (lastCompany != null && lastCompany.isNotEmpty) {
+    if (_companyCtrl.text.isEmpty && lastCompany != null && lastCompany.isNotEmpty) {
       _companyCtrl.text = lastCompany;
     }
   }
@@ -469,7 +481,17 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     }
 
     await DriverSession.setDriverName(driver.name);
-    setState(() => _driverName = driver.name);
+    setState(() {
+      _driverName = driver.name;
+      // Appliquer l'affectation permanente
+      final assignment = ref.read(appStateProvider).getAssignment(driver.name);
+      if (assignment != null) {
+        _selectedTruck = assignment.truckPlate;
+        if (assignment.companyName != null && assignment.companyName!.isNotEmpty) {
+          _companyCtrl.text = assignment.companyName!;
+        }
+      }
+    });
   }
 
   Future<void> _demarrer() async {

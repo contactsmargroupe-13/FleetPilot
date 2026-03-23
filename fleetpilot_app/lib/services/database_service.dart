@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/add_truck.dart';
 import '../screens/models/admin_document.dart';
 import '../screens/models/candidate.dart';
+import '../screens/models/daily_assignment.dart';
 import '../screens/models/client_pricing.dart';
 import '../screens/models/driver.dart';
 import '../screens/models/driver_day_entry.dart';
@@ -38,7 +39,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute(
             'CREATE TABLE drivers (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
@@ -64,6 +65,8 @@ class DatabaseService {
             'CREATE TABLE manager_alerts (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         await db.execute(
             'CREATE TABLE equipment (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE driver_assignments (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -77,6 +80,10 @@ class DatabaseService {
         if (oldVersion < 4) {
           await db.execute(
               'CREATE TABLE IF NOT EXISTS equipment (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 5) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS driver_assignments (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
         }
       },
     );
@@ -439,4 +446,15 @@ class DatabaseService {
 
   Future<void> deleteEquipment(String id) =>
       _delete('equipment', 'id', id);
+
+  // ── Affectations chauffeur ──────────────────────────────────────────
+
+  Future<List<DriverAssignment>> loadAssignments() =>
+      _loadAll('driver_assignments', DriverAssignment.fromJson);
+
+  Future<void> saveAssignment(DriverAssignment a) =>
+      _upsert('driver_assignments', 'name', a.driverName, a.toJson());
+
+  Future<void> deleteAssignment(String driverName) =>
+      _delete('driver_assignments', 'name', driverName);
 }

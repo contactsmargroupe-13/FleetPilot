@@ -6,6 +6,7 @@ import '../screens/models/admin_document.dart';
 import '../screens/models/candidate.dart';
 import '../screens/models/client_pricing.dart';
 import '../screens/models/driver.dart';
+import '../screens/models/daily_assignment.dart';
 import '../screens/models/driver_day_entry.dart';
 import '../screens/models/driver_document.dart';
 import '../screens/models/driver_notification.dart';
@@ -40,6 +41,7 @@ class AppState extends ChangeNotifier {
   List<DriverNotification> driverNotifications = [];
   List<ManagerAlert> managerAlerts = [];
   List<Equipment> equipment = [];
+  List<DriverAssignment> assignments = [];
 
   AppState(this._db);
 
@@ -56,6 +58,7 @@ class AppState extends ChangeNotifier {
     driverNotifications = await _db.loadDriverNotifications();
     managerAlerts = await _db.loadManagerAlerts();
     equipment = await _db.loadEquipment();
+    assignments = await _db.loadAssignments();
     notifyListeners();
   }
 
@@ -600,6 +603,39 @@ class AppState extends ChangeNotifier {
   void deleteEquipment(String id) {
     equipment.removeWhere((e) => e.id == id);
     _db.deleteEquipment(id);
+    notifyListeners();
+  }
+
+  // ─── Affectations chauffeur → camion + commissionnaire ─────────────
+
+  DriverAssignment? getAssignment(String driverName) {
+    try {
+      return assignments.firstWhere(
+        (a) => a.driverName.toLowerCase() == driverName.toLowerCase(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void setAssignment(DriverAssignment assignment) {
+    final index = assignments.indexWhere(
+      (a) => a.driverName.toLowerCase() == assignment.driverName.toLowerCase(),
+    );
+    if (index != -1) {
+      assignments[index] = assignment;
+    } else {
+      assignments.add(assignment);
+    }
+    _db.saveAssignment(assignment);
+    notifyListeners();
+  }
+
+  void removeAssignment(String driverName) {
+    assignments.removeWhere(
+      (a) => a.driverName.toLowerCase() == driverName.toLowerCase(),
+    );
+    _db.deleteAssignment(driverName);
     notifyListeners();
   }
 }
