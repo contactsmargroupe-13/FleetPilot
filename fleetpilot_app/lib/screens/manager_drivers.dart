@@ -104,6 +104,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
           a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     return Scaffold(
+      appBar: AppBar(title: const Text('Chauffeurs')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openDriverPage(null),
         icon: const Icon(Icons.add),

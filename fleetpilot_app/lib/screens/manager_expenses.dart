@@ -103,14 +103,10 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Row(
             children: [
-              const Expanded(
-                child: Text('Dépenses',
-                    style: TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.w800)),
-              ),
+              const Spacer(),
               FilledButton.icon(
                 onPressed: _addExpense,
                 icon: const Icon(Icons.add),

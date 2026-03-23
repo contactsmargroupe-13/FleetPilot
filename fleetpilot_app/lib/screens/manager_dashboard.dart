@@ -100,10 +100,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             _drawerTile(Icons.groups_outlined, 'Chauffeurs', () {
               Navigator.pop(context);
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => Scaffold(
-                    appBar: AppBar(title: const Text('Chauffeurs')),
-                    body: const ManagerDriversPage(),
-                  )));
+                  MaterialPageRoute(builder: (_) => const ManagerDriversPage()));
             }),
             _drawerTile(Icons.local_shipping_outlined, 'Camions', () {
               Navigator.pop(context);
@@ -127,12 +124,18 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             _drawerTile(Icons.receipt_long_outlined, 'Dépenses', () {
               Navigator.pop(context);
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerExpensesPage()));
+                  MaterialPageRoute(builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Dépenses')),
+                    body: const ManagerExpensesPage(),
+                  )));
             }),
             _drawerTile(Icons.request_page_outlined, 'Facturation', () {
               Navigator.pop(context);
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerBillingPage()));
+                  MaterialPageRoute(builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Facturation')),
+                    body: const ManagerBillingPage(),
+                  )));
             }),
             _drawerTile(Icons.account_balance_outlined, 'URSSAF & Charges', () {
               Navigator.pop(context);
@@ -170,7 +173,10 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             _drawerTile(Icons.settings_outlined, 'Paramètres', () {
               Navigator.pop(context);
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerSettingsPage()));
+                  MaterialPageRoute(builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Paramètres')),
+                    body: const ManagerSettingsPage(),
+                  )));
             }),
             const Divider(),
             ListTile(

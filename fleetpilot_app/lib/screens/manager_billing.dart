@@ -87,22 +87,17 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Facturation clients',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-              ),
-            ),
-            if (clients.isNotEmpty)
+        if (clients.isNotEmpty)
+          Row(
+            children: [
+              const Spacer(),
               FilledButton.icon(
                 onPressed: () => _exportPdf(clients, grandTotal),
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                 label: const Text('Export PDF'),
               ),
-          ],
-        ),
+            ],
+          ),
         const SizedBox(height: 12),
 
         // Sélecteur de mois
