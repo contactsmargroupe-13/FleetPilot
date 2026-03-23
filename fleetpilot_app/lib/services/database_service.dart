@@ -227,24 +227,43 @@ class DatabaseService {
 
   Future<List<T>> _loadAll<T>(
       String table, T Function(Map<String, dynamic>) fromJson) async {
-    final rows = await _db.query(table);
-    return rows.map((row) {
-      final map = jsonDecode(row['data'] as String) as Map<String, dynamic>;
-      return fromJson(map);
-    }).toList();
+    try {
+      final rows = await _db.query(table);
+      final List<T> result = [];
+      for (final row in rows) {
+        try {
+          final map = jsonDecode(row['data'] as String) as Map<String, dynamic>;
+          result.add(fromJson(map));
+        } catch (e) {
+          debugPrint('⚠️ Donnée corrompue ignorée dans $table: $e');
+        }
+      }
+      return result;
+    } catch (e) {
+      debugPrint('❌ Erreur chargement $table: $e');
+      return [];
+    }
   }
 
   Future<void> _upsert(
       String table, String pkColumn, String pkValue, Map<String, dynamic> json) async {
-    await _db.insert(
-      table,
-      {pkColumn: pkValue, 'data': jsonEncode(json)},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    try {
+      await _db.insert(
+        table,
+        {pkColumn: pkValue, 'data': jsonEncode(json)},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      debugPrint('❌ Erreur sauvegarde $table ($pkValue): $e');
+    }
   }
 
   Future<void> _delete(String table, String pkColumn, String pkValue) async {
-    await _db.delete(table, where: '$pkColumn = ?', whereArgs: [pkValue]);
+    try {
+      await _db.delete(table, where: '$pkColumn = ?', whereArgs: [pkValue]);
+    } catch (e) {
+      debugPrint('❌ Erreur suppression $table ($pkValue): $e');
+    }
   }
 
   // ── Drivers ────────────────────────────────────────────────────────────────
@@ -349,24 +368,42 @@ class DatabaseService {
   // ── Batch save (for cascading updates) ─────────────────────────────────────
 
   Future<void> saveAllTours(List<Tour> tours) async {
-    await _db.delete('tours');
-    for (final t in tours) {
-      await _db.insert('tours', {'id': t.id, 'data': jsonEncode(t.toJson())});
+    try {
+      await _db.transaction((txn) async {
+        await txn.delete('tours');
+        for (final t in tours) {
+          await txn.insert('tours', {'id': t.id, 'data': jsonEncode(t.toJson())});
+        }
+      });
+    } catch (e) {
+      debugPrint('❌ Erreur saveAllTours: $e');
     }
   }
 
   Future<void> saveAllDayEntries(List<DriverDayEntry> entries) async {
-    await _db.delete('driver_day_entries');
-    for (final e in entries) {
-      await _db.insert(
-          'driver_day_entries', {'id': e.id, 'data': jsonEncode(e.toJson())});
+    try {
+      await _db.transaction((txn) async {
+        await txn.delete('driver_day_entries');
+        for (final e in entries) {
+          await txn.insert(
+              'driver_day_entries', {'id': e.id, 'data': jsonEncode(e.toJson())});
+        }
+      });
+    } catch (e) {
+      debugPrint('❌ Erreur saveAllDayEntries: $e');
     }
   }
 
   Future<void> saveAllDrivers(List<Driver> drivers) async {
-    await _db.delete('drivers');
-    for (final d in drivers) {
-      await _db.insert('drivers', {'name': d.name, 'data': jsonEncode(d.toJson())});
+    try {
+      await _db.transaction((txn) async {
+        await txn.delete('drivers');
+        for (final d in drivers) {
+          await txn.insert('drivers', {'name': d.name, 'data': jsonEncode(d.toJson())});
+        }
+      });
+    } catch (e) {
+      debugPrint('❌ Erreur saveAllDrivers: $e');
     }
   }
 

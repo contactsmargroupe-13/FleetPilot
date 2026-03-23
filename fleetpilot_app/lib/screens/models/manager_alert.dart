@@ -1,6 +1,7 @@
 enum ManagerAlertType {
   truckChange,     // Changement de camion temporaire (panne)
   documentExpire,  // Document expiré
+  fuelScan,        // Ticket carburant scanné par un chauffeur
   info,            // Information générale
 }
 
@@ -10,6 +11,8 @@ String managerAlertTypeLabel(ManagerAlertType type) {
       return 'Changement de camion';
     case ManagerAlertType.documentExpire:
       return 'Document expiré';
+    case ManagerAlertType.fuelScan:
+      return 'Ticket carburant';
     case ManagerAlertType.info:
       return 'Information';
   }

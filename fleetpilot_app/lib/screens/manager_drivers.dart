@@ -711,6 +711,12 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
                 prefixIcon: Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(),
               ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return null;
+                final val = double.tryParse(v.replaceAll(',', '.').trim());
+                if (val == null || val < 0) return 'Montant invalide';
+                return null;
+              },
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -722,6 +728,12 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
                 prefixIcon: Icon(Icons.workspace_premium_outlined),
                 border: OutlineInputBorder(),
               ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return null;
+                final val = double.tryParse(v.replaceAll(',', '.').trim());
+                if (val == null || val < 0) return 'Montant invalide';
+                return null;
+              },
             ),
             const SizedBox(height: 28),
 

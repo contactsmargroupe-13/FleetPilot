@@ -39,6 +39,20 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
     }
   }
 
+  Future<void> _editExpense(Expense e) async {
+    final updated = await Navigator.push<Expense>(
+      context,
+      MaterialPageRoute(builder: (_) => AddExpensePage(existing: e)),
+    );
+    if (updated != null) {
+      setState(() => ref.read(appStateProvider).updateExpense(e.id, updated));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dépense modifiée')),
+      );
+    }
+  }
+
   void _deleteExpense(Expense e) {
     showDialog(
       context: context,
@@ -246,6 +260,12 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
                             Text('$d/$m',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600)),
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined,
+                                  color: Colors.blue),
+                              tooltip: 'Modifier',
+                              onPressed: () => _editExpense(e),
+                            ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline,
                                   color: Colors.red),

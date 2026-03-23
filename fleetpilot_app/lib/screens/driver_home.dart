@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/driver_session.dart';
 import '../services/gps_tracking_service.dart';
+import '../services/ocr_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import 'driver_dashboard.dart';
@@ -11,6 +13,7 @@ import 'driver_documents.dart';
 import 'add_truck.dart';
 import 'models/driver.dart';
 import 'models/driver_day_entry.dart';
+import 'models/expense.dart';
 import 'models/manager_alert.dart';
 import 'models/tour.dart';
 
@@ -138,6 +141,311 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       }
     });
   }
+
+  // ── Dépense carburant chauffeur ─────────────────────────────────────────────
+
+  bool _isScanning = false;
+
+  /// Ouvre un bottom sheet : scanner (caméra/galerie) ou saisie manuelle
+  Future<void> _addFuelExpense() async {
+    if (_selectedTruck == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sélectionne d\'abord un camion.')),
+      );
+      return;
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Ajouter une dépense carburant',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Prendre en photo'),
+              subtitle: const Text('Photographier le ticket'),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choisir une image'),
+              subtitle: const Text('Depuis la galerie'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Saisie manuelle'),
+              subtitle: const Text('Entrer le montant et les litres'),
+              onTap: () => Navigator.pop(ctx, 'manual'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    if (choice == 'manual') {
+      _manualFuelEntry();
+    } else {
+      _scanFuelTicket(choice == 'camera' ? ImageSource.camera : ImageSource.gallery);
+    }
+  }
+
+  Future<void> _scanFuelTicket(ImageSource source) async {
+    final picker = ImagePicker();
+    final XFile? xfile = await picker.pickImage(
+      source: source,
+      imageQuality: 75,
+      maxWidth: 1200,
+    );
+    if (xfile == null) return;
+
+    final bytes = await xfile.readAsBytes();
+    final ext = xfile.name.split('.').last.toLowerCase();
+    final mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+
+    setState(() => _isScanning = true);
+
+    final result = await OcrService.analyze(bytes, mimeType);
+    if (!mounted) return;
+
+    setState(() => _isScanning = false);
+
+    if (result.error != null || result.amount == null) {
+      // Scan échoué → proposer saisie manuelle
+      final goManual = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Scan échoué'),
+          content: Text(result.error ?? 'Impossible de lire le montant sur le ticket.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Saisie manuelle'),
+            ),
+          ],
+        ),
+      );
+      if (goManual == true && mounted) _manualFuelEntry();
+      return;
+    }
+
+    // Montrer un résumé avant de valider
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ticket scanné'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _scanLine('Montant', '${result.amount!.toStringAsFixed(2)} €'),
+            if (result.liters != null)
+              _scanLine('Litres', result.liters!.toStringAsFixed(2)),
+            if (result.pricePerLiter != null)
+              _scanLine('Prix/L', '${result.pricePerLiter!.toStringAsFixed(3)} €'),
+            if (result.date != null)
+              _scanLine('Date',
+                  '${result.date!.day.toString().padLeft(2, '0')}/${result.date!.month.toString().padLeft(2, '0')}/${result.date!.year}'),
+            if (result.station != null)
+              _scanLine('Station', result.station!),
+            const SizedBox(height: 12),
+            Text('Camion : $_selectedTruck',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Valider'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    _saveFuelExpense(
+      amount: result.amount!,
+      liters: result.liters,
+      date: result.date,
+      station: result.station,
+      source: 'scan',
+    );
+  }
+
+  /// Saisie manuelle d'une dépense carburant
+  Future<void> _manualFuelEntry() async {
+    final amountCtrl = TextEditingController();
+    final litersCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dépense carburant'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Camion : $_selectedTruck',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Montant (€) *',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.euro),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: litersCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Litres (optionnel)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.local_gas_station),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Note / Station (optionnel)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.note_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = double.tryParse(
+                  amountCtrl.text.replaceAll(',', '.').trim());
+              if (amount == null || amount <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Montant invalide')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final amount = double.tryParse(
+        amountCtrl.text.replaceAll(',', '.').trim());
+    final liters = double.tryParse(
+        litersCtrl.text.replaceAll(',', '.').trim());
+    final note = noteCtrl.text.trim();
+
+    amountCtrl.dispose();
+    litersCtrl.dispose();
+    noteCtrl.dispose();
+
+    if (amount == null || amount <= 0) return;
+
+    _saveFuelExpense(
+      amount: amount,
+      liters: liters,
+      station: note.isEmpty ? null : note,
+      source: 'manuel',
+    );
+  }
+
+  /// Enregistre la dépense + alerte manager
+  void _saveFuelExpense({
+    required double amount,
+    double? liters,
+    DateTime? date,
+    String? station,
+    required String source,
+  }) {
+    final expense = Expense(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      date: date ?? DateTime.now(),
+      truckPlate: _selectedTruck!,
+      type: ExpenseType.fuel,
+      amount: amount,
+      liters: liters,
+      note: '${source == 'scan' ? 'Scan' : 'Saisie'} chauffeur ${_driverName ?? ""}${station != null ? ' - $station' : ''}',
+    );
+
+    ref.read(appStateProvider).addExpense(expense);
+
+    // Notifier le manager
+    ref.read(appStateProvider).addManagerAlert(ManagerAlert(
+      id: 'fuel_${expense.id}',
+      type: ManagerAlertType.fuelScan,
+      title: source == 'scan'
+          ? 'Ticket carburant scanné'
+          : 'Dépense carburant ajoutée',
+      message:
+          '${_driverName ?? "Chauffeur"} a ${source == 'scan' ? 'scanné' : 'saisi'} une dépense de ${amount.toStringAsFixed(2)} €'
+          '${liters != null ? ' (${liters.toStringAsFixed(1)} L)' : ''}'
+          ' pour le camion $_selectedTruck.'
+          '${station != null ? '\n$station' : ''}',
+      date: DateTime.now(),
+      driverName: _driverName,
+    ));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Dépense enregistrée : ${amount.toStringAsFixed(2)} € — Manager notifié.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Widget _scanLine(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 80,
+              child: Text(label,
+                  style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            ),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      );
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -740,6 +1048,14 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           },
         ),
 
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.local_gas_station_outlined,
+          title: 'Dépense carburant',
+          subtitle: 'Scanner ou saisir manuellement',
+          onTap: _addFuelExpense,
+        ),
+
         const SizedBox(height: 20),
 
         // Section Compte
@@ -887,6 +1203,34 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               child: Text(
                 'Démarrer la tournée',
                 style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Dépense carburant
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _selectedTruck == null || _isScanning
+                ? null
+                : _addFuelExpense,
+            icon: _isScanning
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.local_gas_station_outlined),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                _isScanning
+                    ? 'Analyse en cours...'
+                    : 'Dépense carburant',
+                style: const TextStyle(fontSize: 16),
               ),
             ),
           ),

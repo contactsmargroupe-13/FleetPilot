@@ -169,6 +169,11 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
                   prefixIcon: Icon(Icons.phone_outlined),
                   border: OutlineInputBorder(),
                 ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  if (v.trim().length < 10) return 'Numéro trop court';
+                  return null;
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -179,6 +184,11 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
                   prefixIcon: Icon(Icons.email_outlined),
                   border: OutlineInputBorder(),
                 ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  if (!v.contains('@') || !v.contains('.')) return 'Email invalide';
+                  return null;
+                },
               ),
               const SizedBox(height: 20),
               SizedBox(

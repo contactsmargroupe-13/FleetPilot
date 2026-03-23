@@ -9,7 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 
 class AddExpensePage extends ConsumerStatefulWidget {
-  const AddExpensePage({super.key});
+  final Expense? existing;
+  const AddExpensePage({super.key, this.existing});
 
   @override
   ConsumerState<AddExpensePage> createState() => _AddExpensePageState();
@@ -29,10 +30,20 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   bool _isScanning = false;
   Uint8List? _imagePreview;
 
+  bool get _isEditing => widget.existing != null;
+
   @override
   void initState() {
     super.initState();
-    if (ref.read(appStateProvider).trucks.isNotEmpty) {
+    if (_isEditing) {
+      final e = widget.existing!;
+      _selectedPlate = e.truckPlate;
+      _type = e.type;
+      _selectedDate = e.date;
+      _amountCtrl.text = e.amount.toStringAsFixed(2);
+      if (e.liters != null) _litersCtrl.text = e.liters!.toStringAsFixed(2);
+      if (e.note != null) _noteCtrl.text = e.note!;
+    } else if (ref.read(appStateProvider).trucks.isNotEmpty) {
       _selectedPlate = ref.read(appStateProvider).trucks.first.plate;
     }
   }
@@ -125,7 +136,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
         _litersCtrl.text.trim().isEmpty ? null : _d(_litersCtrl.text);
 
     final expense = Expense(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _isEditing ? widget.existing!.id : DateTime.now().millisecondsSinceEpoch.toString(),
       date: _selectedDate,
       truckPlate: _selectedPlate!,
       type: _type,
@@ -142,7 +153,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
     final trucks = ref.read(appStateProvider).trucks;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ajouter une dépense')),
+      appBar: AppBar(title: Text(_isEditing ? 'Modifier la dépense' : 'Ajouter une dépense')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -253,6 +264,12 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                     labelText: 'Litres (optionnel)',
                     border: OutlineInputBorder(),
                   ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final val = _d(v);
+                    if (val == null || val <= 0) return 'Litres invalides';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
               ],

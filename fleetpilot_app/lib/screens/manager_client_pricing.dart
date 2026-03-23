@@ -444,6 +444,13 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
   double? _d(String s) =>
       double.tryParse(s.replaceAll(',', '.').trim());
 
+  String? _optionalPositive(String? v) {
+    if (v == null || v.trim().isEmpty) return null;
+    final val = _d(v);
+    if (val == null || val < 0) return 'Valeur invalide';
+    return null;
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -553,6 +560,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                           labelText: 'Prix gazole référence (€/L)',
                           border: OutlineInputBorder(),
                         ),
+                        validator: _optionalPositive,
                       ),
                     )
                   : null,
@@ -576,6 +584,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                           labelText: 'Prix km supplémentaire (€/km)',
                           border: OutlineInputBorder(),
                         ),
+                        validator: _optionalPositive,
                       ),
                     )
                   : null,
@@ -599,6 +608,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                           labelText: 'Prix unitaire manutention (€)',
                           border: OutlineInputBorder(),
                         ),
+                        validator: _optionalPositive,
                       ),
                     )
                   : null,
@@ -622,6 +632,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                           labelText: 'Prix tour sup. (€)',
                           border: OutlineInputBorder(),
                         ),
+                        validator: _optionalPositive,
                       ),
                     )
                   : null,
@@ -639,6 +650,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                 prefixIcon: Icon(Icons.speed_outlined),
                 helperText: 'Nombre de km max avant majoration',
               ),
+              validator: _optionalPositive,
               onChanged: (_) => setState(() {}),
             ),
             if (_monthlyKmThresholdCtrl.text.trim().isNotEmpty) ...[
@@ -651,6 +663,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                   labelText: 'Tarif km au-delà (€/km)',
                   border: OutlineInputBorder(),
                 ),
+                validator: _optionalPositive,
               ),
             ],
             const SizedBox(height: 24),
@@ -666,6 +679,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                 prefixIcon: Icon(Icons.trending_up_outlined),
                 helperText: 'Montant minimum à facturer pour être rentable',
               ),
+              validator: _optionalPositive,
             ),
             const SizedBox(height: 24),
 

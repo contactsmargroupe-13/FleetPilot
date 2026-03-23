@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../services/pdf_invoice_service.dart';
 import 'models/tour.dart';
 
 class ManagerBillingPage extends ConsumerStatefulWidget {
@@ -22,6 +23,27 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
 
   String get _monthLabel =>
       '${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+
+  Future<void> _exportPdf(List<_ClientBilling> clients, double grandTotal) async {
+    final pdfClients = clients
+        .map((c) => ClientBillingData(
+              companyName: c.companyName,
+              tours: c.tours,
+              handlingCount: c.handlingCount,
+              handlingAmount: c.handlingAmount,
+              extraKm: c.extraKm,
+              extraKmAmount: c.extraKmAmount,
+              extraTours: c.extraTours,
+              extraTourAmount: c.extraTourAmount,
+            ))
+        .toList();
+
+    await PdfInvoiceService.generateAndPrint(
+      monthLabel: _monthLabel,
+      clients: pdfClients,
+      grandTotal: grandTotal,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,9 +87,21 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Facturation clients',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Facturation clients',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (clients.isNotEmpty)
+              FilledButton.icon(
+                onPressed: () => _exportPdf(clients, grandTotal),
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('Export PDF'),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
 

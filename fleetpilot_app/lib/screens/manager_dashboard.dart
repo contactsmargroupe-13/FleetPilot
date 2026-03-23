@@ -13,6 +13,7 @@ import 'manager_planning.dart';
 import 'manager_recruitment.dart';
 import 'manager_settings.dart';
 import 'manager_tours.dart';
+import 'manager_urssaf.dart';
 import 'manager_vehicles.dart';
 import 'models/driver.dart';
 import 'models/expense.dart';
@@ -109,7 +110,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                   MaterialPageRoute(builder: (_) => const ManagerEquipmentPage()));
             }),
             const Divider(),
-            _drawerTile(Icons.account_balance_outlined, 'Actifs', () {
+            _drawerTile(Icons.savings_outlined, 'Actifs', () {
               Navigator.pop(context);
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerAssetsPage()));
@@ -123,6 +124,11 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               Navigator.pop(context);
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerBillingPage()));
+            }),
+            _drawerTile(Icons.account_balance_outlined, 'URSSAF & Charges', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerUrssafPage()));
             }),
             const Divider(),
             _drawerTile(Icons.folder_outlined, 'Administratif', () {
@@ -200,6 +206,10 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
   String? _selectedPlate;
   late DateTime _selectedMonth;
 
+  final Set<String> _visibleSections = {
+    'profit', 'seuil', 'sante', 'classement', 'metrics', 'cartes',
+  };
+
   final Map<String, TextEditingController> _daysCtrls = {};
 
   @override
@@ -256,16 +266,16 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
   }
 
   double _sumKmForMonth(DateTime month) {
-    return ref.read(appStateProvider).driverDayEntries
-        .where((e) => e.date.year == month.year && e.date.month == month.month)
-        .fold(0.0, (sum, e) => sum + e.kmTotal);
+    return ref.read(appStateProvider).tours
+        .where((t) => t.date.year == month.year && t.date.month == month.month)
+        .fold(0.0, (sum, t) => sum + t.kmTotal);
   }
 
   double _sumKmForTruckInMonth(String plate, DateTime month) {
-    return ref.read(appStateProvider).driverDayEntries
-        .where((e) => e.truckPlate == plate)
-        .where((e) => e.date.year == month.year && e.date.month == month.month)
-        .fold(0.0, (sum, e) => sum + e.kmTotal);
+    return ref.read(appStateProvider).tours
+        .where((t) => t.truckPlate == plate)
+        .where((t) => t.date.year == month.year && t.date.month == month.month)
+        .fold(0.0, (sum, t) => sum + t.kmTotal);
   }
 
   double _truckFixedMonthlyCost(dynamic t) {
@@ -673,6 +683,12 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           children: [
             const Text("Dashboard",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.tune, size: 20),
+              tooltip: 'Personnaliser',
+              onPressed: _showCustomizeDialog,
+            ),
             const Spacer(),
             IconButton(
               icon: const Icon(Icons.chevron_left, size: 20),
@@ -697,7 +713,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         const SizedBox(height: 8),
 
         // ── 2. Big profit/loss card with trend ──────────────────────────
-        Card(
+        if (_visibleSections.contains('profit')) Card(
           color: totalProfit >= 0
               ? Colors.green.withValues(alpha: 0.07)
               : Colors.red.withValues(alpha: 0.07),
@@ -758,10 +774,10 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        if (_visibleSections.contains('profit')) const SizedBox(height: 10),
 
         // ── 3. Seuil de rentabilité (compact) ───────────────────────────
-        Card(
+        if (_visibleSections.contains('seuil')) Card(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Column(
@@ -824,10 +840,10 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        if (_visibleSections.contains('seuil')) const SizedBox(height: 10),
 
         // ── 4. Health row: 3 chips ──────────────────────────────────────
-        Row(
+        if (_visibleSections.contains('sante')) Row(
           children: [
             _healthChip('Rentables', profitableCount, Colors.green),
             const SizedBox(width: 8),
@@ -836,10 +852,10 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             _healthChip('En perte', lossCount, Colors.red),
           ],
         ),
-        const SizedBox(height: 10),
+        if (_visibleSections.contains('sante')) const SizedBox(height: 10),
 
         // ── 5. Classement camions (compact list with profit bars) ───────
-        Card(
+        if (_visibleSections.contains('classement')) Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -911,10 +927,10 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        if (_visibleSections.contains('classement')) const SizedBox(height: 10),
 
         // ── 6. Coût/km + Consommation (side by side) ────────────────────
-        Row(
+        if (_visibleSections.contains('metrics')) Row(
           children: [
             Expanded(
               child: _metricCard(
@@ -939,7 +955,80 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             ),
           ],
         ),
+
+        // ── 7. Cartes détail par camion ─────────────────────────────────
+        if (_visibleSections.contains('cartes')) ...[
+          const SizedBox(height: 10),
+          const Text('Détail par camion',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ...cards,
+        ],
       ],
+    );
+  }
+
+  void _showCustomizeDialog() {
+    final sections = {
+      'profit': 'Profit / Perte global',
+      'seuil': 'Seuil de rentabilité',
+      'sante': 'Santé de la flotte',
+      'classement': 'Classement camions',
+      'metrics': 'Coût/km & Consommation',
+      'cartes': 'Cartes détail camions',
+    };
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.tune, size: 22),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Personnaliser',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              ),
+              TextButton(
+                onPressed: () {
+                  setDialogState(() {});
+                  setState(() {
+                    _visibleSections.addAll(sections.keys);
+                  });
+                },
+                child: const Text('Tout afficher', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: sections.entries.map((e) {
+              return SwitchListTile(
+                dense: true,
+                title: Text(e.value, style: const TextStyle(fontSize: 14)),
+                value: _visibleSections.contains(e.key),
+                onChanged: (val) {
+                  setDialogState(() {});
+                  setState(() {
+                    if (val) {
+                      _visibleSections.add(e.key);
+                    } else {
+                      _visibleSections.remove(e.key);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

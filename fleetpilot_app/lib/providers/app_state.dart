@@ -153,6 +153,34 @@ class AppState extends ChangeNotifier {
       (item) => item.name.toLowerCase() == name.toLowerCase(),
     );
     _db.deleteDriver(name);
+
+    // Cascade : supprimer les day entries orphelines
+    final orphanEntries = driverDayEntries
+        .where((e) => e.driverName.toLowerCase() == name.toLowerCase())
+        .toList();
+    for (final e in orphanEntries) {
+      driverDayEntries.remove(e);
+      _db.deleteDayEntry(e.id);
+    }
+
+    // Cascade : supprimer les notifications orphelines
+    final orphanNotifs = driverNotifications
+        .where((n) => n.driverName.toLowerCase() == name.toLowerCase())
+        .toList();
+    for (final n in orphanNotifs) {
+      driverNotifications.remove(n);
+      _db.deleteDriverNotification(n.id);
+    }
+
+    // Cascade : supprimer les documents orphelins
+    final orphanDocs = driverDocuments
+        .where((d) => d.driverName.toLowerCase() == name.toLowerCase())
+        .toList();
+    for (final d in orphanDocs) {
+      driverDocuments.remove(d);
+      _db.deleteDriverDocument(d.id);
+    }
+
     notifyListeners();
   }
 
@@ -201,34 +229,62 @@ class AppState extends ChangeNotifier {
   void updateTour(String id, Tour updated) {
     final index = tours.indexWhere((item) => item.id == id);
     if (index != -1) tours[index] = updated;
-
-    for (int i = 0; i < driverDayEntries.length; i++) {
-      final entry = driverDayEntries[i];
-      if (entry.date.year == updated.date.year &&
-          entry.date.month == updated.date.month &&
-          entry.date.day == updated.date.day &&
-          entry.driverName.toLowerCase() == updated.driverName.toLowerCase()) {
-        final updatedEntry = DriverDayEntry(
-          id: entry.id,
-          date: entry.date,
-          driverName: updated.driverName,
-          truckPlate: updated.truckPlate,
-          kmTotal: updated.kmTotal,
-          clientsCount: updated.clientsCount,
-        );
-        driverDayEntries[i] = updatedEntry;
-        _db.saveDayEntry(updatedEntry);
-      }
-    }
-
     _db.saveTour(updated);
+
+    // Recalculer le day entry à partir de toutes les tours du jour
+    _recalcDayEntry(updated.driverName, updated.date);
     notifyListeners();
   }
 
   void deleteTour(String id) {
+    final tour = tours.where((item) => item.id == id).firstOrNull;
     tours.removeWhere((item) => item.id == id);
     _db.deleteTour(id);
+
+    // Recalculer les day entries pour ce chauffeur/jour
+    if (tour != null) {
+      _recalcDayEntry(tour.driverName, tour.date);
+    }
     notifyListeners();
+  }
+
+  /// Recalcule le DriverDayEntry pour un chauffeur/jour à partir des tours restantes
+  void _recalcDayEntry(String driverName, DateTime date) {
+    final dayTours = tours.where((t) =>
+        t.driverName.toLowerCase() == driverName.toLowerCase() &&
+        t.date.year == date.year &&
+        t.date.month == date.month &&
+        t.date.day == date.day).toList();
+
+    // Trouver l'entrée existante
+    final entryIdx = driverDayEntries.indexWhere((e) =>
+        e.driverName.toLowerCase() == driverName.toLowerCase() &&
+        e.date.year == date.year &&
+        e.date.month == date.month &&
+        e.date.day == date.day);
+
+    if (dayTours.isEmpty) {
+      // Plus de tournées ce jour → supprimer l'entrée
+      if (entryIdx != -1) {
+        final entryId = driverDayEntries[entryIdx].id;
+        driverDayEntries.removeAt(entryIdx);
+        _db.deleteDayEntry(entryId);
+      }
+    } else if (entryIdx != -1) {
+      // Mettre à jour avec les totaux agrégés
+      final totalKm = dayTours.fold(0.0, (s, t) => s + t.kmTotal);
+      final totalClients = dayTours.fold(0, (s, t) => s + t.clientsCount);
+      final updated = DriverDayEntry(
+        id: driverDayEntries[entryIdx].id,
+        date: driverDayEntries[entryIdx].date,
+        driverName: dayTours.first.driverName,
+        truckPlate: dayTours.last.truckPlate,
+        kmTotal: totalKm,
+        clientsCount: totalClients,
+      );
+      driverDayEntries[entryIdx] = updated;
+      _db.saveDayEntry(updated);
+    }
   }
 
   // ─── Dépenses ─────────────────────────────────────────────────────────────
@@ -236,6 +292,13 @@ class AppState extends ChangeNotifier {
   void addExpense(Expense expense) {
     expenses.add(expense);
     _db.saveExpense(expense);
+    notifyListeners();
+  }
+
+  void updateExpense(String id, Expense updated) {
+    final index = expenses.indexWhere((e) => e.id == id);
+    if (index != -1) expenses[index] = updated;
+    _db.saveExpense(updated);
     notifyListeners();
   }
 

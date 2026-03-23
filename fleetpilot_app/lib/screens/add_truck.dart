@@ -709,6 +709,12 @@ class _AddTruckPageState extends State<AddTruckPage> {
                   labelText: "Prix d'achat (€) (optionnel)",
                   border: OutlineInputBorder(),
                 ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final val = _d(v);
+                  if (val == null || val < 0) return 'Prix invalide';
+                  return null;
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -718,6 +724,12 @@ class _AddTruckPageState extends State<AddTruckPage> {
                   labelText: 'Durée amortissement (mois) (optionnel)',
                   border: OutlineInputBorder(),
                 ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final val = int.tryParse(v.trim());
+                  if (val == null || val <= 0) return 'Durée invalide';
+                  return null;
+                },
               ),
             ] else ...[
               TextFormField(
@@ -756,6 +768,12 @@ class _AddTruckPageState extends State<AddTruckPage> {
                 prefixIcon: Icon(Icons.speed_outlined),
                 helperText: 'Alerte dépassement km si renseigné',
               ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return null;
+                final val = _d(v);
+                if (val == null || val <= 0) return 'Seuil invalide';
+                return null;
+              },
             ),
             const SizedBox(height: 20),
 

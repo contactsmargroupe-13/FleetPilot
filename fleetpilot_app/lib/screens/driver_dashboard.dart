@@ -52,38 +52,25 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
 
-    // Day entries du mois
-    final monthEntries = state.driverDayEntries
-        .where((e) =>
-            e.driverName.toLowerCase() == name &&
-            e.date.year == _selectedMonth.year &&
-            e.date.month == _selectedMonth.month)
-        .toList();
-
-    // Stats du mois
-    final totalKm = monthEntries.fold(0.0, (s, e) => s + e.kmTotal);
-    final totalClients = monthEntries.fold(0, (s, e) => s + e.clientsCount);
-    final joursT = monthEntries
-        .map((e) => '${e.date.year}-${e.date.month}-${e.date.day}')
+    // Stats du mois — source unique : tours
+    final totalKm = monthTours.fold(0.0, (s, t) => s + t.kmTotal);
+    final totalClients = monthTours.fold(0, (s, t) => s + t.clientsCount);
+    final joursT = monthTours
+        .map((t) => '${t.date.year}-${t.date.month}-${t.date.day}')
         .toSet()
         .length;
     final handlingCount =
         monthTours.where((t) => t.hasHandling).length;
 
-    // Stats année
+    // Stats année — source unique : tours
     final yearTours = state.tours
         .where((t) =>
             t.driverName.toLowerCase() == name &&
             t.date.year == _selectedMonth.year)
         .toList();
-    final yearEntries = state.driverDayEntries
-        .where((e) =>
-            e.driverName.toLowerCase() == name &&
-            e.date.year == _selectedMonth.year)
-        .toList();
-    final yearKm = yearEntries.fold(0.0, (s, e) => s + e.kmTotal);
-    final yearJours = yearEntries
-        .map((e) => '${e.date.year}-${e.date.month}-${e.date.day}')
+    final yearKm = yearTours.fold(0.0, (s, t) => s + t.kmTotal);
+    final yearJours = yearTours
+        .map((t) => '${t.date.year}-${t.date.month}-${t.date.day}')
         .toSet()
         .length;
 
