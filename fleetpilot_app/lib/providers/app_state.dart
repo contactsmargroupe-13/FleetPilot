@@ -292,6 +292,7 @@ class AppState extends ChangeNotifier {
   void addExpense(Expense expense) {
     expenses.add(expense);
     _db.saveExpense(expense);
+    _syncExpenseToTruckHistory(expense);
     notifyListeners();
   }
 
@@ -299,13 +300,62 @@ class AppState extends ChangeNotifier {
     final index = expenses.indexWhere((e) => e.id == id);
     if (index != -1) expenses[index] = updated;
     _db.saveExpense(updated);
+    // Supprimer l'ancienne entrée et re-sync
+    _removeServiceEntryFromTruck(id);
+    _syncExpenseToTruckHistory(updated);
     notifyListeners();
   }
 
   void deleteExpense(String id) {
     expenses.removeWhere((e) => e.id == id);
     _db.deleteExpense(id);
+    _removeServiceEntryFromTruck(id);
     notifyListeners();
+  }
+
+  /// Ajoute automatiquement une dépense dans l'historique du camion
+  void _syncExpenseToTruckHistory(Expense expense) {
+    final truckIdx = trucks.indexWhere((t) => t.plate == expense.truckPlate);
+    if (truckIdx == -1) return;
+
+    final truck = trucks[truckIdx];
+    final entry = ServiceEntry(
+      id: 'exp_${expense.id}',
+      date: expense.date,
+      description: expense.note ?? expenseTypeLabel(expense.type),
+      cost: expense.amount,
+    );
+
+    // Réparations → historique réparations
+    if (expense.type == ExpenseType.repair) {
+      trucks[truckIdx] = truck.copyWith(
+        repairs: [...truck.repairs, entry],
+      );
+    } else {
+      // Carburant, matériel, autre → historique entretiens
+      trucks[truckIdx] = truck.copyWith(
+        maintenances: [...truck.maintenances, entry],
+      );
+    }
+    _db.saveTruck(trucks[truckIdx]);
+  }
+
+  /// Supprime une entrée liée à une dépense de l'historique camion
+  void _removeServiceEntryFromTruck(String expenseId) {
+    final serviceId = 'exp_$expenseId';
+    for (int i = 0; i < trucks.length; i++) {
+      final truck = trucks[i];
+      final hadRepair = truck.repairs.any((e) => e.id == serviceId);
+      final hadMaint = truck.maintenances.any((e) => e.id == serviceId);
+      if (hadRepair || hadMaint) {
+        trucks[i] = truck.copyWith(
+          repairs: truck.repairs.where((e) => e.id != serviceId).toList(),
+          maintenances: truck.maintenances.where((e) => e.id != serviceId).toList(),
+        );
+        _db.saveTruck(trucks[i]);
+        break;
+      }
+    }
   }
 
   // ─── Documents chauffeurs ─────────────────────────────────────────────────
@@ -372,6 +422,7 @@ class AppState extends ChangeNotifier {
   void addAdminDocument(AdminDocument doc) {
     adminDocuments.add(doc);
     _db.saveAdminDocument(doc);
+    _syncAdminDocToTruck(doc);
     notifyListeners();
   }
 
@@ -379,6 +430,7 @@ class AppState extends ChangeNotifier {
     final i = adminDocuments.indexWhere((d) => d.id == id);
     if (i != -1) adminDocuments[i] = updated;
     _db.saveAdminDocument(updated);
+    _syncAdminDocToTruck(updated);
     notifyListeners();
   }
 
@@ -386,6 +438,46 @@ class AppState extends ChangeNotifier {
     adminDocuments.removeWhere((d) => d.id == id);
     _db.deleteAdminDocument(id);
     notifyListeners();
+  }
+
+  /// Synchronise un document admin avec le camion lié
+  void _syncAdminDocToTruck(AdminDocument doc) {
+    if (doc.linkedTruckPlate == null || doc.linkedTruckPlate!.isEmpty) return;
+
+    final truckIdx = trucks.indexWhere((t) => t.plate == doc.linkedTruckPlate);
+    if (truckIdx == -1) return;
+
+    final truck = trucks[truckIdx];
+
+    // Assurance → met à jour les infos assurance du camion
+    if (doc.category == AdminDocCategory.assurance) {
+      trucks[truckIdx] = truck.copyWith(
+        insurerName: doc.title,
+        insuranceStart: doc.date,
+      );
+      _db.saveTruck(trucks[truckIdx]);
+    }
+
+    // Contrat location → met à jour le loueur
+    if (doc.category == AdminDocCategory.contratLocation) {
+      trucks[truckIdx] = truck.copyWith(
+        rentCompany: doc.title,
+      );
+      _db.saveTruck(trucks[truckIdx]);
+    }
+
+    // Facture prestataire → ajoute dans l'historique entretiens/réparations
+    if (doc.category == AdminDocCategory.facturePrestataire) {
+      final entry = ServiceEntry(
+        id: 'doc_${doc.id}',
+        date: doc.date,
+        description: doc.title + (doc.note != null ? ' — ${doc.note}' : ''),
+      );
+      trucks[truckIdx] = truck.copyWith(
+        maintenances: [...truck.maintenances, entry],
+      );
+      _db.saveTruck(trucks[truckIdx]);
+    }
   }
 
   // ─── Tarification clients ─────────────────────────────────────────────────
