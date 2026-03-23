@@ -97,6 +97,49 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
         ),
         const SizedBox(height: 12),
 
+        // ── KPIs globaux du mois ─────────────────────────────────────
+        if (monthTours.isNotEmpty) ...[
+          Builder(builder: (_) {
+            final totalKm = monthTours.fold(0.0, (s, t) => s + t.kmTotal);
+            final totalClients = monthTours.fold(0, (s, t) => s + t.clientsCount);
+            final handlingCount = monthTours.where((t) => t.hasHandling).length;
+            final driverCount = monthTours.map((t) => t.driverName).toSet().length;
+            final extraTourCount = monthTours.where((t) => t.extraTour).length;
+
+            return Row(
+              children: [
+                _kpiChip('${monthTours.length}', 'tournées', Icons.route_outlined, Colors.blue),
+                const SizedBox(width: 6),
+                _kpiChip('${totalKm.toStringAsFixed(0)}', 'km', Icons.speed_outlined, Colors.teal),
+                const SizedBox(width: 6),
+                _kpiChip('$totalClients', 'clients', Icons.people_outline, Colors.indigo),
+                const SizedBox(width: 6),
+                _kpiChip('$handlingCount', 'manut.', Icons.pan_tool_outlined, Colors.deepOrange),
+                if (extraTourCount > 0) ...[
+                  const SizedBox(width: 6),
+                  _kpiChip('$extraTourCount', 'supp.', Icons.add_road, Colors.purple),
+                ],
+              ],
+            );
+          }),
+          const SizedBox(height: 6),
+          Builder(builder: (_) {
+            final driverCount = monthTours.map((t) => t.driverName).toSet().length;
+            final truckCount = byTruck.keys.length;
+            final clientCount = byClient.keys.where((c) => c != 'Non renseigné').length;
+            return Row(
+              children: [
+                _kpiChip('$driverCount', 'chauffeurs', Icons.badge_outlined, Colors.brown),
+                const SizedBox(width: 6),
+                _kpiChip('$truckCount', 'camions', Icons.local_shipping_outlined, Colors.blueGrey),
+                const SizedBox(width: 6),
+                _kpiChip('$clientCount', 'commiss.', Icons.business_outlined, Colors.cyan),
+              ],
+            );
+          }),
+          const SizedBox(height: 12),
+        ],
+
         // Toggle vue
         Material(
           type: MaterialType.transparency,
@@ -244,6 +287,30 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
             child: const Text('Supprimer'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _kpiChip(String value, String label, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(height: 2),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 9, color: color.withValues(alpha: 0.7))),
+          ],
+        ),
       ),
     );
   }

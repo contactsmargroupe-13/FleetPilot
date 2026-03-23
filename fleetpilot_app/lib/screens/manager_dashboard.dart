@@ -712,7 +712,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         ),
         const SizedBox(height: 8),
 
-        // ── 2. Big profit/loss card with trend ──────────────────────────
+        // ── 2. Big profit/loss card with trend + emoji ─────────────────
         if (_visibleSections.contains('profit')) Card(
           color: totalProfit >= 0
               ? Colors.green.withValues(alpha: 0.07)
@@ -723,45 +723,71 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      '${totalProfit >= 0 ? '+' : ''}${totalProfit.toStringAsFixed(0)} €',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: totalProfit >= 0 ? Colors.green : Colors.red,
+                      totalProfit >= 0
+                          ? (totalProfit > 5000 ? '🚀' : '✅')
+                          : (totalProfit < -3000 ? '🔴' : '⚠️'),
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${totalProfit >= 0 ? '+' : ''}${totalProfit.toStringAsFixed(0)} €',
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              color: totalProfit >= 0 ? Colors.green : Colors.red,
+                            ),
+                          ),
+                          Text(
+                            totalProfit >= 0
+                                ? (totalProfit > 5000 ? 'Excellent mois !' : 'Mois positif')
+                                : (totalProfit < -3000 ? 'Attention, pertes élevées' : 'Mois déficitaire'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: totalProfit >= 0 ? Colors.green.shade700 : Colors.red.shade700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      totalProfit >= 0 ? 'Profit' : 'Perte',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: totalProfit >= 0 ? Colors.green : Colors.red,
+                    // Trend badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: profitTrend >= 0
+                            ? Colors.green.withValues(alpha: 0.12)
+                            : Colors.red.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            profitTrend >= 0 ? Icons.trending_up : Icons.trending_down,
+                            size: 14,
+                            color: profitTrend >= 0 ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${profitTrend >= 0 ? '+' : ''}${profitTrend.toStringAsFixed(0)} €',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: profitTrend >= 0 ? Colors.green : Colors.red,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      profitTrend >= 0 ? Icons.trending_up : Icons.trending_down,
-                      size: 16,
-                      color: profitTrend >= 0 ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${profitTrend >= 0 ? '+' : ''}${profitTrend.toStringAsFixed(0)} € vs mois précédent',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: profitTrend >= 0 ? Colors.green.shade700 : Colors.red.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     _kpiMini('CA', '${totalRevenue.toStringAsFixed(0)} €', Colors.blue),
@@ -770,6 +796,61 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                     _kpiMini('Chauffeurs', '${drivers.length}', Colors.indigo),
                   ],
                 ),
+
+                // Best & worst truck
+                if (bestTruck != null && computedTrucks.length > 1) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text('🏆', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '${bestTruck!.plate} +${bestTruck!.profit.toStringAsFixed(0)} €',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.green),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (worstTruck != null && worstTruck!.profit < 0)
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text('📉', style: TextStyle(fontSize: 16)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '${worstTruck!.plate} ${worstTruck!.profit.toStringAsFixed(0)} €',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.red),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -845,11 +926,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         // ── 4. Health row: 3 chips ──────────────────────────────────────
         if (_visibleSections.contains('sante')) Row(
           children: [
-            _healthChip('Rentables', profitableCount, Colors.green),
+            _healthChip('Rentables', profitableCount, Colors.green, '✅'),
             const SizedBox(width: 8),
-            _healthChip('À surveiller', warningCount, Colors.orange),
+            _healthChip('À surveiller', warningCount, Colors.orange, '⚠️'),
             const SizedBox(width: 8),
-            _healthChip('En perte', lossCount, Colors.red),
+            _healthChip('En perte', lossCount, Colors.red, '🔴'),
           ],
         ),
         if (_visibleSections.contains('sante')) const SizedBox(height: 10),
@@ -956,7 +1037,35 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           ],
         ),
 
-        // ── 7. Cartes détail par camion ─────────────────────────────────
+        // ── 7. Km + tournées du mois ──────────────────────────────────
+        if (_visibleSections.contains('metrics')) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _metricCard(
+                  'Km total',
+                  totalKmMonth > 0
+                      ? '${totalKmMonth.toStringAsFixed(0)} km'
+                      : '-',
+                  Icons.route_outlined,
+                  Colors.teal,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _metricCard(
+                  'Tournées',
+                  '${ref.read(appStateProvider).tours.where((t) => t.date.year == _selectedMonth.year && t.date.month == _selectedMonth.month).length}',
+                  Icons.local_shipping_outlined,
+                  Colors.indigo,
+                ),
+              ),
+            ],
+          ),
+        ],
+
+        // ── 8. Cartes détail par camion ─────────────────────────────────
         if (_visibleSections.contains('cartes')) ...[
           const SizedBox(height: 10),
           const Text('Détail par camion',
@@ -964,7 +1073,140 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           const SizedBox(height: 8),
           ...cards,
         ],
+
+        // ── 9. Suggestions d'amélioration ──────────────────────────────
+        const SizedBox(height: 16),
+        _buildSuggestions(
+          computedTrucks: computedTrucks,
+          totalProfit: totalProfit,
+          totalKmMonth: totalKmMonth,
+          totalLitersPer100: totalLitersPer100,
+          lossCount: lossCount,
+          drivers: drivers,
+        ),
       ],
+    );
+  }
+
+  Widget _buildSuggestions({
+    required List<_TruckComputedData> computedTrucks,
+    required double totalProfit,
+    required double totalKmMonth,
+    required double totalLitersPer100,
+    required int lossCount,
+    required List<Driver> drivers,
+  }) {
+    final suggestions = <_Suggestion>[];
+
+    // Camions en perte
+    if (lossCount > 0) {
+      suggestions.add(_Suggestion(
+        icon: '🔧',
+        title: '$lossCount camion${lossCount > 1 ? 's' : ''} en perte',
+        subtitle: 'Vérifiez les dépenses et revenus de ces camions.',
+        color: Colors.red,
+      ));
+    }
+
+    // Consommation élevée
+    if (totalLitersPer100 > 18) {
+      suggestions.add(_Suggestion(
+        icon: '⛽',
+        title: 'Consommation élevée (${totalLitersPer100.toStringAsFixed(1)} L/100)',
+        subtitle: 'Au-dessus de 18 L/100 km. Vérifiez l\'état des véhicules.',
+        color: Colors.orange,
+      ));
+    }
+
+    // Peu de km
+    if (totalKmMonth > 0 && totalKmMonth < 1000 && computedTrucks.isNotEmpty) {
+      suggestions.add(_Suggestion(
+        icon: '📊',
+        title: 'Activité faible ce mois',
+        subtitle: 'Seulement ${totalKmMonth.toStringAsFixed(0)} km. Optimisez les plannings.',
+        color: Colors.blue,
+      ));
+    }
+
+    // Tous rentables
+    if (lossCount == 0 && computedTrucks.isNotEmpty) {
+      suggestions.add(_Suggestion(
+        icon: '🎯',
+        title: 'Tous les camions sont rentables !',
+        subtitle: 'Continuez sur cette lancée.',
+        color: Colors.green,
+      ));
+    }
+
+    // Profit en hausse
+    if (totalProfit > 0 && computedTrucks.isNotEmpty) {
+      final marge = computedTrucks.isEmpty ? 0.0 :
+          (totalProfit / computedTrucks.fold(0.0, (s, t) => s + t.revenue).clamp(1, double.infinity) * 100);
+      if (marge > 20) {
+        suggestions.add(_Suggestion(
+          icon: '💰',
+          title: 'Marge de ${marge.toStringAsFixed(0)}%',
+          subtitle: 'Excellente rentabilité. Pensez à investir dans la flotte.',
+          color: Colors.green,
+        ));
+      }
+    }
+
+    // Manque chauffeurs
+    if (drivers.length < computedTrucks.length) {
+      suggestions.add(_Suggestion(
+        icon: '👤',
+        title: 'Plus de camions que de chauffeurs',
+        subtitle: '${computedTrucks.length} camions pour ${drivers.length} chauffeurs. Recrutez !',
+        color: Colors.purple,
+      ));
+    }
+
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Text('💡', style: TextStyle(fontSize: 18)),
+                SizedBox(width: 8),
+                Text('Suggestions',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...suggestions.map((s) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(s.icon, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(s.title,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: s.color)),
+                            Text(s.subtitle,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1048,7 +1290,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     );
   }
 
-  Widget _healthChip(String label, int count, Color color) {
+  Widget _healthChip(String label, int count, Color color, String emoji) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1059,9 +1301,16 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         ),
         child: Column(
           children: [
-            Text('$count',
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 4),
+                Text('$count',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+              ],
+            ),
             Text(label,
                 style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.8))),
           ],
@@ -1795,6 +2044,19 @@ class _KpiCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Suggestion {
+  final String icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  const _Suggestion({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+  });
 }
 
 class _TruckProfitData {
