@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -84,6 +86,121 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
     setState(() => ref.read(appStateProvider).deleteAdminDocument(doc.id));
   }
 
+  // ── Export JSON ──────────────────────────────────────────────────────────
+  Future<void> _exportDocuments() async {
+    final docs = ref.read(appStateProvider).adminDocuments;
+    if (docs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucun document à exporter.')),
+        );
+      }
+      return;
+    }
+
+    final jsonList = docs.map((d) => d.toJson()).toList();
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(jsonList);
+
+    final dir = await getTemporaryDirectory();
+    final now = DateTime.now();
+    final fileName = 'fleetpilot_docs_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.json';
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsString(jsonStr);
+
+    // Collecter les fichiers joints existants
+    final files = <XFile>[XFile(file.path)];
+    for (final doc in docs) {
+      if (doc.filePath != null) {
+        final f = File(doc.filePath!);
+        if (await f.exists()) {
+          files.add(XFile(doc.filePath!, name: doc.fileName));
+        }
+      }
+    }
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: files,
+        subject: 'Export documents FleetPilot',
+      ),
+    );
+  }
+
+  // ── Import JSON ──────────────────────────────────────────────────────────
+  Future<void> _importDocuments() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+
+    try {
+      final content = await File(result.files.first.path!).readAsString();
+      final List<dynamic> jsonList = jsonDecode(content) as List<dynamic>;
+
+      final existing = ref.read(appStateProvider).adminDocuments.map((d) => d.id).toSet();
+      int imported = 0;
+      int skipped = 0;
+
+      for (final item in jsonList) {
+        final doc = AdminDocument.fromJson(item as Map<String, dynamic>);
+        if (existing.contains(doc.id)) {
+          skipped++;
+        } else {
+          ref.read(appStateProvider).addAdminDocument(doc);
+          imported++;
+        }
+      }
+
+      setState(() {});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$imported document(s) importé(s)${skipped > 0 ? ', $skipped doublon(s) ignoré(s)' : ''}'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur d\'import : $e')),
+        );
+      }
+    }
+  }
+
+  // ── Partage fichier individuel ──────────────────────────────────────────
+  Future<void> _shareDoc(AdminDocument doc) async {
+    if (doc.filePath != null) {
+      final f = File(doc.filePath!);
+      if (await f.exists()) {
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(doc.filePath!, name: doc.fileName)],
+            subject: doc.title,
+          ),
+        );
+        return;
+      }
+    }
+    // Pas de fichier → partager les infos texte
+    final lines = <String>[
+      doc.title,
+      'Catégorie : ${adminDocCategoryLabel(doc.category)}',
+      'Date : ${_fmtDate(doc.date)}',
+      if (doc.linkedDriverName != null) 'Chauffeur : ${doc.linkedDriverName}',
+      if (doc.linkedTruckPlate != null) 'Camion : ${doc.linkedTruckPlate}',
+      if (doc.note != null && doc.note!.isNotEmpty) 'Note : ${doc.note}',
+    ];
+    await SharePlus.instance.share(
+      ShareParams(text: lines.join('\n'), subject: doc.title),
+    );
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -116,6 +233,16 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
                 child: Text('Administratif',
                     style: TextStyle(
                         fontSize: 20, fontWeight: FontWeight.w800)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.file_download_outlined),
+                tooltip: 'Importer (JSON)',
+                onPressed: _importDocuments,
+              ),
+              IconButton(
+                icon: const Icon(Icons.ios_share_outlined),
+                tooltip: 'Exporter tout',
+                onPressed: _exportDocuments,
               ),
               Text('${docs.length} doc(s)',
                   style: const TextStyle(color: Colors.grey)),
@@ -198,6 +325,7 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
                       doc: doc,
                       onEdit: () => _openAddDialog(doc),
                       onDelete: () => _deleteDoc(doc),
+                      onShare: () => _shareDoc(doc),
                     )),
                 const SizedBox(height: 8),
               ],
@@ -233,11 +361,13 @@ class _DocCard extends StatelessWidget {
     required this.doc,
     required this.onEdit,
     required this.onDelete,
+    required this.onShare,
   });
 
   final AdminDocument doc;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onShare;
 
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -261,6 +391,11 @@ class _DocCard extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w700),
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, size: 18),
+                  onPressed: onShare,
+                  tooltip: 'Partager',
                 ),
                 IconButton(
                   icon:

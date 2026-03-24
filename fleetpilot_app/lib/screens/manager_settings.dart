@@ -15,6 +15,7 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _siretCtrl;
+  late final TextEditingController _tvaIntraCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _apiKeyCtrl;
@@ -29,6 +30,7 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
     _nameCtrl = TextEditingController(text: CompanySettings.name);
     _addressCtrl = TextEditingController(text: CompanySettings.address);
     _siretCtrl = TextEditingController(text: CompanySettings.siret);
+    _tvaIntraCtrl = TextEditingController(text: CompanySettings.tvaIntra);
     _phoneCtrl = TextEditingController(text: CompanySettings.phone);
     _emailCtrl = TextEditingController(text: CompanySettings.email);
     _apiKeyCtrl = TextEditingController(text: CompanySettings.claudeApiKey);
@@ -39,6 +41,7 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
     _nameCtrl.dispose();
     _addressCtrl.dispose();
     _siretCtrl.dispose();
+    _tvaIntraCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _apiKeyCtrl.dispose();
@@ -52,6 +55,7 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
       name: _nameCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
       siret: _siretCtrl.text.trim(),
+      tvaIntra: _tvaIntraCtrl.text.trim(),
       phone: _phoneCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
     );
@@ -158,6 +162,16 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
                   labelText: 'SIRET',
                   prefixIcon: Icon(Icons.numbers_outlined),
                   border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _tvaIntraCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'N° TVA intracommunautaire',
+                  prefixIcon: Icon(Icons.account_balance_outlined),
+                  border: OutlineInputBorder(),
+                  hintText: 'FR12345678901',
                 ),
               ),
               const SizedBox(height: 12),
@@ -282,17 +296,17 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
 
         const SizedBox(height: 32),
 
-        // ── Contrats clients ─────────────────────────────────────────────
+        // ── Commissionnaires ─────────────────────────────────────────────
         const Text(
-          'Contrats clients',
+          'Commissionnaires',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Card(
           child: ListTile(
             leading: const Icon(Icons.handshake_outlined),
-            title: const Text('Contrats clients'),
-            subtitle: const Text('Tarifs et conditions par client'),
+            title: const Text('Commissionnaires'),
+            subtitle: const Text('Tarifs et conditions par commissionnaire'),
             trailing: FilledButton(
               onPressed: () {
                 Navigator.push(

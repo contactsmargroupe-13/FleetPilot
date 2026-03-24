@@ -13,6 +13,7 @@ import '../screens/models/driver_notification.dart';
 import '../screens/models/equipment.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/manager_alert.dart';
+import '../screens/models/message.dart';
 import '../screens/models/tour.dart';
 import '../services/database_service.dart';
 
@@ -42,6 +43,7 @@ class AppState extends ChangeNotifier {
   List<ManagerAlert> managerAlerts = [];
   List<Equipment> equipment = [];
   List<DriverAssignment> assignments = [];
+  List<Message> messages = [];
 
   AppState(this._db);
 
@@ -59,6 +61,7 @@ class AppState extends ChangeNotifier {
     managerAlerts = await _db.loadManagerAlerts();
     equipment = await _db.loadEquipment();
     assignments = await _db.loadAssignments();
+    messages = await _db.loadMessages();
     notifyListeners();
   }
 
@@ -582,6 +585,84 @@ class AppState extends ChangeNotifier {
   void deleteManagerAlert(String id) {
     managerAlerts.removeWhere((a) => a.id == id);
     _db.deleteManagerAlert(id);
+    notifyListeners();
+  }
+
+  // ─── Messagerie ─────────────────────────────────────────────────────────
+
+  /// Messages d'une conversation (chauffeur ↔ manager)
+  List<Message> messagesForDriver(String driverName) {
+    return messages
+        .where((m) => m.conversationId.toLowerCase() == driverName.toLowerCase())
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+  }
+
+  /// Conversations distinctes (liste des chauffeurs avec messages)
+  List<String> get conversationDriverNames {
+    final names = <String>{};
+    for (final m in messages) {
+      names.add(m.conversationId);
+    }
+    return names.toList()..sort();
+  }
+
+  /// Nombre de messages non lus pour un chauffeur
+  int unreadMessagesForDriver(String driverName) {
+    return messages
+        .where((m) =>
+            m.conversationId.toLowerCase() == driverName.toLowerCase() &&
+            !m.read &&
+            m.isFromManager)
+        .length;
+  }
+
+  /// Nombre de messages non lus côté manager (envoyés par les chauffeurs)
+  int get unreadManagerMessages {
+    return messages.where((m) => !m.read && !m.isFromManager).length;
+  }
+
+  /// Nombre de messages non lus pour une conversation côté manager
+  int unreadManagerMessagesFor(String driverName) {
+    return messages
+        .where((m) =>
+            m.conversationId.toLowerCase() == driverName.toLowerCase() &&
+            !m.read &&
+            !m.isFromManager)
+        .length;
+  }
+
+  void addMessage(Message m) {
+    messages.add(m);
+    _db.saveMessage(m);
+    notifyListeners();
+  }
+
+  void markMessageRead(String id) {
+    final i = messages.indexWhere((m) => m.id == id);
+    if (i != -1) {
+      messages[i] = messages[i].copyWith(read: true);
+      _db.saveMessage(messages[i]);
+      notifyListeners();
+    }
+  }
+
+  void markConversationRead(String driverName, {required bool asManager}) {
+    for (int i = 0; i < messages.length; i++) {
+      final m = messages[i];
+      if (m.conversationId.toLowerCase() == driverName.toLowerCase() &&
+          !m.read &&
+          (asManager ? !m.isFromManager : m.isFromManager)) {
+        messages[i] = m.copyWith(read: true);
+        _db.saveMessage(messages[i]);
+      }
+    }
+    notifyListeners();
+  }
+
+  void deleteMessage(String id) {
+    messages.removeWhere((m) => m.id == id);
+    _db.deleteMessage(id);
     notifyListeners();
   }
 

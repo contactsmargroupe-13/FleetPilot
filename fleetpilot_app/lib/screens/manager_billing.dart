@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../services/pdf_invoice_service.dart';
+import 'models/client_pricing.dart';
 import 'models/tour.dart';
 
 class ManagerBillingPage extends ConsumerStatefulWidget {
@@ -24,30 +25,14 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
   String get _monthLabel =>
       '${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}';
 
-  Future<void> _exportPdf(List<_ClientBilling> clients, double grandTotal) async {
-    final pdfClients = clients
-        .map((c) => ClientBillingData(
-              companyName: c.companyName,
-              tours: c.tours,
-              handlingCount: c.handlingCount,
-              handlingAmount: c.handlingAmount,
-              extraKm: c.extraKm,
-              extraKmAmount: c.extraKmAmount,
-              extraTours: c.extraTours,
-              extraTourAmount: c.extraTourAmount,
-            ))
-        .toList();
-
-    await PdfInvoiceService.generateAndPrint(
-      monthLabel: _monthLabel,
-      clients: pdfClients,
-      grandTotal: grandTotal,
-    );
+  /// Numéro de facture : FP-YYYYMM-XXX
+  String _invoiceNumber(int index) {
+    final m = _selectedMonth;
+    return 'FP-${m.year}${m.month.toString().padLeft(2, '0')}-${(index + 1).toString().padLeft(3, '0')}';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final Map<String, _ClientBilling> billing = {};
+  List<ClientBillingData> _computeBilling() {
+    final Map<String, ClientBillingData> billing = {};
 
     for (final Tour tour in ref.read(appStateProvider).tours) {
       if (tour.date.year != _selectedMonth.year ||
@@ -57,11 +42,34 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
 
       final company = tour.companyName ?? '—';
       final pricing = ref.read(appStateProvider).getClientPricing(company);
+      final dailyRate = pricing?.dailyRate ?? 0.0;
 
-      billing.putIfAbsent(company, () => _ClientBilling(companyName: company));
+      final mode = pricing?.billingMode ?? BillingMode.aLaFiche;
+      final pricePerPoint = pricing?.pricePerPoint ?? 0.0;
+
+      billing.putIfAbsent(
+          company,
+          () => ClientBillingData(
+                companyName: company,
+                dailyRate: dailyRate,
+                fuelIndexPercent: pricing?.fuelIndexPercent,
+                siret: pricing?.siret,
+                tvaIntra: pricing?.tvaIntra,
+                address: pricing?.address,
+                phone: pricing?.phone,
+                contactName: pricing?.contactName,
+                billingMode: mode,
+                pricePerPoint: pricePerPoint,
+              ));
       final client = billing[company]!;
 
       client.tours++;
+      if (mode == BillingMode.auPoint) {
+        client.totalPoints += tour.clientsCount;
+        client.baseAmount += tour.clientsCount * pricePerPoint;
+      } else {
+        client.baseAmount += dailyRate;
+      }
 
       if (tour.hasHandling && pricing != null && pricing.handlingEnabled) {
         client.handlingCount++;
@@ -80,9 +88,36 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
     }
 
     final clients = billing.values.toList()
-      ..sort((a, b) => b.total.compareTo(a.total));
+      ..sort((a, b) => b.totalHT.compareTo(a.totalHT));
 
-    final grandTotal = clients.fold(0.0, (s, c) => s + c.total);
+    // Assign invoice numbers
+    for (int i = 0; i < clients.length; i++) {
+      clients[i].invoiceNumber = _invoiceNumber(i);
+    }
+
+    return clients;
+  }
+
+  Future<void> _exportAllPdf(
+      List<ClientBillingData> clients, double grandTotal) async {
+    await PdfInvoiceService.generateAndPrint(
+      monthLabel: _monthLabel,
+      clients: clients,
+      grandTotal: grandTotal,
+    );
+  }
+
+  Future<void> _exportSinglePdf(ClientBillingData client) async {
+    await PdfInvoiceService.generateSingleInvoice(
+      monthLabel: _monthLabel,
+      client: client,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clients = _computeBilling();
+    final grandTotalHT = clients.fold(0.0, (s, c) => s + c.totalHT);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -92,9 +127,9 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
             children: [
               const Spacer(),
               FilledButton.icon(
-                onPressed: () => _exportPdf(clients, grandTotal),
+                onPressed: () => _exportAllPdf(clients, grandTotalHT),
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                label: const Text('Export PDF'),
+                label: const Text('Export PDF global'),
               ),
             ],
           ),
@@ -103,18 +138,16 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
         // Sélecteur de mois
         Card(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                OutlinedButton.icon(
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
                   onPressed: () => setState(() {
                     _selectedMonth = DateTime(
                         _selectedMonth.year, _selectedMonth.month - 1);
                   }),
-                  icon: const Icon(Icons.chevron_left),
-                  label: const Text('Mois −1'),
                 ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Center(
                     child: Text(
@@ -124,23 +157,20 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
                   onPressed: () => setState(() {
                     _selectedMonth = DateTime(
                         _selectedMonth.year, _selectedMonth.month + 1);
                   }),
-                  icon: const Icon(Icons.chevron_right),
-                  label: const Text('Mois +1'),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.tonalIcon(
+                const SizedBox(width: 4),
+                TextButton(
                   onPressed: () => setState(() {
                     final now = DateTime.now();
                     _selectedMonth = DateTime(now.year, now.month);
                   }),
-                  icon: const Icon(Icons.today, size: 18),
-                  label: const Text('Ce mois'),
+                  child: const Text('Auj.'),
                 ),
               ],
             ),
@@ -161,20 +191,39 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
             color: Theme.of(context).colorScheme.primaryContainer,
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 children: [
-                  const Icon(Icons.euro_outlined),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Total facturable $_monthLabel',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.euro_outlined),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Total facturable $_monthLabel',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Text(
+                        '${grandTotalHT.toStringAsFixed(2)} € HT',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '${grandTotal.toStringAsFixed(2)} €',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w800),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${clients.length} commissionnaire${clients.length > 1 ? 's' : ''} — ${clients.fold(0, (s, c) => s + c.tours)} tournées',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer
+                                .withValues(alpha: 0.7)),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -187,11 +236,11 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
     );
   }
 
-  Widget _clientCard(_ClientBilling c) {
+  Widget _clientCard(ClientBillingData c) {
     final pricing = ref.read(appStateProvider).getClientPricing(c.companyName);
     final breakEven = pricing?.breakEvenAmount;
-    final isAboveBreakEven = breakEven != null && c.total >= breakEven;
-    final isBelowBreakEven = breakEven != null && c.total < breakEven;
+    final isAboveBreakEven = breakEven != null && c.totalHT >= breakEven;
+    final isBelowBreakEven = breakEven != null && c.totalHT < breakEven;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
@@ -200,30 +249,73 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              c.companyName,
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold),
+            // En-tête
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        c.companyName,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      if (c.invoiceNumber != null)
+                        Text(
+                          'N° ${c.invoiceNumber}',
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                  tooltip: 'Facture PDF individuelle',
+                  onPressed: () => _exportSinglePdf(c),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-            _line('Tournées', '${c.tours}'),
-            _line('Manutentions', '${c.handlingCount}'),
-            _line('Extra km', '${c.extraKm.toStringAsFixed(0)} km'),
-            _line('Tours supplémentaires', '${c.extraTours}'),
+
+            // Base
+            if (c.billingMode == BillingMode.auPoint)
+              _line('Points livrés',
+                  '${c.totalPoints} x ${c.pricePerPoint.toStringAsFixed(2)} € = ${c.baseAmount.toStringAsFixed(2)} € HT')
+            else
+              _line('Tournées',
+                  '${c.tours} x ${c.dailyRate.toStringAsFixed(0)} € = ${c.baseAmount.toStringAsFixed(2)} € HT'),
+
+            // Indexation gasoil
+            if (c.fuelIndexPercent != null && c.fuelIndexPercent! > 0)
+              _line('Indexation gasoil (${c.fuelIndexPercent!.toStringAsFixed(1)}%)',
+                  '${c.fuelIndexAmount.toStringAsFixed(2)} € HT'),
+
+            // Manutentions
+            if (c.handlingCount > 0)
+              _line('Manutentions',
+                  '${c.handlingCount} x = ${c.handlingAmount.toStringAsFixed(2)} € HT'),
+
+            // Extra km
+            if (c.extraKm > 0)
+              _line('Km supplémentaires',
+                  '${c.extraKm.toStringAsFixed(0)} km = ${c.extraKmAmount.toStringAsFixed(2)} € HT'),
+
+            // Extra tours
+            if (c.extraTours > 0)
+              _line('Tours supplémentaires',
+                  '${c.extraTours} x = ${c.extraTourAmount.toStringAsFixed(2)} € HT'),
+
             const Divider(),
-            _line('Facturation manutention',
-                '${c.handlingAmount.toStringAsFixed(2)} €'),
-            _line('Facturation extra km',
-                '${c.extraKmAmount.toStringAsFixed(2)} €'),
-            _line('Facturation extra tour',
-                '${c.extraTourAmount.toStringAsFixed(2)} €'),
-            const Divider(),
-            _line('TOTAL FACTURABLE', '${c.total.toStringAsFixed(2)} €',
+            _line('TOTAL HT', '${c.totalHT.toStringAsFixed(2)} € HT',
                 bold: true),
+
             if (breakEven != null) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: isAboveBreakEven
                       ? Colors.green.withValues(alpha: 0.1)
@@ -257,7 +349,7 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
                     ),
                     if (isBelowBreakEven)
                       Text(
-                        '−${(breakEven - c.total).toStringAsFixed(0)} €',
+                        '−${(breakEven - c.totalHT).toStringAsFixed(0)} €',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -266,7 +358,7 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
                       ),
                     if (isAboveBreakEven)
                       Text(
-                        '+${(c.total - breakEven).toStringAsFixed(0)} €',
+                        '+${(c.totalHT - breakEven).toStringAsFixed(0)} €',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -291,28 +383,13 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
           Expanded(
             child: Text(label,
                 style: TextStyle(
-                    fontWeight:
-                        bold ? FontWeight.bold : FontWeight.w500)),
+                    fontWeight: bold ? FontWeight.bold : FontWeight.w500)),
           ),
           Text(value,
               style: TextStyle(
-                  fontWeight:
-                      bold ? FontWeight.bold : FontWeight.w600)),
+                  fontWeight: bold ? FontWeight.bold : FontWeight.w600)),
         ],
       ),
     );
   }
-}
-
-class _ClientBilling {
-  final String companyName;
-  int tours = 0;
-  int handlingCount = 0;
-  double handlingAmount = 0;
-  double extraKm = 0;
-  double extraKmAmount = 0;
-  int extraTours = 0;
-  double extraTourAmount = 0;
-  double get total => handlingAmount + extraKmAmount + extraTourAmount;
-  _ClientBilling({required this.companyName});
 }

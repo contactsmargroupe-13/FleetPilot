@@ -10,6 +10,7 @@ class CompanySettings {
   static const _keySiret = 'company_siret';
   static const _keyPhone = 'company_phone';
   static const _keyEmail = 'company_email';
+  static const _keyTvaIntra = 'company_tva_intra';
   static const _keyManagerPinHash = 'manager_pin_hash';
 
   // Secure storage for API key
@@ -58,6 +59,7 @@ class CompanySettings {
   static String get siret => _prefs?.getString(_keySiret) ?? '';
   static String get phone => _prefs?.getString(_keyPhone) ?? '';
   static String get email => _prefs?.getString(_keyEmail) ?? '';
+  static String get tvaIntra => _prefs?.getString(_keyTvaIntra) ?? '';
   static String get claudeApiKey => _claudeApiKey;
   static bool get hasPinSet =>
       (_prefs?.getString(_keyManagerPinHash) ?? '').isNotEmpty;
@@ -68,12 +70,14 @@ class CompanySettings {
     required String siret,
     required String phone,
     required String email,
+    required String tvaIntra,
   }) async {
     await _prefs!.setString(_keyName, name);
     await _prefs!.setString(_keyAddress, address);
     await _prefs!.setString(_keySiret, siret);
     await _prefs!.setString(_keyPhone, phone);
     await _prefs!.setString(_keyEmail, email);
+    await _prefs!.setString(_keyTvaIntra, tvaIntra);
   }
 
   static Future<void> saveClaudeApiKey(String key) async {

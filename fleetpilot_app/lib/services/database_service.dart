@@ -17,6 +17,7 @@ import '../screens/models/driver_notification.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/equipment.dart';
 import '../screens/models/manager_alert.dart';
+import '../screens/models/message.dart';
 import '../screens/models/tour.dart';
 import 'company_settings.dart';
 
@@ -39,7 +40,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         await db.execute(
             'CREATE TABLE drivers (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
@@ -67,6 +68,8 @@ class DatabaseService {
             'CREATE TABLE equipment (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         await db.execute(
             'CREATE TABLE driver_assignments (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE messages (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -84,6 +87,10 @@ class DatabaseService {
         if (oldVersion < 5) {
           await db.execute(
               'CREATE TABLE IF NOT EXISTS driver_assignments (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 6) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         }
       },
     );
@@ -457,4 +464,15 @@ class DatabaseService {
 
   Future<void> deleteAssignment(String driverName) =>
       _delete('driver_assignments', 'name', driverName);
+
+  // ── Messages ──────────────────────────────────────────────────────────
+
+  Future<List<Message>> loadMessages() =>
+      _loadAll('messages', Message.fromJson);
+
+  Future<void> saveMessage(Message m) =>
+      _upsert('messages', 'id', m.id, m.toJson());
+
+  Future<void> deleteMessage(String id) =>
+      _delete('messages', 'id', id);
 }

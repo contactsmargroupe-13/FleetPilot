@@ -113,6 +113,21 @@ class Truck {
   final DateTime? insuranceStart;
   final DateTime? insuranceExpiry;
 
+  // Contrôle technique
+  final DateTime? ctDate;
+  final DateTime? ctExpiry;
+
+  /// Statut CT : 0=ok, 1=<3mois, 2=<1mois, 3=<1semaine, 4=expiré
+  int get ctStatus {
+    if (ctExpiry == null) return 0;
+    final diff = ctExpiry!.difference(DateTime.now()).inDays;
+    if (diff < 0) return 4;
+    if (diff < 7) return 3;
+    if (diff < 30) return 2;
+    if (diff < 90) return 1;
+    return 0;
+  }
+
   // Historiques
   final List<ServiceEntry> repairs;
   final List<ServiceEntry> maintenances;
@@ -142,6 +157,8 @@ class Truck {
     this.insurerName,
     this.insuranceStart,
     this.insuranceExpiry,
+    this.ctDate,
+    this.ctExpiry,
     this.repairs = const [],
     this.maintenances = const [],
     this.monthlyKmThreshold,
@@ -193,6 +210,8 @@ class Truck {
     String? insurerName,
     DateTime? insuranceStart,
     DateTime? insuranceExpiry,
+    DateTime? ctDate,
+    DateTime? ctExpiry,
     List<ServiceEntry>? repairs,
     List<ServiceEntry>? maintenances,
     double? monthlyKmThreshold,
@@ -215,6 +234,8 @@ class Truck {
         insurerName: insurerName ?? this.insurerName,
         insuranceStart: insuranceStart ?? this.insuranceStart,
         insuranceExpiry: insuranceExpiry ?? this.insuranceExpiry,
+        ctDate: ctDate ?? this.ctDate,
+        ctExpiry: ctExpiry ?? this.ctExpiry,
         repairs: repairs ?? this.repairs,
         maintenances: maintenances ?? this.maintenances,
         monthlyKmThreshold: monthlyKmThreshold ?? this.monthlyKmThreshold,
@@ -242,6 +263,8 @@ static const Object _sentinel = Object();
         'insurerName': insurerName,
         'insuranceStart': insuranceStart?.toIso8601String(),
         'insuranceExpiry': insuranceExpiry?.toIso8601String(),
+        'ctDate': ctDate?.toIso8601String(),
+        'ctExpiry': ctExpiry?.toIso8601String(),
         'repairs': repairs.map((e) => e.toJson()).toList(),
         'maintenances': maintenances.map((e) => e.toJson()).toList(),
         'monthlyKmThreshold': monthlyKmThreshold,
@@ -279,6 +302,12 @@ static const Object _sentinel = Object();
             : null,
         insuranceExpiry: json['insuranceExpiry'] != null
             ? DateTime.parse(json['insuranceExpiry'] as String)
+            : null,
+        ctDate: json['ctDate'] != null
+            ? DateTime.parse(json['ctDate'] as String)
+            : null,
+        ctExpiry: json['ctExpiry'] != null
+            ? DateTime.parse(json['ctExpiry'] as String)
             : null,
         repairs: (json['repairs'] as List<dynamic>? ?? [])
             .map((e) => ServiceEntry.fromJson(e as Map<String, dynamic>))
@@ -331,6 +360,8 @@ class _AddTruckPageState extends State<AddTruckPage> {
   late TruckStatus _truckStatus;
   DateTime? _insuranceStart;
   DateTime? _insuranceExpiry;
+  DateTime? _ctDate;
+  DateTime? _ctExpiry;
 
   late List<ServiceEntry> _repairs;
   late List<ServiceEntry> _maintenances;
@@ -371,6 +402,8 @@ class _AddTruckPageState extends State<AddTruckPage> {
     _truckStatus = t?.truckStatus ?? TruckStatus.fonctionnel;
     _insuranceStart = t?.insuranceStart;
     _insuranceExpiry = t?.insuranceExpiry;
+    _ctDate = t?.ctDate;
+    _ctExpiry = t?.ctExpiry;
     _repairs = List.from(t?.repairs ?? []);
     _maintenances = List.from(t?.maintenances ?? []);
   }
@@ -418,7 +451,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
     final brand = _brandCtrl.text.trim();
     final model = _modelCtrl.text.trim();
     final year = _i(_yearCtrl.text);
-    final dailyRate = _d(_rateCtrl.text)!;
+    final dailyRate = _d(_rateCtrl.text) ?? 0.0;
     final company = _companyCtrl.text.trim().isEmpty
         ? null
         : _companyCtrl.text.trim();
@@ -464,6 +497,8 @@ class _AddTruckPageState extends State<AddTruckPage> {
           insurerName: insurer,
           insuranceStart: _insuranceStart,
           insuranceExpiry: _insuranceExpiry,
+          ctDate: _ctDate,
+          ctExpiry: _ctExpiry,
           repairs: _repairs,
           maintenances: _maintenances,
           monthlyKmThreshold: monthlyKmThreshold,
@@ -500,6 +535,8 @@ class _AddTruckPageState extends State<AddTruckPage> {
           insurerName: insurer,
           insuranceStart: _insuranceStart,
           insuranceExpiry: _insuranceExpiry,
+          ctDate: _ctDate,
+          ctExpiry: _ctExpiry,
           repairs: _repairs,
           maintenances: _maintenances,
           monthlyKmThreshold: monthlyKmThreshold,
@@ -650,32 +687,10 @@ class _AddTruckPageState extends State<AddTruckPage> {
             ),
             const SizedBox(height: 12),
 
-            TextFormField(
-              controller: _companyCtrl,
-              decoration: const InputDecoration(
-                labelText: "Entreprise d'affectation (optionnel)",
-                border: OutlineInputBorder(),
-              ),
-            ),
             const SizedBox(height: 20),
 
-            // ── Financier ────────────────────────────────────────────────
-            _sectionTitle('Financier'),
-
-            TextFormField(
-              controller: _rateCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Forfait journalier (€) *',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) {
-                final val = _d(v ?? '');
-                if (val == null || val <= 0) return 'Forfait invalide';
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
+            // ── Acquisition ──────────────────────────────────────────────
+            _sectionTitle('Acquisition'),
 
             const Text(
               "Mode d'acquisition",
@@ -757,24 +772,6 @@ class _AddTruckPageState extends State<AddTruckPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-
-            TextFormField(
-              controller: _monthlyKmThresholdCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Seuil km mensuel (alerte) — optionnel',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.speed_outlined),
-                helperText: 'Alerte dépassement km si renseigné',
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return null;
-                final val = _d(v);
-                if (val == null || val <= 0) return 'Seuil invalide';
-                return null;
-              },
-            ),
             const SizedBox(height: 20),
 
             // ── Assurance ────────────────────────────────────────────────
@@ -814,6 +811,39 @@ class _AddTruckPageState extends State<AddTruckPage> {
                       if (d != null) setState(() => _insuranceExpiry = d);
                     },
                     onClear: () => setState(() => _insuranceExpiry = null),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // ── Contrôle technique ──────────────────────────────────────
+            _sectionTitle('Contrôle technique'),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _DatePickerTile(
+                    label: 'Date dernier CT',
+                    date: _ctDate,
+                    onTap: () async {
+                      final d = await _pickDate(_ctDate);
+                      if (d != null) setState(() => _ctDate = d);
+                    },
+                    onClear: () => setState(() => _ctDate = null),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _DatePickerTile(
+                    label: 'Expiration CT',
+                    date: _ctExpiry,
+                    isExpiry: true,
+                    onTap: () async {
+                      final d = await _pickDate(_ctExpiry);
+                      if (d != null) setState(() => _ctExpiry = d);
+                    },
+                    onClear: () => setState(() => _ctExpiry = null),
                   ),
                 ),
               ],

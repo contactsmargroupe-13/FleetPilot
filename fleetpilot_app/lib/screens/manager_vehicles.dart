@@ -144,10 +144,9 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                     ),
                   const SizedBox(height: 16),
 
-                  // Assurance
-                  if (truck.insurerName != null ||
-                      truck.insuranceExpiry != null)
-                    _InsuranceBadge(truck: truck),
+                  // Assurance + CT
+                  _InsuranceBadge(truck: truck),
+                  _CtBadge(truck: truck),
 
                   const SizedBox(height: 16),
 
@@ -246,6 +245,14 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
         .where((t) => t.insuranceStatus == 2)
         .length;
 
+    // Alertes CT
+    final ctExpiredCount = trucks
+        .where((t) => t.ctStatus == 4)
+        .length;
+    final ctSoonCount = trucks
+        .where((t) => t.ctStatus == 2 || t.ctStatus == 3)
+        .length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -281,6 +288,20 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
             icon: Icons.warning_amber_rounded,
             message:
                 '$soonCount assurance(s) expire(nt) dans moins de 30 jours',
+          ),
+        if (ctExpiredCount > 0)
+          _AlertBanner(
+            color: Colors.red,
+            icon: Icons.warning_rounded,
+            message:
+                '$ctExpiredCount contrôle(s) technique(s) expiré(s) — action requise',
+          ),
+        if (ctSoonCount > 0)
+          _AlertBanner(
+            color: Colors.orange,
+            icon: Icons.build_outlined,
+            message:
+                '$ctSoonCount contrôle(s) technique(s) expire(nt) bientôt',
           ),
 
         const SizedBox(height: 12),
@@ -318,6 +339,8 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
     if (t.insuranceStatus == 3) borderColor = Colors.red;
     if (t.insuranceStatus == 2) borderColor = Colors.orange;
     if (t.insuranceStatus == 1) borderColor = Colors.amber;
+    if (t.ctStatus == 4 || t.ctStatus == 3) borderColor = Colors.red;
+    if (t.ctStatus == 2 && borderColor == Colors.transparent) borderColor = Colors.orange;
 
     return Card(
       shape: borderColor != null
@@ -399,24 +422,19 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                _infoBox('Forfait/jour',
-                    '${t.dailyRate.toStringAsFixed(0)} €/j',
-                    Icons.euro_outlined),
-                if (t.monthlyCost != null)
-                  _infoBox(
-                    t.ownershipType == OwnershipType.achat
-                        ? 'Amort/mois'
-                        : 'Location/mois',
-                    '${t.monthlyCost!.toStringAsFixed(0)} €',
-                    t.ownershipType == OwnershipType.achat
-                        ? Icons.trending_down_outlined
-                        : Icons.receipt_outlined,
-                  ),
-                if (t.companyName != null)
-                  _infoBox('Entreprise', t.companyName!,
-                      Icons.business_outlined),
+                _infoBox(
+                  t.ownershipType == OwnershipType.achat
+                      ? 'Achat'
+                      : 'Location',
+                  t.monthlyCost != null
+                      ? '${t.monthlyCost!.toStringAsFixed(0)} €/mois'
+                      : '—',
+                  t.ownershipType == OwnershipType.achat
+                      ? Icons.shopping_cart_outlined
+                      : Icons.receipt_outlined,
+                ),
                 if (t.rentCompany != null)
-                  _infoBox('Sté location', t.rentCompany!,
+                  _infoBox('Loueur', t.rentCompany!,
                       Icons.apartment_outlined),
                 _infoBox(
                   'Ce mois',
@@ -428,19 +446,10 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
               ],
             ),
 
-            // Badge assurance
-            if (t.insuranceExpiry != null) ...[
-              const SizedBox(height: 10),
-              _InsuranceBadge(truck: t),
-            ],
-
-            // Badge seuil km
-            if (t.monthlyKmThreshold != null) ...[
-              const SizedBox(height: 8),
-              _KmThresholdBadge(
-                  monthKm: monthKm,
-                  threshold: t.monthlyKmThreshold!),
-            ],
+            // Badges assurance + CT
+            const SizedBox(height: 10),
+            _InsuranceBadge(truck: t),
+            _CtBadge(truck: t),
 
             const SizedBox(height: 12),
 
@@ -636,6 +645,84 @@ class _InsuranceBadge extends StatelessWidget {
     }
 
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Badge contrôle technique ──────────────────────────────────────────────────
+
+class _CtBadge extends StatelessWidget {
+  const _CtBadge({required this.truck});
+  final Truck truck;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = truck.ctStatus;
+    final expiry = truck.ctExpiry;
+
+    if (expiry == null && status == 0) return const SizedBox.shrink();
+
+    Color color;
+    IconData icon;
+    String text;
+
+    if (expiry == null) {
+      color = Colors.grey;
+      icon = Icons.build_outlined;
+      text = 'CT non renseigné';
+    } else {
+      final diff = expiry.difference(DateTime.now()).inDays;
+      final dateStr =
+          '${expiry.day.toString().padLeft(2, '0')}/${expiry.month.toString().padLeft(2, '0')}/${expiry.year}';
+
+      switch (status) {
+        case 4:
+          color = Colors.red;
+          icon = Icons.warning_rounded;
+          text = 'CT expiré le $dateStr';
+          break;
+        case 3:
+          color = Colors.red;
+          icon = Icons.warning_amber_rounded;
+          text = 'CT expire dans $diff j — $dateStr';
+          break;
+        case 2:
+          color = Colors.orange;
+          icon = Icons.warning_amber_rounded;
+          text = 'CT expire dans $diff j — $dateStr';
+          break;
+        case 1:
+          color = Colors.amber;
+          icon = Icons.build_outlined;
+          text = 'CT dans $diff j — $dateStr';
+          break;
+        default:
+          color = Colors.green;
+          icon = Icons.verified_outlined;
+          text = 'CT valide jusqu\'au $dateStr';
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),

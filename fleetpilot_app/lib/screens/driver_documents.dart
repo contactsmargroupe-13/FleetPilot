@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../providers/app_state.dart';
 import 'models/driver_document.dart';
@@ -157,7 +161,16 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
 
     if (widget.showAppBar) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Mes documents')),
+        appBar: AppBar(
+          title: const Text('Mes documents'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.ios_share_outlined),
+              tooltip: 'Exporter tous mes documents',
+              onPressed: () => _exportAllDocs(docs),
+            ),
+          ],
+        ),
         body: body,
       );
     }
@@ -298,6 +311,11 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
                 ),
               ),
             ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () => _shareDocument(doc),
+            child: Icon(Icons.share_outlined, size: 18, color: Colors.grey.shade600),
+          ),
         ],
       ),
     );
@@ -366,6 +384,71 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
             ref.read(appStateProvider).markNotificationRead(n.id);
           }
         },
+      ),
+    );
+  }
+
+  // ── Partage d'un document individuel ──────────────────────────────────────
+  Future<void> _shareDocument(DriverDocument doc) async {
+    final lines = <String>[
+      documentTypeLabel(doc.type),
+      if (doc.documentNumber != null) 'N° ${doc.documentNumber}',
+      if (doc.issueDate != null) 'Délivré le : ${_fmt(doc.issueDate!)}',
+      if (doc.expiryDate != null) 'Expiration : ${_fmt(doc.expiryDate!)}',
+      if (doc.note != null && doc.note!.isNotEmpty) 'Note : ${doc.note}',
+      '',
+      'Chauffeur : ${widget.driverName}',
+    ];
+    await SharePlus.instance.share(
+      ShareParams(text: lines.join('\n'), subject: documentTypeLabel(doc.type)),
+    );
+  }
+
+  // ── Export de tous les documents ────────────────────────────────────────────
+  Future<void> _exportAllDocs(List<DriverDocument> docs) async {
+    if (docs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucun document à exporter.')),
+        );
+      }
+      return;
+    }
+
+    // Générer un résumé texte
+    final buf = StringBuffer();
+    buf.writeln('=== Documents de ${widget.driverName} ===');
+    buf.writeln('Export du ${_fmt(DateTime.now())}');
+    buf.writeln('');
+
+    final grouped = <String, List<DriverDocument>>{};
+    for (final doc in docs) {
+      final cat = documentTypeCategory(doc.type);
+      grouped.putIfAbsent(cat, () => []).add(doc);
+    }
+
+    for (final cat in grouped.keys) {
+      buf.writeln('--- $cat ---');
+      for (final doc in grouped[cat]!) {
+        buf.writeln('  ${documentTypeLabel(doc.type)}');
+        if (doc.documentNumber != null) buf.writeln('    N° ${doc.documentNumber}');
+        if (doc.expiryDate != null) {
+          buf.writeln('    Expiration : ${_fmt(doc.expiryDate!)} (${doc.alertLevel == 'expired' ? 'EXPIRÉ' : doc.alertLevel == 'warning' ? 'EXPIRE BIENTÔT' : 'Valide'})');
+        }
+        if (doc.note != null && doc.note!.isNotEmpty) buf.writeln('    Note : ${doc.note}');
+      }
+      buf.writeln('');
+    }
+
+    // Sauvegarder en fichier et partager
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/documents_${widget.driverName.replaceAll(' ', '_')}.txt');
+    await file.writeAsString(buf.toString());
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        subject: 'Documents de ${widget.driverName}',
       ),
     );
   }

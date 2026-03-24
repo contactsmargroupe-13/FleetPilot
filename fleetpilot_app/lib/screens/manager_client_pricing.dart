@@ -25,7 +25,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Contrats clients')),
+      appBar: AppBar(title: const Text('Commissionnaires')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddForm,
         icon: const Icon(Icons.add),
@@ -43,7 +43,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                     Icon(Icons.handshake_outlined, size: 48),
                     SizedBox(height: 12),
                     Text(
-                      'Aucun contrat client',
+                      'Aucun commissionnaire',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -51,7 +51,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                     ),
                     SizedBox(height: 8),
                     Text(
-                      'Ajoute un premier contrat client pour gérer tarifs et conditions.',
+                      'Ajoute un premier commissionnaire pour gérer tarifs et conditions.',
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -68,7 +68,12 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
 
   Widget _buildClientCard(ClientPricing pricing) {
     // Badges des options actives
-    final List<_OptionBadge> badges = [];
+    final List<_OptionBadge> badges = [
+      _OptionBadge(
+        label: billingModeLabel(pricing.billingMode),
+        color: pricing.billingMode == BillingMode.auPoint ? Colors.indigo : Colors.teal,
+      ),
+    ];
     if (pricing.fuelIndexEnabled) {
       badges.add(_OptionBadge(
         label: 'Gasoil indexé',
@@ -94,6 +99,11 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
       ));
     }
 
+    // Nombre de chauffeurs affectés à ce commissionnaire
+    final assignedDrivers = ref.watch(appStateProvider).assignments
+        .where((a) => a.companyName?.toLowerCase() == pricing.companyName.toLowerCase())
+        .length;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
       child: Padding(
@@ -104,13 +114,42 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
             // Titre + tarif
             Row(
               children: [
-                Expanded(
+                CircleAvatar(
+                  backgroundColor: DC.primary.withValues(alpha: 0.1),
                   child: Text(
-                    pricing.companyName,
+                    pricing.companyName[0].toUpperCase(),
                     style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        fontWeight: FontWeight.bold, color: DC.primary),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pricing.companyName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (pricing.siret != null && pricing.siret!.isNotEmpty)
+                        Text(
+                          'SIRET : ${pricing.siret}',
+                          style: const TextStyle(fontSize: 11, color: DC.textSecondary),
+                        ),
+                      if (pricing.tvaIntra != null && pricing.tvaIntra!.isNotEmpty)
+                        Text(
+                          'TVA : ${pricing.tvaIntra}',
+                          style: const TextStyle(fontSize: 11, color: DC.textSecondary),
+                        ),
+                      if (assignedDrivers > 0)
+                        Text(
+                          '$assignedDrivers chauffeur${assignedDrivers > 1 ? 's' : ''} affecté${assignedDrivers > 1 ? 's' : ''}',
+                          style: const TextStyle(fontSize: 11, color: DC.textSecondary),
+                        ),
+                    ],
                   ),
                 ),
                 Container(
@@ -121,7 +160,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${pricing.dailyRate.toStringAsFixed(0)} €/j',
+                    '${pricing.dailyRate.toStringAsFixed(0)} € HT/j',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: DC.primary,
@@ -129,6 +168,63 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                   ),
                 ),
               ],
+            ),
+
+
+            // ── Infos entreprise ──────────────────────────────────────────
+            if (_hasCompanyInfo(pricing)) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.12)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (pricing.address != null && pricing.address!.isNotEmpty)
+                      _infoLine(Icons.location_on_outlined, pricing.address!),
+                    if (pricing.phone != null && pricing.phone!.isNotEmpty)
+                      _infoLine(Icons.phone_outlined, pricing.phone!),
+                    if (pricing.email != null && pricing.email!.isNotEmpty)
+                      _infoLine(Icons.email_outlined, pricing.email!),
+                    if (pricing.contactName != null && pricing.contactName!.isNotEmpty)
+                      _infoLine(Icons.person_outline, pricing.contactName!),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 12),
+
+            // ── Grille tarifs détaillés ────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+              ),
+              child: Column(
+                children: [
+                  if (pricing.billingMode == BillingMode.auPoint && pricing.pricePerPoint != null) ...[
+                    _priceLine('Prix par point HT', '${pricing.pricePerPoint!.toStringAsFixed(2)} €'),
+                  ] else ...[
+                    _priceLine('Tournée / jour HT', '${pricing.dailyRate.toStringAsFixed(2)} €'),
+                    _priceLine('Estimation mois (22j)', '${(pricing.dailyRate * 22).toStringAsFixed(0)} € HT'),
+                  ],
+                  if (pricing.handlingEnabled && pricing.handlingPrice != null)
+                    _priceLine('Manutention', '${pricing.handlingPrice!.toStringAsFixed(2)} € / unité'),
+                  if (pricing.extraKmEnabled && pricing.extraKmPrice != null)
+                    _priceLine('Km supplémentaire', '${pricing.extraKmPrice!.toStringAsFixed(2)} € / km'),
+                  if (pricing.extraTourEnabled && pricing.extraTourPrice != null)
+                    _priceLine('Tour supplémentaire', '${pricing.extraTourPrice!.toStringAsFixed(2)} €'),
+                  if (pricing.fuelIndexEnabled && pricing.fuelIndexPercent != null)
+                    _priceLine('Indexation gasoil', '${pricing.fuelIndexPercent!.toStringAsFixed(1)} %'),
+                ],
+              ),
             ),
 
             // Options actives
@@ -154,18 +250,19 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                       color: DC.warning.withValues(alpha: 0.4)),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.speed_outlined,
                         size: 14, color: DC.warning),
                     const SizedBox(width: 6),
-                    Text(
-                      'Seuil : ${pricing.monthlyKmThreshold!.toStringAsFixed(0)} km/mois'
-                      '${pricing.overKmRate != null ? ' • ${pricing.overKmRate!.toStringAsFixed(2)} €/km au-delà' : ''}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: DC.warning,
+                    Expanded(
+                      child: Text(
+                        'Seuil : ${pricing.monthlyKmThreshold!.toStringAsFixed(0)} km/mois'
+                        '${pricing.overKmRate != null ? ' — ${pricing.overKmRate!.toStringAsFixed(2)} €/km au-delà' : ''}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: DC.warning,
+                        ),
                       ),
                     ),
                   ],
@@ -186,17 +283,18 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                       color: Colors.green.withValues(alpha: 0.4)),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.trending_up_outlined,
                         size: 14, color: Colors.green),
                     const SizedBox(width: 6),
-                    Text(
-                      'Seuil rentabilité : ${pricing.breakEvenAmount!.toStringAsFixed(0)} €/mois',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green,
+                    Expanded(
+                      child: Text(
+                        'Seuil rentabilité : ${pricing.breakEvenAmount!.toStringAsFixed(0)} €/mois',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green,
+                        ),
                       ),
                     ),
                   ],
@@ -241,6 +339,44 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
     );
   }
 
+  bool _hasCompanyInfo(ClientPricing p) =>
+      (p.address != null && p.address!.isNotEmpty) ||
+      (p.phone != null && p.phone!.isNotEmpty) ||
+      (p.email != null && p.email!.isNotEmpty) ||
+      (p.contactName != null && p.contactName!.isNotEmpty);
+
+  Widget _infoLine(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: Colors.blue.shade400),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _priceLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontSize: 13, color: DC.textSecondary)),
+          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
   void _openAddForm() {
     Navigator.push(
       context,
@@ -253,13 +389,13 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                   pricing.companyName.toLowerCase(),
             );
             if (alreadyExists) {
-              _showMessage('Ce client existe déjà');
+              _showMessage('Ce commissionnaire existe déjà');
               return false;
             }
             setState(() {
               ref.read(appStateProvider).addClientPricing(pricing);
             });
-            _showMessage('Contrat client ajouté');
+            _showMessage('Commissionnaire ajouté');
             return true;
           },
         ),
@@ -288,7 +424,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
             setState(() {
               ref.read(appStateProvider).updateClientPricing(pricing.companyName, updated);
             });
-            _showMessage('Contrat client modifié');
+            _showMessage('Commissionnaire modifié');
             return true;
           },
         ),
@@ -301,9 +437,9 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Supprimer ce contrat ?'),
+          title: const Text('Supprimer ce commissionnaire ?'),
           content: Text(
-            'Supprimer le contrat de ${pricing.companyName} ?',
+            'Supprimer le commissionnaire ${pricing.companyName} ?',
           ),
           actions: [
             TextButton(
@@ -316,7 +452,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                   ref.read(appStateProvider).deleteClientPricing(pricing.companyName);
                 });
                 Navigator.pop(context);
-                _showMessage('Contrat client supprimé');
+                _showMessage('Commissionnaire supprimé');
               },
               style: FilledButton.styleFrom(backgroundColor: DC.error),
               child: const Text('Supprimer'),
@@ -382,8 +518,16 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;
+  late final TextEditingController _siretCtrl;
+  late final TextEditingController _tvaIntraCtrl;
+  late final TextEditingController _pricePerPointCtrl;
+  late BillingMode _billingMode;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _contactCtrl;
   late final TextEditingController _dailyRateCtrl;
-  late final TextEditingController _fuelRefPriceCtrl;
+  late final TextEditingController _fuelIndexPercentCtrl;
   late final TextEditingController _extraKmPriceCtrl;
   late final TextEditingController _handlingPriceCtrl;
   late final TextEditingController _extraTourPriceCtrl;
@@ -402,10 +546,19 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
     super.initState();
     final e = widget.existing;
     _nameCtrl = TextEditingController(text: e?.companyName ?? '');
+    _siretCtrl = TextEditingController(text: e?.siret ?? '');
+    _tvaIntraCtrl = TextEditingController(text: e?.tvaIntra ?? '');
+    _pricePerPointCtrl = TextEditingController(
+        text: e?.pricePerPoint?.toString() ?? '');
+    _billingMode = e?.billingMode ?? BillingMode.aLaFiche;
+    _addressCtrl = TextEditingController(text: e?.address ?? '');
+    _phoneCtrl = TextEditingController(text: e?.phone ?? '');
+    _emailCtrl = TextEditingController(text: e?.email ?? '');
+    _contactCtrl = TextEditingController(text: e?.contactName ?? '');
     _dailyRateCtrl = TextEditingController(
         text: e != null ? e.dailyRate.toStringAsFixed(0) : '');
-    _fuelRefPriceCtrl = TextEditingController(
-        text: e?.fuelRefPrice?.toString() ?? '');
+    _fuelIndexPercentCtrl = TextEditingController(
+        text: e?.fuelIndexPercent?.toString() ?? '');
     _extraKmPriceCtrl = TextEditingController(
         text: e?.extraKmPrice?.toString() ?? '');
     _handlingPriceCtrl = TextEditingController(
@@ -429,8 +582,15 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _siretCtrl.dispose();
+    _tvaIntraCtrl.dispose();
+    _pricePerPointCtrl.dispose();
+    _addressCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _contactCtrl.dispose();
     _dailyRateCtrl.dispose();
-    _fuelRefPriceCtrl.dispose();
+    _fuelIndexPercentCtrl.dispose();
     _extraKmPriceCtrl.dispose();
     _handlingPriceCtrl.dispose();
     _extraTourPriceCtrl.dispose();
@@ -462,12 +622,27 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
       return;
     }
 
+    String? _optStr(TextEditingController c) {
+      final v = c.text.trim();
+      return v.isEmpty ? null : v;
+    }
+
     final pricing = ClientPricing(
       companyName: _nameCtrl.text.trim(),
+      billingMode: _billingMode,
+      pricePerPoint: _billingMode == BillingMode.auPoint
+          ? _d(_pricePerPointCtrl.text)
+          : null,
+      siret: _optStr(_siretCtrl),
+      tvaIntra: _optStr(_tvaIntraCtrl),
+      address: _optStr(_addressCtrl),
+      phone: _optStr(_phoneCtrl),
+      email: _optStr(_emailCtrl),
+      contactName: _optStr(_contactCtrl),
       dailyRate: dailyRate,
       fuelIndexEnabled: _fuelIndexEnabled,
-      fuelRefPrice:
-          _fuelIndexEnabled ? _d(_fuelRefPriceCtrl.text) : null,
+      fuelIndexPercent:
+          _fuelIndexEnabled ? _d(_fuelIndexPercentCtrl.text) : null,
       extraKmEnabled: _extraKmEnabled,
       extraKmPrice:
           _extraKmEnabled ? _d(_extraKmPriceCtrl.text) : null,
@@ -502,7 +677,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEdit ? 'Modifier le contrat' : 'Nouveau contrat'),
+        title: Text(isEdit ? 'Modifier le commissionnaire' : 'Nouveau commissionnaire'),
       ),
       body: Form(
         key: _formKey,
@@ -510,11 +685,11 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
           padding: const EdgeInsets.all(16),
           children: [
             // ── Informations client ───────────────────────────────────────
-            _sectionTitle('Informations client'),
+            _sectionTitle('Informations commissionnaire'),
             TextFormField(
               controller: _nameCtrl,
               decoration: const InputDecoration(
-                labelText: 'Nom client / entreprise *',
+                labelText: 'Nom commissionnaire / entreprise *',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.business_outlined),
               ),
@@ -523,20 +698,127 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
             ),
             const SizedBox(height: 12),
             TextFormField(
-              controller: _dailyRateCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              controller: _siretCtrl,
               decoration: const InputDecoration(
-                labelText: 'Tarif journalier (€/j) *',
+                labelText: 'SIRET',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.euro_outlined),
+                prefixIcon: Icon(Icons.badge_outlined),
               ),
-              validator: (v) {
-                final val = _d(v ?? '');
-                if (val == null || val <= 0) return 'Tarif invalide';
-                return null;
-              },
             ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _tvaIntraCtrl,
+              decoration: const InputDecoration(
+                labelText: 'N° TVA intracommunautaire',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.account_balance_outlined),
+                hintText: 'FR12345678901',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _addressCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Adresse',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Téléphone',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _contactCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Personne de contact',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Mode de facturation ─────────────────────────────────────
+            _sectionTitle('Mode de facturation'),
+            SegmentedButton<BillingMode>(
+              segments: const [
+                ButtonSegment(
+                  value: BillingMode.aLaFiche,
+                  label: Text('À la fiche'),
+                  icon: Icon(Icons.description_outlined),
+                ),
+                ButtonSegment(
+                  value: BillingMode.auPoint,
+                  label: Text('Au point'),
+                  icon: Icon(Icons.pin_drop_outlined),
+                ),
+              ],
+              selected: {_billingMode},
+              onSelectionChanged: (v) =>
+                  setState(() => _billingMode = v.first),
+            ),
+            const SizedBox(height: 12),
+
+            if (_billingMode == BillingMode.aLaFiche)
+              TextFormField(
+                controller: _dailyRateCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Tarif journalier (€/j) *',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.euro_outlined),
+                ),
+                validator: (v) {
+                  if (_billingMode != BillingMode.aLaFiche) return null;
+                  final val = _d(v ?? '');
+                  if (val == null || val <= 0) return 'Tarif invalide';
+                  return null;
+                },
+              )
+            else
+              TextFormField(
+                controller: _pricePerPointCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Prix par point / client (€) *',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.pin_drop_outlined),
+                  helperText: 'Facturation basée sur le nombre de clients livrés',
+                ),
+                validator: (v) {
+                  if (_billingMode != BillingMode.auPoint) return null;
+                  final val = _d(v ?? '');
+                  if (val == null || val <= 0) return 'Prix invalide';
+                  return null;
+                },
+              ),
             const SizedBox(height: 24),
 
             // ── Options contractuelles ────────────────────────────────────
@@ -546,19 +828,20 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
             _OptionSwitch(
               title: 'Indexation gasoil',
               subtitle:
-                  'Ajustement tarifaire selon le prix du gazole',
+                  'Pourcentage d\'indexation appliqué au tarif',
               value: _fuelIndexEnabled,
               onChanged: (v) => setState(() => _fuelIndexEnabled = v),
               child: _fuelIndexEnabled
                   ? Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: TextFormField(
-                        controller: _fuelRefPriceCtrl,
+                        controller: _fuelIndexPercentCtrl,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                         decoration: const InputDecoration(
-                          labelText: 'Prix gazole référence (€/L)',
+                          labelText: 'Indexation gasoil (%)',
                           border: OutlineInputBorder(),
+                          suffixText: '%',
                         ),
                         validator: _optionalPositive,
                       ),

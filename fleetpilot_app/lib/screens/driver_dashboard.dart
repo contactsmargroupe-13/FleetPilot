@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import 'models/driver.dart';
 import 'models/tour.dart';
+import 'manager_urssaf.dart';
 
 class DriverDashboardPage extends ConsumerStatefulWidget {
   final String driverName;
@@ -74,11 +75,15 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         .toSet()
         .length;
 
-    // Salaire
+    // Salaire — affiché en net (brut - charges salariales)
+    final tauxSalarial = UrssafRates.totalSalarial / 100;
+    final salaireBrutMois = driver.totalSalary;
+    final salaireMois = salaireBrutMois * (1 - tauxSalarial);
     final salaireJour =
-        joursT > 0 ? driver.fixedSalary / 22 : 0.0; // base 22j/mois
-    final salaireMois = driver.totalSalary;
-    final salaireAnnee = driver.totalSalary * 12;
+        joursT > 0 ? salaireMois / 22 : 0.0; // base 22j/mois
+    final salaireAnnee = salaireMois * 12;
+    final fixedNet = driver.fixedSalary * (1 - tauxSalarial);
+    final bonusNet = driver.bonus * (1 - tauxSalarial);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -125,8 +130,8 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         ),
         const SizedBox(height: 16),
 
-        // ── Salaire ─────────────────────────────────────────────────────
-        _sectionTitle('Salaire'),
+        // ── Salaire (net) ──────────────────────────────────────────────
+        _sectionTitle('Salaire net'),
         Row(
           children: [
             _statCard('Jour', '${salaireJour.toStringAsFixed(0)} €',
@@ -145,12 +150,12 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
             padding: const EdgeInsets.all(14),
             child: Column(
               children: [
-                _detailLine('Salaire fixe',
-                    '${driver.fixedSalary.toStringAsFixed(0)} €'),
+                _detailLine('Salaire fixe net',
+                    '${fixedNet.toStringAsFixed(0)} €'),
                 _detailLine(
-                    'Bonus', '${driver.bonus.toStringAsFixed(0)} €'),
+                    'Bonus net', '${bonusNet.toStringAsFixed(0)} €'),
                 const Divider(),
-                _detailLine('Total mensuel',
+                _detailLine('Total mensuel net',
                     '${salaireMois.toStringAsFixed(0)} €',
                     bold: true),
               ],
@@ -160,7 +165,7 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         const SizedBox(height: 20),
 
         // ── Chronologie paie ──────────────────────────────────────────
-        _sectionTitle('Ma paie — $_monthLabel'),
+        _sectionTitle('Ma paie net — $_monthLabel'),
         _buildSalaryProgress(joursT, driver, salaireMois),
         const SizedBox(height: 20),
 

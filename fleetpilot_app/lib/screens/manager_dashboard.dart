@@ -5,12 +5,14 @@ import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
 import 'manager_admin.dart';
 import 'manager_ai_chat.dart';
+import 'manager_messages.dart';
 import 'manager_ai_report.dart';
 import 'manager_assignments.dart';
 import 'smart_scan_page.dart';
 import 'manager_assets.dart';
 import 'manager_billing.dart';
 import 'manager_drivers.dart';
+import 'manager_client_pricing.dart';
 import 'manager_equipment.dart';
 import 'manager_expenses.dart';
 import 'manager_planning.dart';
@@ -36,6 +38,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
   @override
   Widget build(BuildContext context) {
     final alertCount = ref.watch(appStateProvider).unreadManagerAlertCount;
+    final unreadMsgCount = ref.watch(appStateProvider).unreadManagerMessages;
 
     final pages = [
       const ManagerDashboardPage(),
@@ -47,6 +50,20 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
       appBar: AppBar(
         title: const Text("FleetPilot Manager"),
         actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: unreadMsgCount > 0,
+              label: Text('$unreadMsgCount'),
+              child: const Icon(Icons.chat_outlined),
+            ),
+            tooltip: 'Messages',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ManagerMessagesPage()),
+              );
+            },
+          ),
           IconButton(
             icon: Badge(
               isLabelVisible: alertCount > 0,
@@ -115,6 +132,11 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerEquipmentPage()));
             }),
+            _drawerTile(Icons.handshake_outlined, 'Commissionnaires', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerClientPricingPage()));
+            }),
             const Divider(),
             _drawerTile(Icons.savings_outlined, 'Actifs', () {
               Navigator.pop(context);
@@ -152,6 +174,11 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               Navigator.pop(context);
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerRecruitmentPage()));
+            }),
+            _drawerTile(Icons.chat_outlined, 'Messages${unreadMsgCount > 0 ? ' ($unreadMsgCount)' : ''}', () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManagerMessagesPage()));
             }),
             const Divider(),
             _drawerTile(Icons.auto_awesome, 'Assistant IA', () {

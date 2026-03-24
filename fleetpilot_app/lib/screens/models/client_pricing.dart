@@ -1,12 +1,37 @@
+enum BillingMode { aLaFiche, auPoint }
+
+String billingModeLabel(BillingMode mode) {
+  switch (mode) {
+    case BillingMode.aLaFiche:
+      return 'À la fiche';
+    case BillingMode.auPoint:
+      return 'Au point';
+  }
+}
+
 class ClientPricing {
   final String companyName;
+
+  // Mode de facturation
+  final BillingMode billingMode;
+
+  // Prix par point (mode auPoint)
+  final double? pricePerPoint;
+
+  // Infos entreprise
+  final String? siret;
+  final String? tvaIntra;
+  final String? address;
+  final String? phone;
+  final String? email;
+  final String? contactName;
 
   // Base obligatoire
   final double dailyRate;
 
-  // Indexation gasoil (optionnel)
+  // Indexation gasoil en % (optionnel)
   final bool fuelIndexEnabled;
-  final double? fuelRefPrice;
+  final double? fuelIndexPercent;
 
   // Extra km (optionnel)
   final bool extraKmEnabled;
@@ -31,9 +56,17 @@ class ClientPricing {
 
   const ClientPricing({
     required this.companyName,
+    this.billingMode = BillingMode.aLaFiche,
+    this.pricePerPoint,
+    this.siret,
+    this.tvaIntra,
+    this.address,
+    this.phone,
+    this.email,
+    this.contactName,
     required this.dailyRate,
     this.fuelIndexEnabled = false,
-    this.fuelRefPrice,
+    this.fuelIndexPercent,
     this.extraKmEnabled = false,
     this.extraKmPrice,
     this.handlingEnabled = false,
@@ -48,9 +81,17 @@ class ClientPricing {
 
   ClientPricing copyWith({
     String? companyName,
+    BillingMode? billingMode,
+    double? pricePerPoint,
+    String? siret,
+    String? tvaIntra,
+    String? address,
+    String? phone,
+    String? email,
+    String? contactName,
     double? dailyRate,
     bool? fuelIndexEnabled,
-    double? fuelRefPrice,
+    double? fuelIndexPercent,
     bool? extraKmEnabled,
     double? extraKmPrice,
     bool? handlingEnabled,
@@ -64,9 +105,17 @@ class ClientPricing {
   }) {
     return ClientPricing(
       companyName: companyName ?? this.companyName,
+      billingMode: billingMode ?? this.billingMode,
+      pricePerPoint: pricePerPoint ?? this.pricePerPoint,
+      siret: siret ?? this.siret,
+      tvaIntra: tvaIntra ?? this.tvaIntra,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      contactName: contactName ?? this.contactName,
       dailyRate: dailyRate ?? this.dailyRate,
       fuelIndexEnabled: fuelIndexEnabled ?? this.fuelIndexEnabled,
-      fuelRefPrice: fuelRefPrice ?? this.fuelRefPrice,
+      fuelIndexPercent: fuelIndexPercent ?? this.fuelIndexPercent,
       extraKmEnabled: extraKmEnabled ?? this.extraKmEnabled,
       extraKmPrice: extraKmPrice ?? this.extraKmPrice,
       handlingEnabled: handlingEnabled ?? this.handlingEnabled,
@@ -82,9 +131,17 @@ class ClientPricing {
 
   Map<String, dynamic> toJson() => {
         'companyName': companyName,
+        'billingMode': billingMode.name,
+        'pricePerPoint': pricePerPoint,
+        'siret': siret,
+        'tvaIntra': tvaIntra,
+        'address': address,
+        'phone': phone,
+        'email': email,
+        'contactName': contactName,
         'dailyRate': dailyRate,
         'fuelIndexEnabled': fuelIndexEnabled,
-        'fuelRefPrice': fuelRefPrice,
+        'fuelIndexPercent': fuelIndexPercent,
         'extraKmEnabled': extraKmEnabled,
         'extraKmPrice': extraKmPrice,
         'handlingEnabled': handlingEnabled,
@@ -111,12 +168,27 @@ class ClientPricing {
 
     return ClientPricing(
       companyName: json['companyName'] as String,
+      billingMode: json['billingMode'] != null
+          ? BillingMode.values.firstWhere(
+              (e) => e.name == json['billingMode'],
+              orElse: () => BillingMode.aLaFiche,
+            )
+          : BillingMode.aLaFiche,
+      pricePerPoint: json['pricePerPoint'] != null
+          ? (json['pricePerPoint'] as num).toDouble()
+          : null,
+      siret: json['siret'] as String?,
+      tvaIntra: json['tvaIntra'] as String?,
+      address: json['address'] as String?,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
+      contactName: json['contactName'] as String?,
       dailyRate: json['dailyRate'] != null
           ? (json['dailyRate'] as num).toDouble()
           : 0.0,
       fuelIndexEnabled: json['fuelIndexEnabled'] as bool? ?? false,
-      fuelRefPrice: json['fuelRefPrice'] != null
-          ? (json['fuelRefPrice'] as num).toDouble()
+      fuelIndexPercent: json['fuelIndexPercent'] != null
+          ? (json['fuelIndexPercent'] as num).toDouble()
           : null,
       extraKmEnabled: json['extraKmEnabled'] as bool? ??
           (legacyExtraKmPrice != null && legacyExtraKmPrice > 0),

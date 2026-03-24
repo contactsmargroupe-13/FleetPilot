@@ -8,6 +8,7 @@ import '../services/gps_tracking_service.dart';
 import '../services/ocr_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import 'chat_screen.dart';
 import 'driver_dashboard.dart';
 import 'driver_documents.dart';
 import 'add_truck.dart';
@@ -889,10 +890,13 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
     final unreadCount =
         ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
+    final unreadMsgCount =
+        ref.watch(appStateProvider).unreadMessagesForDriver(_driverName!);
 
     final pages = [
       _tourStart == null ? _buildIdle() : _buildActiveTour(),
       DriverDashboardPage(driverName: _driverName!),
+      ChatScreen(driverName: _driverName!, isManager: false, showAppBar: false),
       _buildSettings(),
     ];
 
@@ -930,6 +934,14 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           const NavigationDestination(
             icon: Icon(Icons.analytics_outlined),
             label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: unreadMsgCount > 0,
+              label: Text('$unreadMsgCount'),
+              child: const Icon(Icons.chat_outlined),
+            ),
+            label: 'Messages',
           ),
           NavigationDestination(
             icon: Badge(
