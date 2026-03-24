@@ -21,6 +21,7 @@ import 'manager_settings.dart';
 import 'manager_tours.dart';
 import 'manager_urssaf.dart';
 import 'manager_vehicles.dart';
+import 'models/client_pricing.dart';
 import 'models/driver.dart';
 import 'models/expense.dart';
 import 'models/manager_alert.dart';
@@ -109,7 +110,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                 ],
               ),
             ),
-            _drawerTile(Icons.assignment_ind_outlined, 'Affectations', () {
+            _drawerTile(Icons.hub_outlined, 'Flotte', () {
               Navigator.pop(context);
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ManagerAssignmentsPage()));
@@ -433,7 +434,25 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
       final daysCtrl = _daysCtrlFor(t.plate, _selectedMonth);
       final days = _parseDays(daysCtrl.text);
 
-      final revenue = (t.dailyRate as num).toDouble() * days;
+      // Revenu = somme des tarifs commissionnaire pour chaque tournée du camion
+      final appState = ref.read(appStateProvider);
+      final truckTours = appState.tours.where((tour) =>
+          tour.truckPlate == t.plate &&
+          tour.date.year == _selectedMonth.year &&
+          tour.date.month == _selectedMonth.month).toList();
+      double revenue = 0;
+      for (final tour in truckTours) {
+        final pricing = appState.getClientPricing(tour.companyName);
+        final assign = appState.getAssignment(tour.driverName);
+        if (pricing != null) {
+          if (pricing.billingMode == BillingMode.auPoint) {
+            final pp = assign?.customPricePerPoint ?? pricing.pricePerPoint ?? 0;
+            revenue += tour.clientsCount * pp;
+          } else {
+            revenue += assign?.customDailyRate ?? pricing.dailyRate;
+          }
+        }
+      }
 
       final expenses = _sumExpensesForTruckInMonth(t.plate, _selectedMonth);
 
@@ -717,8 +736,24 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     double prevExpenses = 0;
     double prevFixed = 0;
     for (final t in allTrucks) {
-      final days = _parseDays(_daysCtrlFor(t.plate, prevMonth).text);
-      prevRevenue += (t.dailyRate as num).toDouble() * days;
+      // Revenu mois précédent via tournées réelles
+      final prevAppState = ref.read(appStateProvider);
+      final prevTours = prevAppState.tours.where((tour) =>
+          tour.truckPlate == t.plate &&
+          tour.date.year == prevMonth.year &&
+          tour.date.month == prevMonth.month).toList();
+      for (final tour in prevTours) {
+        final pricing = prevAppState.getClientPricing(tour.companyName);
+        final assign = prevAppState.getAssignment(tour.driverName);
+        if (pricing != null) {
+          if (pricing.billingMode == BillingMode.auPoint) {
+            final pp = assign?.customPricePerPoint ?? pricing.pricePerPoint ?? 0;
+            prevRevenue += tour.clientsCount * pp;
+          } else {
+            prevRevenue += assign?.customDailyRate ?? pricing.dailyRate;
+          }
+        }
+      }
       prevExpenses += _sumExpensesForTruckInMonth(t.plate, prevMonth);
       prevFixed += _truckFixedMonthlyCost(t);
     }

@@ -41,11 +41,14 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
       }
 
       final company = tour.companyName ?? '—';
-      final pricing = ref.read(appStateProvider).getClientPricing(company);
-      final dailyRate = pricing?.dailyRate ?? 0.0;
+      final appState = ref.read(appStateProvider);
+      final pricing = appState.getClientPricing(company);
 
+      // Chercher un tarif spécifique sur l'affectation chauffeur
+      final assignment = appState.getAssignment(tour.driverName);
+      final dailyRate = assignment?.customDailyRate ?? pricing?.dailyRate ?? 0.0;
+      final pricePerPoint = assignment?.customPricePerPoint ?? pricing?.pricePerPoint ?? 0.0;
       final mode = pricing?.billingMode ?? BillingMode.aLaFiche;
-      final pricePerPoint = pricing?.pricePerPoint ?? 0.0;
 
       billing.putIfAbsent(
           company,

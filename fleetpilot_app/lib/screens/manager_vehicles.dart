@@ -417,6 +417,58 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
             ),
             const SizedBox(height: 10),
 
+            // Affectation (chauffeur + commissionnaire)
+            Builder(builder: (_) {
+              final state = ref.read(appStateProvider);
+              final assign = state.assignments
+                  .where((a) => a.truckPlate == t.plate)
+                  .firstOrNull;
+              if (assign == null) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.person_off_outlined, size: 15, color: Colors.grey),
+                      SizedBox(width: 6),
+                      Text('Non affecté',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                );
+              }
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, size: 15, color: Colors.indigo),
+                    const SizedBox(width: 6),
+                    Text(assign.driverName,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo)),
+                    if (assign.companyName != null && assign.companyName!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.handshake_outlined, size: 13, color: Colors.teal),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(assign.companyName!,
+                            style: const TextStyle(fontSize: 12, color: Colors.teal),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+
             // Infos
             Wrap(
               spacing: 10,

@@ -149,6 +149,18 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                           '$assignedDrivers chauffeur${assignedDrivers > 1 ? 's' : ''} affecté${assignedDrivers > 1 ? 's' : ''}',
                           style: const TextStyle(fontSize: 11, color: DC.textSecondary),
                         ),
+                      // Aperçu chauffeurs + camions
+                      ...ref.watch(appStateProvider).assignments
+                          .where((a) => a.companyName?.toLowerCase() == pricing.companyName.toLowerCase())
+                          .take(3)
+                          .map((a) {
+                        final truck = ref.read(appStateProvider).trucks
+                            .where((t) => t.plate == a.truckPlate).firstOrNull;
+                        return Text(
+                          '${a.driverName} → ${a.truckPlate}${truck != null ? ' (${truck.model})' : ''}',
+                          style: const TextStyle(fontSize: 10, color: DC.textSecondary),
+                        );
+                      }),
                     ],
                   ),
                 ),
@@ -160,7 +172,9 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${pricing.dailyRate.toStringAsFixed(0)} € HT/j',
+                    pricing.billingMode == BillingMode.auPoint
+                        ? '${pricing.pricePerPoint?.toStringAsFixed(2) ?? '—'} €/pt'
+                        : '${pricing.dailyRate.toStringAsFixed(0)} € HT/j',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: DC.primary,
@@ -209,12 +223,12 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
               ),
               child: Column(
                 children: [
-                  if (pricing.billingMode == BillingMode.auPoint && pricing.pricePerPoint != null) ...[
-                    _priceLine('Prix par point HT', '${pricing.pricePerPoint!.toStringAsFixed(2)} €'),
-                  ] else ...[
+                  if (pricing.dailyRate > 0)
                     _priceLine('Tournée / jour HT', '${pricing.dailyRate.toStringAsFixed(2)} €'),
+                  if (pricing.pricePerPoint != null && pricing.pricePerPoint! > 0)
+                    _priceLine('Prix par point HT', '${pricing.pricePerPoint!.toStringAsFixed(2)} €'),
+                  if (pricing.billingMode == BillingMode.aLaFiche && pricing.dailyRate > 0)
                     _priceLine('Estimation mois (22j)', '${(pricing.dailyRate * 22).toStringAsFixed(0)} € HT'),
-                  ],
                   if (pricing.handlingEnabled && pricing.handlingPrice != null)
                     _priceLine('Manutention', '${pricing.handlingPrice!.toStringAsFixed(2)} € / unité'),
                   if (pricing.extraKmEnabled && pricing.extraKmPrice != null)
@@ -630,9 +644,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
     final pricing = ClientPricing(
       companyName: _nameCtrl.text.trim(),
       billingMode: _billingMode,
-      pricePerPoint: _billingMode == BillingMode.auPoint
-          ? _d(_pricePerPointCtrl.text)
-          : null,
+      pricePerPoint: _d(_pricePerPointCtrl.text),
       siret: _optStr(_siretCtrl),
       tvaIntra: _optStr(_tvaIntraCtrl),
       address: _optStr(_addressCtrl),
@@ -763,8 +775,13 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
             ),
             const SizedBox(height: 24),
 
-            // ── Mode de facturation ─────────────────────────────────────
-            _sectionTitle('Mode de facturation'),
+            // ── Tarification ───────────────────────────────────────────
+            _sectionTitle('Tarification'),
+
+            // Mode de calcul
+            const Text('Mode de calcul de la base',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
             SegmentedButton<BillingMode>(
               segments: const [
                 ButtonSegment(
@@ -782,43 +799,55 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
               onSelectionChanged: (v) =>
                   setState(() => _billingMode = v.first),
             ),
+            const SizedBox(height: 4),
+            Text(
+              _billingMode == BillingMode.aLaFiche
+                  ? 'Base calculée sur le tarif journalier × nombre de tournées'
+                  : 'Base calculée sur le prix par point × nombre de clients livrés',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+
+            // Tarif journalier — toujours visible
+            TextFormField(
+              controller: _dailyRateCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: _billingMode == BillingMode.aLaFiche
+                    ? 'Tarif journalier (€/j) *'
+                    : 'Tarif journalier (€/j) — optionnel',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.euro_outlined),
+              ),
+              validator: (v) {
+                if (_billingMode != BillingMode.aLaFiche) return null;
+                final val = _d(v ?? '');
+                if (val == null || val <= 0) return 'Tarif invalide';
+                return null;
+              },
+            ),
             const SizedBox(height: 12),
 
-            if (_billingMode == BillingMode.aLaFiche)
-              TextFormField(
-                controller: _dailyRateCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Tarif journalier (€/j) *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.euro_outlined),
-                ),
-                validator: (v) {
-                  if (_billingMode != BillingMode.aLaFiche) return null;
-                  final val = _d(v ?? '');
-                  if (val == null || val <= 0) return 'Tarif invalide';
-                  return null;
-                },
-              )
-            else
-              TextFormField(
-                controller: _pricePerPointCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Prix par point / client (€) *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.pin_drop_outlined),
-                  helperText: 'Facturation basée sur le nombre de clients livrés',
-                ),
-                validator: (v) {
-                  if (_billingMode != BillingMode.auPoint) return null;
-                  final val = _d(v ?? '');
-                  if (val == null || val <= 0) return 'Prix invalide';
-                  return null;
-                },
+            // Prix par point — toujours visible
+            TextFormField(
+              controller: _pricePerPointCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: _billingMode == BillingMode.auPoint
+                    ? 'Prix par point / client (€) *'
+                    : 'Prix par point / client (€) — optionnel',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.pin_drop_outlined),
               ),
+              validator: (v) {
+                if (_billingMode != BillingMode.auPoint) return null;
+                final val = _d(v ?? '');
+                if (val == null || val <= 0) return 'Prix invalide';
+                return null;
+              },
+            ),
             const SizedBox(height: 24),
 
             // ── Options contractuelles ────────────────────────────────────

@@ -194,7 +194,59 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+
+            // Affectation rapide
+            Builder(builder: (_) {
+              final state = ref.read(appStateProvider);
+              final assign = state.getAssignment(driver.name);
+              if (assign == null) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.link_off, size: 14, color: Colors.grey),
+                      SizedBox(width: 6),
+                      Text('Non affecté', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                );
+              }
+              final truck = state.trucks.where((t) => t.plate == assign.truckPlate).firstOrNull;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.local_shipping_outlined, size: 14, color: Colors.teal),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${assign.truckPlate}${truck != null ? ' • ${truck.model}' : ''}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal),
+                    ),
+                    if (assign.companyName != null && assign.companyName!.isNotEmpty) ...[
+                      const SizedBox(width: 10),
+                      const Icon(Icons.handshake_outlined, size: 13, color: Colors.indigo),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(assign.companyName!,
+                            style: const TextStyle(fontSize: 12, color: Colors.indigo),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
 
             // Stats
             Wrap(

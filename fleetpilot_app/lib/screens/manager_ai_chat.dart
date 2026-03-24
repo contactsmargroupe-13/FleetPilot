@@ -73,11 +73,16 @@ class _ManagerAiChatPageState extends ConsumerState<ManagerAiChatPage> {
       final truckExp = monthExpenses
           .where((e) => e.truckPlate == truck.plate)
           .fold(0.0, (s, e) => s + e.amount);
-      final revenue = truck.dailyRate * 22; // estimation
+      // Revenu via tarifs commissionnaires des tournées réelles
+      double revenue = 0;
+      for (final tour in truckTours) {
+        final pricing = state.getClientPricing(tour.companyName);
+        if (pricing != null) revenue += pricing.dailyRate;
+      }
       buf.writeln(
           '- ${truck.plate} (${truck.model}) : ${truckTours.length} tournées, '
           '${truckKm.toStringAsFixed(0)} km, dépenses ${truckExp.toStringAsFixed(0)} €, '
-          'tarif/jour ${truck.dailyRate} €');
+          'revenu estimé ${revenue.toStringAsFixed(0)} €');
     }
     buf.writeln();
 

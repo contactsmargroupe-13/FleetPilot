@@ -71,7 +71,12 @@ class _ManagerAiReportPageState extends ConsumerState<ManagerAiReportPage> {
       final te = expenses
           .where((e) => e.truckPlate == truck.plate)
           .fold(0.0, (s, e) => s + e.amount);
-      final revenue = truck.dailyRate * 22;
+      // Revenu via tarifs commissionnaires des tournées réelles
+      double revenue = 0;
+      for (final tour in tt) {
+        final pricing = state.getClientPricing(tour.companyName);
+        if (pricing != null) revenue += pricing.dailyRate;
+      }
       final profit = revenue - te -
           (truck.monthlyCost ?? 0) -
           (state.drivers.isEmpty ? 0 : totalSalaries / state.trucks.length);
