@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -313,7 +314,7 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600),
+                  color: DC.textSecondary),
             ),
             const SizedBox(height: 4),
             ...state.drivers

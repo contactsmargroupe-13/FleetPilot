@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
 import 'manager_admin.dart';
@@ -25,9 +27,11 @@ import 'models/client_pricing.dart';
 import 'models/driver.dart';
 import 'models/expense.dart';
 import 'models/manager_alert.dart';
+import 'models/user_access.dart';
 
 class ManagerShell extends ConsumerStatefulWidget {
-  const ManagerShell({super.key});
+  final AccessRole role;
+  const ManagerShell({super.key, this.role = AccessRole.manager});
 
   @override
   ConsumerState<ManagerShell> createState() => _ManagerShellState();
@@ -35,6 +39,9 @@ class ManagerShell extends ConsumerStatefulWidget {
 
 class _ManagerShellState extends ConsumerState<ManagerShell> {
   int index = 0;
+
+  bool _hasAccess(String page) =>
+      rolePages[widget.role]?.contains(page) ?? false;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +56,9 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("FleetPilot Manager"),
+        title: Text(widget.role == AccessRole.manager
+            ? 'FleetPilot Manager'
+            : 'FleetPilot ${accessRoleLabel(widget.role)}'),
         actions: [
           IconButton(
             icon: Badge(
@@ -110,102 +119,158 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                 ],
               ),
             ),
-            _drawerTile(Icons.hub_outlined, 'Flotte', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerAssignmentsPage()));
-            }),
-            _drawerTile(Icons.groups_outlined, 'Chauffeurs', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerDriversPage()));
-            }),
-            _drawerTile(Icons.local_shipping_outlined, 'Camions', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => Scaffold(
-                    appBar: AppBar(title: const Text('Camions')),
-                    body: const ManagerVehiclesPage(),
-                  )));
-            }),
-            _drawerTile(Icons.build_outlined, 'Matériel', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerEquipmentPage()));
-            }),
-            _drawerTile(Icons.handshake_outlined, 'Commissionnaires', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerClientPricingPage()));
-            }),
+            if (_hasAccess('flotte'))
+              _drawerTile(Icons.hub_outlined, 'Flotte', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerAssignmentsPage()));
+              }),
+            if (_hasAccess('chauffeurs'))
+              _drawerTile(Icons.groups_outlined, 'Chauffeurs', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerDriversPage()));
+              }),
+            if (_hasAccess('camions'))
+              _drawerTile(Icons.local_shipping_outlined, 'Camions', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => Scaffold(
+                      appBar: AppBar(
+                        title: const Text('Camions'),
+                        actions: [
+                          Builder(builder: (ctx) => helpButton(ctx, 'Camions',
+                            'Gérez votre parc de véhicules.\n\n'
+                            '• Ajoutez vos camions avec immatriculation et modèle\n'
+                            '• Suivez assurance et contrôle technique\n'
+                            '• Affectez du matériel (transpalette, etc.)\n'
+                            '• Consultez les tournées par camion')),
+                        ],
+                      ),
+                      body: const ManagerVehiclesPage(),
+                    )));
+              }),
+            if (_hasAccess('materiel'))
+              _drawerTile(Icons.build_outlined, 'Matériel', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerEquipmentPage()));
+              }),
+            if (_hasAccess('commissionnaires'))
+              _drawerTile(Icons.handshake_outlined, 'Commissionnaires', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerClientPricingPage()));
+              }),
             const Divider(),
-            _drawerTile(Icons.savings_outlined, 'Actifs', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerAssetsPage()));
-            }),
-            _drawerTile(Icons.receipt_long_outlined, 'Dépenses', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => Scaffold(
-                    appBar: AppBar(title: const Text('Dépenses')),
-                    body: const ManagerExpensesPage(),
-                  )));
-            }),
-            _drawerTile(Icons.request_page_outlined, 'Facturation', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => Scaffold(
-                    appBar: AppBar(title: const Text('Facturation')),
-                    body: const ManagerBillingPage(),
-                  )));
-            }),
-            _drawerTile(Icons.account_balance_outlined, 'URSSAF & Charges', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerUrssafPage()));
-            }),
+            if (_hasAccess('actifs'))
+              _drawerTile(Icons.savings_outlined, 'Actifs', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerAssetsPage()));
+              }),
+            if (_hasAccess('depenses'))
+              _drawerTile(Icons.receipt_long_outlined, 'Dépenses', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => Scaffold(
+                      appBar: AppBar(
+                        title: const Text('Dépenses'),
+                        actions: [
+                          Builder(builder: (ctx) => helpButton(ctx, 'Dépenses',
+                            'Suivez toutes les dépenses de votre flotte.\n\n'
+                            '• Carburant, péages, réparations, amendes\n'
+                            '• Scan OCR pour saisir une facture en photo\n'
+                            '• Filtrez par camion, type ou période')),
+                        ],
+                      ),
+                      body: const ManagerExpensesPage(),
+                    )));
+              }),
+            if (_hasAccess('facturation'))
+              _drawerTile(Icons.request_page_outlined, 'Facturation', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => Scaffold(
+                      appBar: AppBar(
+                        title: const Text('Facturation'),
+                        actions: [
+                          Builder(builder: (ctx) => helpButton(ctx, 'Facturation',
+                            'Générez vos factures automatiquement.\n\n'
+                            '• Basé sur les tournées saisies par les chauffeurs\n'
+                            '• Calcul automatique selon le tarif commissionnaire\n'
+                            '• Export PDF pour envoi')),
+                        ],
+                      ),
+                      body: const ManagerBillingPage(),
+                    )));
+              }),
+            if (_hasAccess('urssaf'))
+              _drawerTile(Icons.account_balance_outlined, 'URSSAF & Charges', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerUrssafPage()));
+              }),
             const Divider(),
-            _drawerTile(Icons.folder_outlined, 'Administratif', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerAdminPage()));
-            }),
-            _drawerTile(Icons.badge_outlined, 'Recrutement', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerRecruitmentPage()));
-            }),
-            _drawerTile(Icons.chat_outlined, 'Messages${unreadMsgCount > 0 ? ' ($unreadMsgCount)' : ''}', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerMessagesPage()));
-            }),
-            const Divider(),
-            _drawerTile(Icons.auto_awesome, 'Assistant IA', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerAiChatPage()));
-            }),
-            _drawerTile(Icons.document_scanner_outlined, 'Scan intelligent', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SmartScanPage()));
-            }),
-            _drawerTile(Icons.analytics_outlined, 'Rapport IA', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ManagerAiReportPage()));
-            }),
-            const Divider(),
-            _drawerTile(Icons.settings_outlined, 'Paramètres', () {
-              Navigator.pop(context);
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => Scaffold(
-                    appBar: AppBar(title: const Text('Paramètres')),
-                    body: const ManagerSettingsPage(),
-                  )));
-            }),
+            if (_hasAccess('administratif'))
+              _drawerTile(Icons.folder_outlined, 'Administratif', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerAdminPage()));
+              }),
+            if (_hasAccess('recrutement'))
+              _drawerTile(Icons.badge_outlined, 'Recrutement', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerRecruitmentPage()));
+              }),
+            if (_hasAccess('messages'))
+              _drawerTile(Icons.chat_outlined, 'Messages${unreadMsgCount > 0 ? ' ($unreadMsgCount)' : ''}', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerMessagesPage()));
+              }),
+            if (_hasAccess('ia_chat') || _hasAccess('scan') || _hasAccess('rapport_ia'))
+              const Divider(),
+            if (_hasAccess('ia_chat'))
+              _drawerTile(Icons.auto_awesome, 'Assistant IA', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerAiChatPage()));
+              }),
+            if (_hasAccess('scan'))
+              _drawerTile(Icons.document_scanner_outlined, 'Scan intelligent', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const SmartScanPage()));
+              }),
+            if (_hasAccess('rapport_ia'))
+              _drawerTile(Icons.analytics_outlined, 'Rapport IA', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ManagerAiReportPage()));
+              }),
+            if (_hasAccess('parametres'))
+              const Divider(),
+            if (_hasAccess('parametres'))
+              _drawerTile(Icons.settings_outlined, 'Paramètres', () {
+                Navigator.pop(context);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => Scaffold(
+                      appBar: AppBar(
+                        title: const Text('Paramètres'),
+                        actions: [
+                          Builder(builder: (ctx) => helpButton(ctx, 'Paramètres',
+                            'Configurez votre entreprise et vos accès.\n\n'
+                            '• Infos entreprise : nom, SIRET, adresse\n'
+                            '• Code PIN manager pour protéger l\'accès\n'
+                            '• Créez des accès limités (ex: comptable)\n'
+                            '• Clé API pour l\'assistant IA')),
+                        ],
+                      ),
+                      body: const ManagerSettingsPage(),
+                    )));
+              }),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
@@ -818,11 +883,12 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
+                    Icon(
                       totalProfit >= 0
-                          ? (totalProfit > 5000 ? '🚀' : '✅')
-                          : (totalProfit < -3000 ? '🔴' : '⚠️'),
-                      style: const TextStyle(fontSize: 32),
+                          ? (totalProfit > 5000 ? Icons.rocket_launch_rounded : Icons.check_circle_rounded)
+                          : (totalProfit < -3000 ? Icons.error_rounded : Icons.warning_amber_rounded),
+                      size: 32,
+                      color: totalProfit >= 0 ? DC.success : DC.error,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -994,7 +1060,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                         ? (totalRevenue / totalCosts).clamp(0.0, 1.0)
                         : 0.0,
                     minHeight: 10,
-                    backgroundColor: Colors.grey.shade200,
+                    backgroundColor: DC.surface,
                     valueColor: AlwaysStoppedAnimation(
                       seuilAtteint ? Colors.green : Colors.orange,
                     ),
@@ -1019,11 +1085,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         // ── 4. Health row: 3 chips ──────────────────────────────────────
         if (_visibleSections.contains('sante')) Row(
           children: [
-            _healthChip('Rentables', profitableCount, Colors.green, '✅'),
+            _healthChip('Rentables', profitableCount, DC.success, Icons.check_circle_rounded),
             const SizedBox(width: 8),
-            _healthChip('À surveiller', warningCount, Colors.orange, '⚠️'),
+            _healthChip('À surveiller', warningCount, DC.warning, Icons.warning_amber_rounded),
             const SizedBox(width: 8),
-            _healthChip('En perte', lossCount, Colors.red, '🔴'),
+            _healthChip('En perte', lossCount, DC.error, Icons.error_rounded),
           ],
         ),
         if (_visibleSections.contains('sante')) const SizedBox(height: 10),
@@ -1040,7 +1106,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                 const SizedBox(height: 10),
                 if (sortedByProfit.isEmpty)
                   const Text('Aucun camion',
-                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      style: TextStyle(color: DC.textSecondary, fontSize: 13)),
                 ...sortedByProfit.map((t) {
                   final barRatio = (t.profit / maxAbsProfit).clamp(-1.0, 1.0);
                   final isPositive = t.profit >= 0;
@@ -1061,7 +1127,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                               Container(
                                 height: 18,
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
+                                  color: DC.surface,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
@@ -1194,7 +1260,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     // Camions en perte
     if (lossCount > 0) {
       suggestions.add(_Suggestion(
-        icon: '🔧',
+        icon: Icons.build_outlined,
         title: '$lossCount camion${lossCount > 1 ? 's' : ''} en perte',
         subtitle: 'Vérifiez les dépenses et revenus de ces camions.',
         color: Colors.red,
@@ -1204,7 +1270,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     // Consommation élevée
     if (totalLitersPer100 > 18) {
       suggestions.add(_Suggestion(
-        icon: '⛽',
+        icon: Icons.local_gas_station_outlined,
         title: 'Consommation élevée (${totalLitersPer100.toStringAsFixed(1)} L/100)',
         subtitle: 'Au-dessus de 18 L/100 km. Vérifiez l\'état des véhicules.',
         color: Colors.orange,
@@ -1214,7 +1280,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     // Peu de km
     if (totalKmMonth > 0 && totalKmMonth < 1000 && computedTrucks.isNotEmpty) {
       suggestions.add(_Suggestion(
-        icon: '📊',
+        icon: Icons.bar_chart_rounded,
         title: 'Activité faible ce mois',
         subtitle: 'Seulement ${totalKmMonth.toStringAsFixed(0)} km. Optimisez les plannings.',
         color: Colors.blue,
@@ -1224,7 +1290,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     // Tous rentables
     if (lossCount == 0 && computedTrucks.isNotEmpty) {
       suggestions.add(_Suggestion(
-        icon: '🎯',
+        icon: Icons.track_changes_rounded,
         title: 'Tous les camions sont rentables !',
         subtitle: 'Continuez sur cette lancée.',
         color: Colors.green,
@@ -1237,7 +1303,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           (totalProfit / computedTrucks.fold(0.0, (s, t) => s + t.revenue).clamp(1, double.infinity) * 100);
       if (marge > 20) {
         suggestions.add(_Suggestion(
-          icon: '💰',
+          icon: Icons.savings_outlined,
           title: 'Marge de ${marge.toStringAsFixed(0)}%',
           subtitle: 'Excellente rentabilité. Pensez à investir dans la flotte.',
           color: Colors.green,
@@ -1248,7 +1314,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     // Manque chauffeurs
     if (drivers.length < computedTrucks.length) {
       suggestions.add(_Suggestion(
-        icon: '👤',
+        icon: Icons.person_outline,
         title: 'Plus de camions que de chauffeurs',
         subtitle: '${computedTrucks.length} camions pour ${drivers.length} chauffeurs. Recrutez !',
         color: Colors.purple,
@@ -1277,7 +1343,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(s.icon, style: const TextStyle(fontSize: 18)),
+                      Icon(s.icon, size: 20, color: s.color),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -1290,7 +1356,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                                     color: s.color)),
                             Text(s.subtitle,
                                 style: const TextStyle(
-                                    fontSize: 12, color: Colors.grey)),
+                                    fontSize: 12, color: DC.textSecondary)),
                           ],
                         ),
                       ),
@@ -1377,13 +1443,13 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
               style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w700, color: color)),
           Text(label,
-              style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              style: const TextStyle(fontSize: 10, color: DC.textSecondary)),
         ],
       ),
     );
   }
 
-  Widget _healthChip(String label, int count, Color color, String emoji) {
+  Widget _healthChip(String label, int count, Color color, IconData icon) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1397,7 +1463,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 14)),
+                Icon(icon, size: 16, color: color),
                 const SizedBox(width: 4),
                 Text('$count',
                     style: TextStyle(
@@ -1419,7 +1485,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           Text('${amount.toStringAsFixed(0)} €',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
           Text(label,
-              style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              style: const TextStyle(fontSize: 10, color: DC.textSecondary)),
         ],
       ),
     );
@@ -1438,7 +1504,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                     fontSize: 16, fontWeight: FontWeight.w800, color: color)),
             const SizedBox(height: 2),
             Text(label,
-                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                style: const TextStyle(fontSize: 11, color: DC.textSecondary)),
           ],
         ),
       ),
@@ -2140,7 +2206,7 @@ class _KpiCard extends StatelessWidget {
 }
 
 class _Suggestion {
-  final String icon;
+  final IconData icon;
   final String title;
   final String subtitle;
   final Color color;
@@ -2294,7 +2360,7 @@ class _ManagerAlertsSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: DC.textSecondary,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -2330,7 +2396,7 @@ class _ManagerAlertsSheet extends StatelessWidget {
                       padding: EdgeInsets.all(32),
                       child: Text(
                         'Aucune alerte',
-                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                        style: TextStyle(color: DC.textSecondary, fontSize: 16),
                       ),
                     ),
                   )
@@ -2421,7 +2487,7 @@ class _ManagerAlertTile extends StatelessWidget {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 timeAgo,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                style: TextStyle(fontSize: 11, color: DC.textSecondary),
               ),
             ),
           ],
@@ -2498,11 +2564,11 @@ class _MenuTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(subtitle,
                         style: TextStyle(
-                            fontSize: 13, color: Colors.grey.shade600)),
+                            fontSize: 13, color: DC.textSecondary)),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.grey.shade400),
+              Icon(Icons.chevron_right, color: DC.textSecondary),
             ],
           ),
         ),

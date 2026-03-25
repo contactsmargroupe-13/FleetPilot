@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../utils/page_help.dart';
 import 'models/admin_document.dart';
 
 class ManagerAdminPage extends ConsumerStatefulWidget {
@@ -218,6 +219,16 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
     }
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Administratif'),
+        actions: [
+          helpButton(context, 'Administratif',
+            'Stockez et classez vos documents administratifs.\n\n'
+            '• Contrats chauffeurs, fiches de paie, assurances\n'
+            '• Factures prestataires, contrats de location\n'
+            '• Filtrez par catégorie pour retrouver rapidement'),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openAddDialog(),
         icon: const Icon(Icons.add),

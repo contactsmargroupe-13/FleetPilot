@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -19,7 +21,16 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Matériel')),
+      appBar: AppBar(
+        title: const Text('Matériel'),
+        actions: [
+          helpButton(context, 'Matériel',
+            'Gérez le matériel et son amortissement.\n\n'
+            '• Ajoutez transpalettes, outils, informatique...\n'
+            '• Suivez l\'amortissement et la valeur résiduelle\n'
+            '• Affectez le matériel à un camion depuis la page Camions'),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(null),
         icon: const Icon(Icons.add),
@@ -30,7 +41,7 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.build_outlined, size: 48, color: Colors.grey.shade300),
+                  Icon(Icons.build_outlined, size: 48, color: DC.textTertiary),
                   const SizedBox(height: 12),
                   const Text('Aucun matériel enregistré.',
                       style: TextStyle(color: Colors.grey, fontSize: 15)),
@@ -83,10 +94,10 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
                               style: const TextStyle(fontSize: 12, color: Colors.grey)),
                           if (e.assignedTruckPlate != null) ...[
                             const SizedBox(width: 6),
-                            Icon(Icons.local_shipping, size: 12, color: Colors.grey.shade500),
+                            Icon(Icons.local_shipping, size: 12, color: DC.textSecondary),
                             const SizedBox(width: 3),
                             Text(e.assignedTruckPlate!,
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                                style: TextStyle(fontSize: 11, color: DC.textSecondary, fontWeight: FontWeight.w600)),
                           ],
                         ],
                       ),
@@ -113,7 +124,7 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
               child: LinearProgressIndicator(
                 value: e.amortPercent,
                 minHeight: 6,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: DC.surface2,
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ),

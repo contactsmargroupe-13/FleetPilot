@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -38,7 +40,16 @@ class ManagerAssetsPage extends ConsumerWidget {
     final totalAmorti = totalAchat - totalValeur;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Actifs')),
+      appBar: AppBar(
+        title: const Text('Actifs'),
+        actions: [
+          helpButton(context, 'Actifs',
+            'Vue d\'ensemble de vos actifs et amortissements.\n\n'
+            '• Valeur totale de vos camions et matériel\n'
+            '• Suivi de l\'amortissement mensuel\n'
+            '• Coût mensuel par véhicule (achat ou location)'),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -108,7 +119,7 @@ class ManagerAssetsPage extends ConsumerWidget {
                   child: Column(
                     children: [
                       Icon(Icons.account_balance_outlined,
-                          size: 48, color: Colors.grey.shade300),
+                          size: 48, color: DC.textTertiary),
                       const SizedBox(height: 12),
                       const Text('Aucun actif enregistré.',
                           style: TextStyle(color: Colors.grey)),
@@ -245,7 +256,7 @@ class ManagerAssetsPage extends ConsumerWidget {
               child: LinearProgressIndicator(
                 value: amortPercent,
                 minHeight: 6,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: DC.surface2,
                 valueColor: AlwaysStoppedAnimation(
                     amortPercent >= 1.0 ? Colors.green : Colors.blue),
               ),
@@ -315,7 +326,7 @@ class ManagerAssetsPage extends ConsumerWidget {
               child: LinearProgressIndicator(
                 value: e.amortPercent,
                 minHeight: 6,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: DC.surface2,
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ),

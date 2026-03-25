@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../utils/design_constants.dart';
 import 'add_truck.dart';
 import 'models/tour.dart';
 
@@ -240,7 +241,9 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
               _dl('Client', t.companyName ?? '—'),
               _dl('Horaires', '${t.startTime ?? '—'} → ${t.endTime ?? '—'}'),
               _dl('Km', '${t.kmTotal.toStringAsFixed(0)} km'),
-              _dl('Clients', '${t.clientsCount}'),
+              _dl('Colis / Fiches', '${t.clientsCount}'),
+              if (t.pickupCount > 0)
+                _dl('Ramasses', '${t.pickupCount}'),
               if (t.weightKg != null)
                 _dl('Poids', '${t.weightKg!.toStringAsFixed(0)} kg'),
               _dl('Manutention',
@@ -532,7 +535,13 @@ class _TruckDetailCardState extends State<_TruckDetailCard> {
                           const SizedBox(width: 6),
                           Text('${t.clientsCount} cl.',
                               style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey)),
+                                  fontSize: 11, color: DC.textSecondary)),
+                          if (t.pickupCount > 0) ...[
+                            const SizedBox(width: 4),
+                            Text('${t.pickupCount} ram.',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.orange.shade700)),
+                          ],
                           const SizedBox(width: 4),
                           if (t.hasHandling)
                             _badge('M', Colors.deepOrange),
@@ -794,7 +803,13 @@ class _ClientDetailCardState extends State<_ClientDetailCard> {
                           const SizedBox(width: 6),
                           Text('${t.clientsCount} cl.',
                               style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey)),
+                                  fontSize: 11, color: DC.textSecondary)),
+                          if (t.pickupCount > 0) ...[
+                            const SizedBox(width: 4),
+                            Text('${t.pickupCount} ram.',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.orange.shade700)),
+                          ],
                           const SizedBox(width: 4),
                           if (t.hasHandling)
                             _badge('M', Colors.deepOrange),

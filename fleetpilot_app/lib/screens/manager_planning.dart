@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -240,7 +241,7 @@ class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
               child: Center(
                 child: Text(
                   'Aucune donnée pour cette date.',
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                  style: TextStyle(color: DC.textSecondary, fontSize: 15),
                 ),
               ),
             ),
@@ -252,7 +253,7 @@ class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.grey.shade400),
+                  Icon(Icons.info_outline, color: DC.textTertiary),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(

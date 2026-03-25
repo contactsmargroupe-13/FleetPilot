@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
 import 'add_truck.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -140,7 +141,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                       '${truck.brand} ${truck.model}'
                           .trim()
                           + (truck.year != null ? ' • ${truck.year}' : ''),
-                      style: const TextStyle(color: Colors.grey),
+                      style: const TextStyle(color: DC.textSecondary),
                     ),
                   const SizedBox(height: 16),
 
@@ -371,7 +372,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                           '${t.brand} ${t.model}'.trim() +
                               (t.year != null ? ' • ${t.year}' : ''),
                           style: const TextStyle(
-                              fontSize: 13, color: Colors.grey),
+                              fontSize: 13, color: DC.textSecondary),
                         ),
                     ],
                   ),
@@ -427,15 +428,15 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.06),
+                    color: DC.textSecondary.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.person_off_outlined, size: 15, color: Colors.grey),
+                      Icon(Icons.person_off_outlined, size: 15, color: DC.textSecondary),
                       SizedBox(width: 6),
                       Text('Non affecté',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          style: TextStyle(fontSize: 12, color: DC.textSecondary)),
                     ],
                   ),
                 );
@@ -510,41 +511,75 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
               final equip = ref.read(appStateProvider).equipment
                   .where((e) => e.assignedTruckPlate == t.plate)
                   .toList();
-              if (equip.isEmpty) return const SizedBox.shrink();
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.build_outlined, size: 16, color: Colors.grey),
+                      const Icon(Icons.build_outlined, size: 16, color: DC.textSecondary),
                       const SizedBox(width: 6),
-                      Text('Matériel à bord (${equip.length})',
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey)),
+                      Expanded(
+                        child: Text(
+                            equip.isEmpty
+                                ? 'Aucun matériel'
+                                : 'Matériel à bord (${equip.length})',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w600, color: DC.textSecondary)),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => _manageEquipment(t),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(equip.isEmpty ? Icons.add : Icons.edit_outlined,
+                                  size: 14, color: Colors.blue),
+                              const SizedBox(width: 4),
+                              Text(equip.isEmpty ? 'Affecter' : 'Gérer',
+                                  style: const TextStyle(
+                                      fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue)),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: equip.map((e) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.06),
+                  if (equip.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: equip.map((e) => InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.build, size: 12, color: Colors.blue),
-                          const SizedBox(width: 4),
-                          Text(e.name,
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue)),
-                        ],
-                      ),
-                    )).toList(),
-                  ),
+                        onTap: () => _confirmUnassignEquipment(e, t.plate),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(_equipIcon(e.category), size: 12, color: Colors.blue),
+                              const SizedBox(width: 4),
+                              Text(e.name,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue)),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.close, size: 12, color: Colors.red),
+                            ],
+                          ),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                 ],
               );
@@ -584,7 +619,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: DC.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -596,7 +631,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
             children: [
               Text(label,
                   style: const TextStyle(
-                      fontSize: 11, color: Colors.black54)),
+                      fontSize: 11, color: DC.textSecondary)),
               const SizedBox(height: 2),
               Text(value,
                   style: const TextStyle(
@@ -621,6 +656,201 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
           Icon(icon, size: 15),
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  IconData _equipIcon(EquipmentCategory cat) {
+    switch (cat) {
+      case EquipmentCategory.manutention:
+        return Icons.move_down_outlined;
+      case EquipmentCategory.outillage:
+        return Icons.handyman_outlined;
+      case EquipmentCategory.informatique:
+        return Icons.computer_outlined;
+      case EquipmentCategory.securite:
+        return Icons.health_and_safety_outlined;
+      case EquipmentCategory.mobilier:
+        return Icons.chair_outlined;
+      case EquipmentCategory.autre:
+        return Icons.build_outlined;
+    }
+  }
+
+  void _manageEquipment(Truck truck) {
+    // Matériel disponible (non affecté ou affecté à ce camion)
+    final allEquip = ref.read(appStateProvider).equipment;
+    final available = allEquip
+        .where((e) =>
+            e.assignedTruckPlate == null || e.assignedTruckPlate == truck.plate)
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    if (available.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Aucun matériel disponible. Ajoutez-en dans Matériel/Amortissements.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) {
+          // Relire pour avoir l'état à jour
+          final currentEquip = ref.read(appStateProvider).equipment;
+          final assigned = currentEquip
+              .where((e) => e.assignedTruckPlate == truck.plate)
+              .toList();
+          final free = currentEquip
+              .where((e) => e.assignedTruckPlate == null)
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
+
+          return AlertDialog(
+            title: Text('Matériel — ${truck.plate}'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Matériel actuellement à bord
+                    if (assigned.isNotEmpty) ...[
+                      const Text('À bord',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      ...assigned.map((e) => ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(_equipIcon(e.category),
+                                color: Colors.blue, size: 20),
+                            title: Text(e.name,
+                                style: const TextStyle(fontSize: 13)),
+                            subtitle: Text(
+                                equipmentCategoryLabel(e.category),
+                                style: const TextStyle(fontSize: 11)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.remove_circle_outline,
+                                  color: Colors.red, size: 20),
+                              onPressed: () {
+                                ref.read(appStateProvider).updateEquipment(
+                                    e.id,
+                                    Equipment(
+                                      id: e.id,
+                                      name: e.name,
+                                      category: e.category,
+                                      purchasePrice: e.purchasePrice,
+                                      purchaseDate: e.purchaseDate,
+                                      amortMonths: e.amortMonths,
+                                      note: e.note,
+                                      assignedTruckPlate: null,
+                                    ));
+                                set(() {});
+                                setState(() {});
+                              },
+                            ),
+                          )),
+                      const Divider(),
+                    ],
+
+                    // Matériel disponible
+                    if (free.isNotEmpty) ...[
+                      const Text('Disponible',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      ...free.map((e) => ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(_equipIcon(e.category),
+                                color: DC.textSecondary, size: 20),
+                            title: Text(e.name,
+                                style: const TextStyle(fontSize: 13)),
+                            subtitle: Text(
+                                equipmentCategoryLabel(e.category),
+                                style: const TextStyle(fontSize: 11)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.add_circle_outline,
+                                  color: Colors.green, size: 20),
+                              onPressed: () {
+                                ref.read(appStateProvider).updateEquipment(
+                                    e.id,
+                                    Equipment(
+                                      id: e.id,
+                                      name: e.name,
+                                      category: e.category,
+                                      purchasePrice: e.purchasePrice,
+                                      purchaseDate: e.purchaseDate,
+                                      amortMonths: e.amortMonths,
+                                      note: e.note,
+                                      assignedTruckPlate: truck.plate,
+                                    ));
+                                set(() {});
+                                setState(() {});
+                              },
+                            ),
+                          )),
+                    ],
+
+                    if (assigned.isEmpty && free.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Aucun matériel disponible.',
+                            style: TextStyle(color: DC.textSecondary)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Fermer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmUnassignEquipment(Equipment e, String truckPlate) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Retirer le matériel ?'),
+        content: Text('Retirer "${e.name}" de ce camion ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () {
+              ref.read(appStateProvider).updateEquipment(
+                  e.id,
+                  Equipment(
+                    id: e.id,
+                    name: e.name,
+                    category: e.category,
+                    purchasePrice: e.purchasePrice,
+                    purchaseDate: e.purchaseDate,
+                    amortMonths: e.amortMonths,
+                    note: e.note,
+                    assignedTruckPlate: null,
+                  ));
+              setState(() {});
+              Navigator.pop(ctx);
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Retirer'),
+          ),
         ],
       ),
     );

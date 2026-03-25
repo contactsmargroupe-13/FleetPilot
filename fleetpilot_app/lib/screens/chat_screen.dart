@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -102,17 +103,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.chat_bubble_outline,
-                            size: 48, color: Colors.grey.shade300),
+                            size: 48, color: DC.textTertiary),
                         const SizedBox(height: 12),
                         Text(
                           'Aucun message',
-                          style: TextStyle(color: Colors.grey.shade500),
+                          style: TextStyle(color: DC.textSecondary),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Envoyez le premier message !',
                           style: TextStyle(
-                              fontSize: 12, color: Colors.grey.shade400),
+                              fontSize: 12, color: DC.textTertiary),
                         ),
                       ],
                     ),
@@ -147,7 +148,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             decoration: BoxDecoration(
               color: theme.scaffoldBackgroundColor,
               border: Border(
-                  top: BorderSide(color: Colors.grey.shade200)),
+                  top: BorderSide(color: DC.surface2)),
             ),
             padding: const EdgeInsets.symmetric(
                 horizontal: 8, vertical: 6),
@@ -164,7 +165,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       decoration: InputDecoration(
                         hintText: 'Écrire un message…',
                         filled: true,
-                        fillColor: Colors.grey.shade100,
+                        fillColor: DC.surface2,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
@@ -217,7 +218,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         decoration: BoxDecoration(
           color: isMe
               ? primary.withValues(alpha: 0.12)
-              : Colors.grey.shade100,
+              : DC.surface2,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -236,7 +237,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             const SizedBox(height: 4),
             Text(
               time,
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              style: TextStyle(fontSize: 10, color: DC.textSecondary),
             ),
           ],
         ),
@@ -267,11 +268,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           padding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
+            color: DC.surface2,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(label,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+              style: TextStyle(fontSize: 11, color: DC.textSecondary)),
         ),
       ),
     );

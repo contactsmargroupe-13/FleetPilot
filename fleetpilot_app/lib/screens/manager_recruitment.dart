@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -32,9 +34,9 @@ Color _statusColor(String status, {bool dark = false}) {
     case 'embauché':
       return dark ? Colors.green.shade700 : Colors.green.shade100;
     case 'refusé':
-      return dark ? Colors.grey.shade600 : Colors.grey.shade200;
+      return dark ? DC.textSecondary : DC.surface2;
     default:
-      return Colors.grey.shade200;
+      return DC.surface2;
   }
 }
 
@@ -156,6 +158,16 @@ class _ManagerRecruitmentPageState extends ConsumerState<ManagerRecruitmentPage>
     final filtered = _filtered;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recrutement'),
+        actions: [
+          helpButton(context, 'Recrutement',
+            'Suivez vos candidatures et embauches.\n\n'
+            '• Les candidats postulent depuis la page d\'accueil\n'
+            '• Faites avancer le statut : candidature → entretien → embauché\n'
+            '• Convertissez un candidat en chauffeur en un clic'),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openDialog(),
         child: const Icon(Icons.person_add_outlined),
@@ -201,7 +213,7 @@ class _ManagerRecruitmentPageState extends ConsumerState<ManagerRecruitmentPage>
                               fontSize: 10,
                               color: _filterStatus == s
                                   ? Colors.white70
-                                  : Colors.black54,
+                                  : DC.textSecondary,
                             ),
                           ),
                         ],

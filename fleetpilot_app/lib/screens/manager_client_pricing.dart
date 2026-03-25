@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 import 'models/client_pricing.dart';
 
 class ManagerClientPricingPage extends ConsumerStatefulWidget {
@@ -25,7 +26,17 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Commissionnaires')),
+      appBar: AppBar(
+        title: const Text('Commissionnaires'),
+        actions: [
+          helpButton(context, 'Commissionnaires',
+            'Configurez vos commissionnaires et leurs tarifs.\n\n'
+            '• À la fiche : forfait journalier et/ou tarif par fiche\n'
+            '• Au point : forfait journalier et/ou tarif par colis\n'
+            '• Ajoutez les options : gasoil, manutention, km sup.\n'
+            '• Attribuez une couleur pour identifier rapidement'),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddForm,
         icon: const Icon(Icons.add),
@@ -115,11 +126,17 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: DC.primary.withValues(alpha: 0.1),
+                  backgroundColor: (pricing.colorValue != null
+                          ? Color(pricing.colorValue!)
+                          : DC.primary)
+                      .withValues(alpha: 0.1),
                   child: Text(
                     pricing.companyName[0].toUpperCase(),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, color: DC.primary),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: pricing.colorValue != null
+                            ? Color(pricing.colorValue!)
+                            : DC.primary),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -172,9 +189,11 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    pricing.billingMode == BillingMode.auPoint
-                        ? '${pricing.pricePerPoint?.toStringAsFixed(2) ?? '—'} €/pt'
-                        : '${pricing.dailyRate.toStringAsFixed(0)} € HT/j',
+                    pricing.dailyRate > 0
+                        ? '${pricing.dailyRate.toStringAsFixed(0)} €/j'
+                        : pricing.billingMode == BillingMode.auPoint
+                            ? '${pricing.pricePerPoint?.toStringAsFixed(2) ?? '—'} €/colis'
+                            : '${pricing.pricePerPoint?.toStringAsFixed(2) ?? '—'} €/fiche',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: DC.primary,
@@ -224,10 +243,15 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
               child: Column(
                 children: [
                   if (pricing.dailyRate > 0)
-                    _priceLine('Tournée / jour HT', '${pricing.dailyRate.toStringAsFixed(2)} €'),
+                    _priceLine('Forfait journalier', '${pricing.dailyRate.toStringAsFixed(2)} €/jour'),
                   if (pricing.pricePerPoint != null && pricing.pricePerPoint! > 0)
-                    _priceLine('Prix par point HT', '${pricing.pricePerPoint!.toStringAsFixed(2)} €'),
-                  if (pricing.billingMode == BillingMode.aLaFiche && pricing.dailyRate > 0)
+                    _priceLine(
+                      pricing.billingMode == BillingMode.aLaFiche
+                          ? 'Tarif par fiche'
+                          : 'Tarif par colis',
+                      '${pricing.pricePerPoint!.toStringAsFixed(2)} €',
+                    ),
+                  if (pricing.dailyRate > 0)
                     _priceLine('Estimation mois (22j)', '${(pricing.dailyRate * 22).toStringAsFixed(0)} € HT'),
                   if (pricing.handlingEnabled && pricing.handlingPrice != null)
                     _priceLine('Manutention', '${pricing.handlingPrice!.toStringAsFixed(2)} € / unité'),
@@ -529,6 +553,19 @@ class _ClientPricingFormPage extends ConsumerStatefulWidget {
 }
 
 class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> {
+  static const _colorOptions = [
+    Colors.indigo,
+    Colors.blue,
+    Colors.teal,
+    Colors.green,
+    Colors.orange,
+    Colors.red,
+    Colors.purple,
+    Colors.pink,
+    Colors.brown,
+    Colors.blueGrey,
+  ];
+
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;
@@ -554,6 +591,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
   late bool _extraKmEnabled;
   late bool _handlingEnabled;
   late bool _extraTourEnabled;
+  late int? _colorValue;
 
   @override
   void initState() {
@@ -591,6 +629,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
     _extraKmEnabled = e?.extraKmEnabled ?? false;
     _handlingEnabled = e?.handlingEnabled ?? false;
     _extraTourEnabled = e?.extraTourEnabled ?? false;
+    _colorValue = e?.colorValue;
   }
 
   @override
@@ -628,10 +667,11 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
-    final dailyRate = _d(_dailyRateCtrl.text);
-    if (dailyRate == null || dailyRate <= 0) {
+    final dailyRate = _d(_dailyRateCtrl.text) ?? 0;
+    final unitPrice = _d(_pricePerPointCtrl.text);
+    if (dailyRate <= 0 && (unitPrice == null || unitPrice <= 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tarif journalier invalide')),
+        const SnackBar(content: Text('Renseignez au moins un tarif (journalier ou à l\'unité)')),
       );
       return;
     }
@@ -644,7 +684,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
     final pricing = ClientPricing(
       companyName: _nameCtrl.text.trim(),
       billingMode: _billingMode,
-      pricePerPoint: _d(_pricePerPointCtrl.text),
+      pricePerPoint: unitPrice,
       siret: _optStr(_siretCtrl),
       tvaIntra: _optStr(_tvaIntraCtrl),
       address: _optStr(_addressCtrl),
@@ -675,6 +715,7 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
           ? _d(_breakEvenCtrl.text)
           : null,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      colorValue: _colorValue,
     );
 
     final success = widget.onSave(pricing);
@@ -709,6 +750,47 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
                   (v ?? '').trim().isEmpty ? 'Nom obligatoire' : null,
             ),
             const SizedBox(height: 12),
+
+            // Couleur
+            Row(
+              children: [
+                const Text('Couleur', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 12),
+                ..._colorOptions.map((c) => Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _colorValue = c.value),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _colorValue == c.value
+                                  ? Colors.black87
+                                  : Colors.transparent,
+                              width: 2.5,
+                            ),
+                          ),
+                          child: _colorValue == c.value
+                              ? const Icon(Icons.check, size: 14, color: Colors.white)
+                              : null,
+                        ),
+                      ),
+                    )),
+                if (_colorValue != null)
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => setState(() => _colorValue = null),
+                    tooltip: 'Aucune couleur',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
             TextFormField(
               controller: _siretCtrl,
               decoration: const InputDecoration(
@@ -802,51 +884,41 @@ class _ClientPricingFormPageState extends ConsumerState<_ClientPricingFormPage> 
             const SizedBox(height: 4),
             Text(
               _billingMode == BillingMode.aLaFiche
-                  ? 'Base calculée sur le tarif journalier × nombre de tournées'
-                  : 'Base calculée sur le prix par point × nombre de clients livrés',
+                  ? 'Facturation par fiche réalisée et/ou forfait journalier'
+                  : 'Facturation par colis livré et/ou forfait journalier',
               style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
             const SizedBox(height: 16),
 
-            // Tarif journalier — toujours visible
+            // Forfait journalier — toujours visible, par défaut car le plus courant
             TextFormField(
               controller: _dailyRateCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: _billingMode == BillingMode.aLaFiche
-                    ? 'Tarif journalier (€/j) *'
-                    : 'Tarif journalier (€/j) — optionnel',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.euro_outlined),
+              decoration: const InputDecoration(
+                labelText: 'Forfait journalier (€/jour)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.euro_outlined),
+                helperText: 'Le plus courant — laissez vide si facturation uniquement à l\'unité',
               ),
-              validator: (v) {
-                if (_billingMode != BillingMode.aLaFiche) return null;
-                final val = _d(v ?? '');
-                if (val == null || val <= 0) return 'Tarif invalide';
-                return null;
-              },
             ),
             const SizedBox(height: 12),
 
-            // Prix par point — toujours visible
+            // Prix par fiche ou par colis selon le mode
             TextFormField(
               controller: _pricePerPointCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: _billingMode == BillingMode.auPoint
-                    ? 'Prix par point / client (€) *'
-                    : 'Prix par point / client (€) — optionnel',
+                labelText: _billingMode == BillingMode.aLaFiche
+                    ? 'Tarif par fiche (€/fiche)'
+                    : 'Tarif par colis (€/colis)',
                 border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.pin_drop_outlined),
+                prefixIcon: Icon(_billingMode == BillingMode.aLaFiche
+                    ? Icons.description_outlined
+                    : Icons.inventory_2_outlined),
+                helperText: 'Laissez vide si forfait journalier uniquement',
               ),
-              validator: (v) {
-                if (_billingMode != BillingMode.auPoint) return null;
-                final val = _d(v ?? '');
-                if (val == null || val <= 0) return 'Prix invalide';
-                return null;
-              },
             ),
             const SizedBox(height: 24),
 

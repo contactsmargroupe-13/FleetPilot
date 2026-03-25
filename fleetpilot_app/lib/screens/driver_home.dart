@@ -8,10 +8,12 @@ import '../services/gps_tracking_service.dart';
 import '../services/ocr_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../utils/design_constants.dart';
 import 'chat_screen.dart';
 import 'driver_dashboard.dart';
 import 'driver_documents.dart';
 import 'add_truck.dart';
+import 'models/client_pricing.dart';
 import 'models/driver.dart';
 import 'models/driver_day_entry.dart';
 import 'models/expense.dart';
@@ -48,6 +50,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   final _kmCtrl = TextEditingController();
   final _clientsCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
+  final _pickupCtrl = TextEditingController();
   final _handlingCtrl = TextEditingController();
   final _handlingCountCtrl = TextEditingController();
   bool _hasHandling = false;
@@ -120,6 +123,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     _companyCtrl.dispose();
     _kmCtrl.dispose();
     _clientsCtrl.dispose();
+    _pickupCtrl.dispose();
     _weightCtrl.dispose();
     _handlingCtrl.dispose();
     _handlingCountCtrl.dispose();
@@ -450,7 +454,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
             SizedBox(
               width: 80,
               child: Text(label,
-                  style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  style: const TextStyle(color: DC.textSecondary, fontSize: 13)),
             ),
             Expanded(
               child: Text(value,
@@ -544,6 +548,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     _timer?.cancel();
     _kmCtrl.clear();
     _clientsCtrl.clear();
+    _pickupCtrl.clear();
     _weightCtrl.clear();
     _handlingCtrl.clear();
     _handlingCountCtrl.clear();
@@ -568,6 +573,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
     final km = _d(_kmCtrl.text);
     final clients = int.tryParse(_clientsCtrl.text.trim());
+    final pickups = int.tryParse(_pickupCtrl.text.trim()) ?? 0;
 
     if (_selectedTruck == null) {
       _snack('Choisis un camion.');
@@ -606,6 +612,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       truckPlate: _selectedTruck!,
       kmTotal: km,
       clientsCount: clients,
+      pickupCount: pickups,
     );
 
     final tour = Tour(
@@ -621,6 +628,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       endTime: _fmtTime(now),
       kmTotal: km,
       clientsCount: clients,
+      pickupCount: pickups,
       weightKg: _d(_weightCtrl.text),
       hasHandling: _hasHandling,
       handlingClientName: _hasHandling ? _handlingCtrl.text.trim() : null,
@@ -643,6 +651,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     // Reset formulaire (garder tourNumber et company pré-remplis)
     _kmCtrl.clear();
     _clientsCtrl.clear();
+    _pickupCtrl.clear();
     _weightCtrl.clear();
     _handlingCtrl.clear();
     _handlingCountCtrl.clear();
@@ -657,6 +666,136 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     });
 
     _snack('Tournée ${tour.tourNumber} enregistrée — ${_fmtTime(start)} → ${_fmtTime(now)}');
+  }
+
+  Future<void> _signalerPanne(List<Truck> trucks) async {
+    // Motif obligatoire
+    String? motif;
+    final motifs = ['Panne mécanique', 'Panne électrique', 'Crevaison', 'Accident', 'Autre'];
+
+    motif = await showDialog<String>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Motif du changement'),
+        children: motifs.map((m) => SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, m),
+          child: Text(m),
+        )).toList(),
+      ),
+    );
+    if (motif == null || !mounted) return;
+
+    // Choisir le nouveau camion (flotte ou prêt)
+    final availableTrucks = trucks.where((t) =>
+        t.plate != _selectedTruck &&
+        t.truckStatus == TruckStatus.fonctionnel).toList();
+
+    final newTruck = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final plateCtrl = TextEditingController();
+        return SimpleDialog(
+          title: const Text('Camion de remplacement'),
+          children: [
+            // Camions de la flotte
+            ...availableTrucks.map((t) => SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, t.plate),
+              child: ListTile(
+                leading: const Icon(Icons.local_shipping_outlined),
+                title: Text(t.plate),
+                subtitle: Text(t.model),
+                contentPadding: EdgeInsets.zero,
+              ),
+            )),
+            // Séparateur
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Divider(),
+            ),
+            // Camion de prêt (hors flotte)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Camion de prêt (hors flotte)',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade700)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: plateCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: 'Immatriculation du camion prêté',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.drive_eta_outlined),
+                      hintText: 'Ex: AB-123-CD',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        final plate = plateCtrl.text.trim().toUpperCase();
+                        if (plate.isEmpty) return;
+                        plateCtrl.dispose();
+                        Navigator.pop(ctx, 'PRET:$plate');
+                      },
+                      style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+                      icon: const Icon(Icons.car_rental_outlined, size: 18),
+                      label: const Text('Utiliser ce camion de prêt'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (newTruck == null || !mounted) return;
+
+    // Déterminer si c'est un prêt ou un camion flotte
+    final bool isPret = newTruck.startsWith('PRET:');
+    final String actualPlate = isPret ? newTruck.substring(5) : newTruck;
+    final truckModel = isPret
+        ? 'Prêt'
+        : (trucks.where((t) => t.plate == actualPlate).firstOrNull?.model ?? '');
+    final oldTruck = _selectedTruck;
+
+    // Mettre l'ancien camion en panne
+    final oldTruckObj = trucks.where((t) => t.plate == oldTruck).firstOrNull;
+    if (oldTruckObj != null) {
+      ref.read(appStateProvider).updateTruck(
+        oldTruck!,
+        oldTruckObj.copyWith(truckStatus: TruckStatus.enPanne),
+      );
+    }
+
+    setState(() => _selectedTruck = actualPlate);
+
+    // Alerte manager avec motif
+    final now = DateTime.now();
+    final pretLabel = isPret ? ' (CAMION DE PRÊT)' : '';
+    final alert = ManagerAlert(
+      id: '${now.microsecondsSinceEpoch}_truck_change',
+      type: ManagerAlertType.truckChange,
+      title: '$_driverName — changement camion$pretLabel',
+      message: 'Changement : $oldTruck → $actualPlate${isPret ? ' (camion de prêt, hors flotte)' : ' ($truckModel)'}.\n'
+          'Motif : $motif.\n'
+          'Le camion $oldTruck a été passé en statut "En panne".',
+      date: now,
+      driverName: _driverName,
+      oldTruckPlate: oldTruck,
+      newTruckPlate: actualPlate,
+    );
+    ref.read(appStateProvider).addManagerAlert(alert);
+
+    _snack(isPret
+        ? 'Camion de prêt $actualPlate activé. Le manager a été alerté.'
+        : 'Camion changé → $actualPlate. Le manager a été alerté.');
   }
 
   Future<void> _changerCamion(List<Truck> trucks) async {
@@ -793,7 +932,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           children: [
             _StatBox(label: 'Km/jour (moy.)', value: '${kmMoy.toStringAsFixed(0)} km'),
             const SizedBox(width: 10),
-            _StatBox(label: 'Clients/jour (moy.)', value: clientsMoy.toStringAsFixed(1)),
+            _StatBox(label: 'Colis/jour (moy.)', value: clientsMoy.toStringAsFixed(1)),
           ],
         ),
         const SizedBox(height: 20),
@@ -806,7 +945,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         const SizedBox(height: 8),
 
         if (entries.isEmpty)
-          const Text('Aucune saisie ce mois.', style: TextStyle(color: Colors.grey))
+          const Text('Aucune saisie ce mois.', style: TextStyle(color: DC.textSecondary))
         else
           ...entries.map((e) {
             final dayKey = '${e.date.year}-${e.date.month}-${e.date.day}';
@@ -838,23 +977,30 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                   Expanded(
                     child: Text('${e.kmTotal.toStringAsFixed(0)} km'),
                   ),
-                  // Clients
+                  // Colis
                   Expanded(
-                    child: Text('${e.clientsCount} clients'),
+                    child: Text('${e.clientsCount} colis'),
                   ),
+                  // Ramasses
+                  if (e.pickupCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Text('${e.pickupCount} ram.',
+                          style: TextStyle(fontSize: 12, color: Colors.orange.shade700)),
+                    ),
                   // Manutention
                   if (hasManu)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade100,
+                        color: Colors.blue.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         'Manu ×${manutentionTours.length}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.blue.shade800,
+                          color: Colors.blue,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1033,7 +1179,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.grey,
+            color: DC.textSecondary,
           ),
         ),
         const SizedBox(height: 8),
@@ -1063,7 +1209,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.grey,
+            color: DC.textSecondary,
           ),
         ),
         const SizedBox(height: 8),
@@ -1098,7 +1244,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.grey,
+            color: DC.textSecondary,
           ),
         ),
         const SizedBox(height: 8),
@@ -1204,7 +1350,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         // Date
         Text(
           '$day $month ${now.year}',
-          style: const TextStyle(fontSize: 16, color: Colors.grey),
+          style: const TextStyle(fontSize: 16, color: DC.textSecondary),
         ),
         const SizedBox(height: 24),
 
@@ -1284,7 +1430,6 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
   Widget _buildActiveTour() {
     final trucks = ref.read(appStateProvider).trucks;
-    final clients = ref.read(appStateProvider).clientPricings.map((c) => c.companyName).toList();
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -1378,17 +1523,17 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: DC.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: DC.border),
             ),
             child: Row(
               children: [
-                Icon(Icons.gps_off, color: Colors.grey.shade500, size: 20),
+                Icon(Icons.gps_off, color: DC.textTertiary, size: 20),
                 const SizedBox(width: 10),
                 Text(
                   'GPS inactif — saisis les km manuellement',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  style: TextStyle(color: DC.textSecondary, fontSize: 13),
                 ),
               ],
             ),
@@ -1396,79 +1541,134 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
         const SizedBox(height: 20),
 
-        // Camion (verrouillé pendant la tournée, changeable via bouton)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.local_shipping_outlined, color: Colors.grey),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        // Affectation (camion + commissionnaire) — lecture seule, vient du manager
+        Builder(builder: (_) {
+          final assignment = ref.read(appStateProvider).getAssignment(_driverName ?? '');
+          final truck = _selectedTruck != null
+              ? trucks.where((t) => t.plate == _selectedTruck).firstOrNull
+              : null;
+          final companyName = _companyCtrl.text.trim();
+          final pricing = companyName.isNotEmpty
+              ? ref.read(appStateProvider).getClientPricing(companyName)
+              : null;
+          final commColor = pricing?.colorValue != null
+              ? Color(pricing!.colorValue!)
+              : Colors.indigo;
+
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: commColor.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: commColor.withValues(alpha: 0.15)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Commissionnaire
+                if (companyName.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.handshake_outlined, size: 16, color: commColor),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          companyName,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: commColor,
+                          ),
+                        ),
+                      ),
+                      if (pricing != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: commColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            billingModeLabel(pricing.billingMode),
+                            style: TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.w600, color: commColor),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                // Camion
+                Row(
                   children: [
-                    Text(
-                      'Camion',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    ),
-                    Text(
-                      _selectedTruck != null
-                          ? '${_selectedTruck!} • ${trucks.where((t) => t.plate == _selectedTruck).firstOrNull?.model ?? ''}'
-                          : 'Aucun',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.teal),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        truck != null
+                            ? '${truck.plate} • ${truck.model}'
+                            : _selectedTruck ?? 'Aucun camion',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              TextButton.icon(
-                onPressed: () => _changerCamion(trucks),
-                icon: const Icon(Icons.swap_horiz, size: 18),
-                label: const Text('Changer'),
-                style: TextButton.styleFrom(foregroundColor: Colors.orange),
-              ),
-            ],
-          ),
-        ),
+                // Indication + bouton panne
+                if (assignment != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.lock_outline, size: 12, color: DC.textTertiary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'Affectation définie par le manager',
+                          style: TextStyle(fontSize: 10, color: DC.textTertiary),
+                        ),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _signalerPanne(trucks),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
+                              SizedBox(width: 4),
+                              Text('Panne / Changer',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
         const SizedBox(height: 12),
 
-        // N° tournée
+        // N° tournée (sauvegardé, auto-rempli, modifiable)
         TextField(
           controller: _tourNumberCtrl,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Numéro de tournée *',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            helperText: _tourNumberCtrl.text.isNotEmpty
+                ? 'Enregistré — modifiable si besoin'
+                : null,
+            helperStyle: TextStyle(fontSize: 11, color: DC.textTertiary),
           ),
           keyboardType: TextInputType.number,
         ),
-        const SizedBox(height: 12),
-
-        // Client / entreprise
-        if (clients.isNotEmpty)
-          DropdownButtonFormField<String>(
-            value: _companyCtrl.text.isEmpty ? null : _companyCtrl.text,
-            decoration: const InputDecoration(
-              labelText: 'Client / Entreprise',
-              border: OutlineInputBorder(),
-            ),
-            items: [
-              const DropdownMenuItem(value: null, child: Text('— Non renseigné —')),
-              ...clients.map((c) => DropdownMenuItem(value: c, child: Text(c))),
-            ],
-            onChanged: (v) => setState(
-                () => _companyCtrl.text = v ?? ''),
-          )
-        else
-          TextField(
-            controller: _companyCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Client / Entreprise',
-              border: OutlineInputBorder(),
-            ),
-          ),
         const SizedBox(height: 12),
 
         // Km
@@ -1498,15 +1698,73 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         ),
         const SizedBox(height: 12),
 
-        // Clients de la journée
-        TextField(
-          controller: _clientsCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Clients de la journée *',
-            border: OutlineInputBorder(),
-          ),
-        ),
+        // ── Section Fiches / Colis + Ramasses ──────────────────────────
+        Builder(builder: (_) {
+          final companyName = _companyCtrl.text.trim();
+          final pricing = companyName.isNotEmpty
+              ? ref.read(appStateProvider).getClientPricing(companyName)
+              : null;
+          final isFiche = pricing?.billingMode == BillingMode.aLaFiche;
+          final commColor = pricing?.colorValue != null
+              ? Color(pricing!.colorValue!)
+              : (isFiche ? Colors.teal : Colors.indigo);
+
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: commColor.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: commColor.withValues(alpha: 0.15)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isFiche ? Icons.description_outlined : Icons.inventory_2_outlined,
+                      size: 16,
+                      color: commColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isFiche ? 'Fiches & Ramasses' : 'Colis & Ramasses',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: commColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _clientsCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: isFiche
+                        ? 'Nombre de fiches *'
+                        : 'Nombre de colis *',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(isFiche
+                        ? Icons.description_outlined
+                        : Icons.inventory_2_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _pickupCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre de ramasses',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.move_to_inbox_outlined),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
         const SizedBox(height: 12),
 
         // Poids
@@ -1612,7 +1870,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                 child: Text(
                   'Aucun chauffeur enregistré.\nDemande à ton manager d\'ajouter ton profil.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  style: TextStyle(fontSize: 16, color: DC.textSecondary),
                 ),
               ),
             )
@@ -1631,7 +1889,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                   padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
                   child: Text(
                     'Sélectionne ton nom et saisis ton code PIN.',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: DC.textSecondary),
                   ),
                 ),
                 Expanded(
@@ -1703,7 +1961,7 @@ class _StatBox extends StatelessWidget {
             ),
             Text(
               label,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: const TextStyle(fontSize: 12, color: DC.textSecondary),
             ),
           ],
         ),
@@ -1829,12 +2087,12 @@ class _DriverInfoPage extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey),
+          Icon(icon, size: 18, color: DC.textSecondary),
           const SizedBox(width: 10),
           SizedBox(
             width: 140,
             child: Text(label,
-                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                style: const TextStyle(fontSize: 13, color: DC.textSecondary)),
           ),
           Expanded(
             child: Text(
@@ -1923,7 +2181,7 @@ class _SettingsTile extends StatelessWidget {
                 ),
               ),
             const SizedBox(width: 4),
-            Icon(Icons.chevron_right, color: Colors.grey.shade400),
+            Icon(Icons.chevron_right, color: DC.textSecondary),
           ],
         ),
         onTap: onTap,
@@ -2131,7 +2389,7 @@ class _DriverPinDialogState extends State<_DriverPinDialog> {
                     fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(subtitle,
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                style: const TextStyle(fontSize: 13, color: DC.textSecondary),
                 textAlign: TextAlign.center),
 
             const SizedBox(height: 28),
@@ -2196,7 +2454,7 @@ class _DriverPinDialogState extends State<_DriverPinDialog> {
                       alignment: Alignment.center,
                       child: k == '⌫'
                           ? const Icon(Icons.backspace_outlined,
-                              color: Colors.grey, size: 20)
+                              color: DC.textSecondary, size: 20)
                           : Text(k,
                               style: const TextStyle(
                                   fontSize: 20,
@@ -2212,7 +2470,7 @@ class _DriverPinDialogState extends State<_DriverPinDialog> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Annuler',
-                  style: TextStyle(color: Colors.grey)),
+                  style: TextStyle(color: DC.textSecondary)),
             ),
           ],
         ),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -44,7 +46,16 @@ class ManagerMessagesPage extends ConsumerWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Messages')),
+      appBar: AppBar(
+        title: const Text('Messages'),
+        actions: [
+          helpButton(context, 'Messages',
+            'Communiquez avec vos chauffeurs.\n\n'
+            '• Envoyez des messages à chaque chauffeur\n'
+            '• Les chauffeurs répondent depuis leur espace\n'
+            '• Badge rouge = messages non lus'),
+        ],
+      ),
       body: conversations.isEmpty
           ? const Center(
               child: Text('Aucun chauffeur.',
@@ -104,11 +115,11 @@ class _ConversationTile extends StatelessWidget {
       leading: CircleAvatar(
         backgroundColor: hasUnread
             ? Theme.of(context).colorScheme.primary
-            : Colors.grey.shade300,
+            : DC.textTertiary,
         child: Text(
           conv.driverName[0].toUpperCase(),
           style: TextStyle(
-            color: hasUnread ? Colors.white : Colors.grey.shade700,
+            color: hasUnread ? Colors.white : DC.textPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),

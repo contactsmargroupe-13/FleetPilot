@@ -149,7 +149,7 @@ class _ManagerAiChatPageState extends ConsumerState<ManagerAiChatPage> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Text('🤖', style: TextStyle(fontSize: 22)),
+            Icon(Icons.smart_toy_outlined, size: 22, color: Colors.blue),
             SizedBox(width: 8),
             Text('Assistant IA'),
           ],
@@ -192,7 +192,7 @@ class _ManagerAiChatPageState extends ConsumerState<ManagerAiChatPage> {
       children: [
         const SizedBox(height: 20),
         const Center(
-          child: Text('🤖', style: TextStyle(fontSize: 48)),
+          child: Icon(Icons.smart_toy_outlined, size: 48, color: Colors.blue),
         ),
         const SizedBox(height: 12),
         const Center(

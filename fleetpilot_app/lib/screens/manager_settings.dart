@@ -1,15 +1,23 @@
-import 'package:flutter/material.dart';
-import '../services/company_settings.dart';
-import 'manager_client_pricing.dart';
+import 'dart:convert';
 
-class ManagerSettingsPage extends StatefulWidget {
+import 'package:crypto/crypto.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_state.dart';
+import '../services/company_settings.dart';
+import '../utils/design_constants.dart';
+import 'manager_client_pricing.dart';
+import 'models/user_access.dart';
+
+class ManagerSettingsPage extends ConsumerStatefulWidget {
   const ManagerSettingsPage({super.key});
 
   @override
-  State<ManagerSettingsPage> createState() => _ManagerSettingsPageState();
+  ConsumerState<ManagerSettingsPage> createState() => _ManagerSettingsPageState();
 }
 
-class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
+class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;
@@ -74,6 +82,379 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Clé API enregistrée')),
     );
+  }
+
+  // ── Gestion des accès ─────────────────────────────────────────────────
+
+  Widget _buildAccessList() {
+    final accesses = ref.watch(appStateProvider).userAccesses;
+    if (accesses.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: DC.textSecondary),
+              const SizedBox(width: 8),
+              const Text('Aucun accès configuré',
+                  style: TextStyle(fontSize: 13, color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: accesses.map((access) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: access.role == AccessRole.comptable
+                  ? Colors.purple.withValues(alpha: 0.12)
+                  : Colors.blue.withValues(alpha: 0.12),
+              child: Icon(
+                access.role == AccessRole.comptable
+                    ? Icons.account_balance_outlined
+                    : Icons.dashboard_outlined,
+                size: 20,
+                color: access.role == AccessRole.comptable
+                    ? Colors.purple
+                    : Colors.blue,
+              ),
+            ),
+            title: Text(access.name,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(accessRoleLabel(access.role),
+                style: const TextStyle(fontSize: 12)),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: () => _deleteAccess(access),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  void _addAccess() {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    AccessRole selectedRole = AccessRole.comptable;
+    String pin = '';
+    String confirmPin = '';
+    bool confirming = false;
+    String? error;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) {
+          if (pin.length < 4 || confirming) {
+            // Étape PIN
+            final currentPin = confirming ? confirmPin : pin;
+            return AlertDialog(
+              title: Text(confirming
+                  ? 'Confirmer le code PIN'
+                  : nameCtrl.text.isEmpty
+                      ? 'Nouvel accès'
+                      : 'PIN pour ${nameCtrl.text}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!confirming && pin.isEmpty) ...[
+                    // Nom
+                    TextField(
+                      controller: nameCtrl,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Email
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email (pour invitation)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.email_outlined),
+                        helperText: 'Optionnel — pour envoyer les identifiants',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Rôle
+                    DropdownButtonFormField<AccessRole>(
+                      value: selectedRole,
+                      decoration: const InputDecoration(
+                        labelText: 'Rôle',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                      items: AccessRole.values
+                          .where((r) => r != AccessRole.manager)
+                          .map((r) => DropdownMenuItem(
+                                value: r,
+                                child: Text(accessRoleLabel(r)),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) set(() => selectedRole = v);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(accessRoleDescription(selectedRole),
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: nameCtrl.text.trim().isEmpty
+                          ? null
+                          : () => set(() {}), // Force rebuild pour passer au PIN
+                      child: const Text('Définir le code PIN'),
+                    ),
+                  ] else ...[
+                    Text(confirming
+                        ? 'Saisissez à nouveau le code'
+                        : 'Choisissez un code PIN (4 chiffres)'),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(4, (i) {
+                        final filled = i < currentPin.length;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: filled ? Colors.purple : Colors.transparent,
+                            border: Border.all(
+                              color:
+                                  filled ? Colors.purple : Colors.grey,
+                              width: 2,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(error!,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.red)),
+                    ],
+                    const SizedBox(height: 20),
+                    // Mini numpad
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final d in [
+                          '1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'
+                        ])
+                          if (d.isEmpty)
+                            const SizedBox(width: 48, height: 40)
+                          else
+                            SizedBox(
+                              width: 48,
+                              height: 40,
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  set(() {
+                                    error = null;
+                                    if (d == '⌫') {
+                                      if (confirming && confirmPin.isNotEmpty) {
+                                        confirmPin = confirmPin.substring(
+                                            0, confirmPin.length - 1);
+                                      } else if (!confirming &&
+                                          pin.isNotEmpty) {
+                                        pin = pin.substring(
+                                            0, pin.length - 1);
+                                      }
+                                    } else {
+                                      if (confirming &&
+                                          confirmPin.length < 4) {
+                                        confirmPin += d;
+                                        if (confirmPin.length == 4) {
+                                          if (pin == confirmPin) {
+                                            // Succès
+                                            final hash = sha256
+                                                .convert(
+                                                    utf8.encode(pin))
+                                                .toString();
+                                            final userName = nameCtrl.text.trim();
+                                            final userEmail = emailCtrl.text.trim();
+                                            final userPin = pin;
+                                            ref
+                                                .read(appStateProvider)
+                                                .addUserAccess(UserAccess(
+                                                  id: DateTime.now()
+                                                      .millisecondsSinceEpoch
+                                                      .toString(),
+                                                  name: userName,
+                                                  role: selectedRole,
+                                                  pinHash: hash,
+                                                ));
+                                            nameCtrl.dispose();
+                                            emailCtrl.dispose();
+                                            Navigator.pop(ctx);
+                                            // Proposer l'envoi par email
+                                            if (userEmail.isNotEmpty) {
+                                              _sendAccessEmail(
+                                                  userEmail, userName, selectedRole, userPin);
+                                            } else {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(SnackBar(
+                                                      content: Text(
+                                                          'Accès ${accessRoleLabel(selectedRole)} créé — PIN : $userPin')));
+                                            }
+                                          } else {
+                                            confirmPin = '';
+                                            confirming = false;
+                                            pin = '';
+                                            error =
+                                                'Les codes ne correspondent pas';
+                                          }
+                                        }
+                                      } else if (!confirming &&
+                                          pin.length < 4) {
+                                        pin += d;
+                                        if (pin.length == 4) {
+                                          confirming = true;
+                                        }
+                                      }
+                                    }
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                ),
+                                child: Text(d,
+                                    style: const TextStyle(fontSize: 16)),
+                              ),
+                            ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    nameCtrl.dispose();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Annuler'),
+                ),
+              ],
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+  }
+
+  void _sendAccessEmail(
+      String email, String name, AccessRole role, String pin) {
+    final companyName = CompanySettings.name.isNotEmpty
+        ? CompanySettings.name
+        : 'FleetPilot';
+    final message =
+        'Bonjour $name,\n\n'
+        'Vous avez été invité(e) à accéder à $companyName sur FleetPilot '
+        'en tant que ${accessRoleLabel(role)}.\n\n'
+        'Votre code PIN : $pin\n\n'
+        'Ouvrez l\'application et sélectionnez votre accès sur la page d\'accueil.\n\n'
+        'Cordialement,\n$companyName';
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Accès créé')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$name — ${accessRoleLabel(role)}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('Email : $email',
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                message,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: message));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Message copié')),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copier'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteAccess(UserAccess access) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer l\'accès'),
+        content: Text(
+            'Supprimer l\'accès "${access.name}" (${accessRoleLabel(access.role)}) ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      ref.read(appStateProvider).deleteUserAccess(access.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Accès "${access.name}" supprimé')),
+        );
+      }
+    }
   }
 
   Future<void> _changePin() async {
@@ -292,6 +673,27 @@ class _ManagerSettingsPageState extends State<ManagerSettingsPage> {
               ],
             ),
           ),
+        ),
+
+        const SizedBox(height: 32),
+
+        // ── Gestion des accès ────────────────────────────────────────────
+        const Text(
+          'Gestion des accès',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Créez des accès avec des droits limités (ex: comptable)',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 8),
+        _buildAccessList(),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: _addAccess,
+          icon: const Icon(Icons.person_add_outlined, size: 18),
+          label: const Text('Ajouter un accès'),
         ),
 
         const SizedBox(height: 32),

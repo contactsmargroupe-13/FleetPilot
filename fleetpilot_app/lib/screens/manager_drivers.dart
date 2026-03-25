@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../utils/design_constants.dart';
+import '../utils/page_help.dart';
 import 'models/driver.dart';
 import 'models/driver_document.dart';
 
@@ -104,7 +106,16 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
           a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Chauffeurs')),
+      appBar: AppBar(
+        title: const Text('Chauffeurs'),
+        actions: [
+          helpButton(context, 'Chauffeurs',
+            'Gérez vos chauffeurs et leurs documents.\n\n'
+            '• Ajoutez un chauffeur avec son statut (CDI, CDD, Intérim)\n'
+            '• Suivez les documents : permis, FIMO, FCO, carte conducteur\n'
+            '• Alertes automatiques avant expiration'),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openDriverPage(null),
         icon: const Icon(Icons.add),
@@ -301,7 +312,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: highlight ? Colors.blue.withValues(alpha: 0.5) : Colors.black12,
+          color: highlight ? Colors.blue.withValues(alpha: 0.5) : DC.border,
         ),
         color: highlight ? Colors.blue.withValues(alpha: 0.07) : null,
       ),
@@ -1180,7 +1191,7 @@ class _DocumentTile extends StatelessWidget {
             _statusChip('Valide', Colors.green, Icons.check_circle_outline);
         break;
       default:
-        borderColor = Colors.black12;
+        borderColor = DC.border;
         bgColor = Colors.transparent;
         statusWidget = const SizedBox.shrink();
     }
@@ -1233,7 +1244,7 @@ class _DocumentTile extends StatelessWidget {
               padding: const EdgeInsets.only(top: 4),
               child: Text(doc.note!,
                   style: const TextStyle(
-                      fontSize: 12, color: Colors.black54)),
+                      fontSize: 12, color: DC.textSecondary)),
             ),
         ],
       ),

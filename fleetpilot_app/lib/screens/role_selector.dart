@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 import '../services/company_settings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import 'driver_home.dart';
 import 'manager_dashboard.dart';
+import 'onboarding_page.dart';
 import 'models/candidate.dart';
+import 'models/user_access.dart';
 
-class RoleSelectorPage extends StatelessWidget {
+class RoleSelectorPage extends ConsumerWidget {
   const RoleSelectorPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accesses = ref.watch(appStateProvider).userAccesses;
+
     return Scaffold(
       backgroundColor: DC.background,
       body: SafeArea(
@@ -21,14 +29,20 @@ class RoleSelectorPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 48),
+              // Bouton aide en haut à droite
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  onPressed: () => _showHelp(context),
+                  icon: const Icon(Icons.help_outline_rounded),
+                  tooltip: 'Guide d\'utilisation',
+                  color: DC.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // Logo / titre
-              Text(
-                'FleetPilot',
-                textAlign: TextAlign.center,
-                style: DC.title(36),
-              ),
+              Center(child: DC.logo(size: 36)),
               const SizedBox(height: 8),
               Text(
                 'Gestion de flotte transport',
@@ -70,6 +84,22 @@ class RoleSelectorPage extends StatelessWidget {
 
               const SizedBox(height: 16),
 
+              // Accès supplémentaires (comptable, etc.)
+              ...accesses.map((access) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _RoleCard(
+                      icon: access.role == AccessRole.comptable
+                          ? Icons.account_balance_outlined
+                          : Icons.dashboard_outlined,
+                      label: access.name,
+                      subtitle: accessRoleLabel(access.role),
+                      color: access.role == AccessRole.comptable
+                          ? Colors.purple
+                          : DC.primary,
+                      onTap: () => _onExtraRoleTap(context, ref, access),
+                    ),
+                  )),
+
               // Bouton Postuler
               _RoleCard(
                 icon: Icons.work_outline,
@@ -85,6 +115,128 @@ class RoleSelectorPage extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showHelp(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OnboardingPage(
+          onDone: () => Navigator.pop(context),
+        ),
+      ),
+    );
+  }
+
+  void _onExtraRoleTap(
+      BuildContext context, WidgetRef ref, UserAccess access) {
+    String pin = '';
+    String? error;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, set) {
+          return Dialog(
+            backgroundColor: DC.surface2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(DC.rCard),
+              side: const BorderSide(color: DC.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.lock_outline,
+                        color: Colors.purple, size: 28),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(access.name, style: DC.title(20)),
+                  const SizedBox(height: 4),
+                  Text('Entrez le code PIN',
+                      style: DC.body(13, color: DC.textSecondary)),
+                  const SizedBox(height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(4, (i) {
+                      final filled = i < pin.length;
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: filled ? Colors.purple : Colors.transparent,
+                          border: Border.all(
+                            color: filled ? Colors.purple : DC.textSecondary,
+                            width: 2,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(error!,
+                        style: DC.body(12, color: DC.error),
+                        textAlign: TextAlign.center),
+                  ],
+                  const SizedBox(height: 28),
+                  _NumPad(
+                    onKey: (digit) {
+                      set(() {
+                        error = null;
+                        if (pin.length < 4) pin += digit;
+                        if (pin.length == 4) {
+                          final hash = sha256
+                              .convert(utf8.encode(pin))
+                              .toString();
+                          if (hash == access.pinHash) {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      ManagerShell(role: access.role)),
+                            );
+                          } else {
+                            pin = '';
+                            error = 'Code incorrect';
+                          }
+                        }
+                      });
+                    },
+                    onDelete: () {
+                      set(() {
+                        error = null;
+                        if (pin.isNotEmpty) {
+                          pin = pin.substring(0, pin.length - 1);
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text('Annuler',
+                        style: DC.body(14, color: DC.textSecondary)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

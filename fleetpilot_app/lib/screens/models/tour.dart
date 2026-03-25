@@ -20,6 +20,8 @@ class Tour {
   final String? handlingClientName;
   final DateTime? handlingDate;
 
+  final int pickupCount; // nombre de ramasses
+
   final double extraKm;
   final bool extraTour;
 
@@ -38,6 +40,7 @@ class Tour {
     this.breakTime,
     required this.kmTotal,
     required this.clientsCount,
+    this.pickupCount = 0,
     this.weightKg,
     required this.hasHandling,
     this.handlingClientName,
@@ -66,6 +69,7 @@ class Tour {
       breakTime: breakTime,
       kmTotal: kmTotal,
       clientsCount: clientsCount,
+      pickupCount: pickupCount,
       weightKg: weightKg,
       hasHandling: hasHandling,
       handlingClientName: handlingClientName,
@@ -89,6 +93,7 @@ class Tour {
     'breakTime': breakTime,
     'kmTotal': kmTotal,
     'clientsCount': clientsCount,
+    'pickupCount': pickupCount,
     'weightKg': weightKg,
     'hasHandling': hasHandling,
     'handlingClientName': handlingClientName,
@@ -111,6 +116,7 @@ class Tour {
     breakTime: json['breakTime'] as String?,
     kmTotal: (json['kmTotal'] as num).toDouble(),
     clientsCount: json['clientsCount'] as int,
+    pickupCount: json['pickupCount'] as int? ?? 0,
     weightKg: json['weightKg'] != null ? (json['weightKg'] as num).toDouble() : null,
     hasHandling: json['hasHandling'] as bool,
     handlingClientName: json['handlingClientName'] as String?,

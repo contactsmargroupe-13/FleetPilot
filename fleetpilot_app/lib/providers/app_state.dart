@@ -15,6 +15,7 @@ import '../screens/models/expense.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/message.dart';
 import '../screens/models/tour.dart';
+import '../screens/models/user_access.dart';
 import '../services/database_service.dart';
 
 /// Provider global pour le DatabaseService (overridden dans main.dart)
@@ -44,6 +45,7 @@ class AppState extends ChangeNotifier {
   List<Equipment> equipment = [];
   List<DriverAssignment> assignments = [];
   List<Message> messages = [];
+  List<UserAccess> userAccesses = [];
 
   AppState(this._db);
 
@@ -62,6 +64,7 @@ class AppState extends ChangeNotifier {
     equipment = await _db.loadEquipment();
     assignments = await _db.loadAssignments();
     messages = await _db.loadMessages();
+    userAccesses = await _db.loadUserAccesses();
     notifyListeners();
   }
 
@@ -717,6 +720,27 @@ class AppState extends ChangeNotifier {
       (a) => a.driverName.toLowerCase() == driverName.toLowerCase(),
     );
     _db.deleteAssignment(driverName);
+    notifyListeners();
+  }
+
+  // ─── Accès utilisateurs ──────────────────────────────────────────────
+
+  void addUserAccess(UserAccess u) {
+    userAccesses.add(u);
+    _db.saveUserAccess(u);
+    notifyListeners();
+  }
+
+  void updateUserAccess(String id, UserAccess updated) {
+    final i = userAccesses.indexWhere((u) => u.id == id);
+    if (i != -1) userAccesses[i] = updated;
+    _db.saveUserAccess(updated);
+    notifyListeners();
+  }
+
+  void deleteUserAccess(String id) {
+    userAccesses.removeWhere((u) => u.id == id);
+    _db.deleteUserAccess(id);
     notifyListeners();
   }
 }

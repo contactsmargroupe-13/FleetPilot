@@ -54,6 +54,9 @@ class ClientPricing {
 
   final String? notes;
 
+  // Couleur identitaire (stockée en hex, ex: 0xFF4CAF50)
+  final int? colorValue;
+
   const ClientPricing({
     required this.companyName,
     this.billingMode = BillingMode.aLaFiche,
@@ -64,7 +67,7 @@ class ClientPricing {
     this.phone,
     this.email,
     this.contactName,
-    required this.dailyRate,
+    this.dailyRate = 0,
     this.fuelIndexEnabled = false,
     this.fuelIndexPercent,
     this.extraKmEnabled = false,
@@ -77,6 +80,7 @@ class ClientPricing {
     this.overKmRate,
     this.breakEvenAmount,
     this.notes,
+    this.colorValue,
   });
 
   ClientPricing copyWith({
@@ -102,6 +106,7 @@ class ClientPricing {
     double? overKmRate,
     double? breakEvenAmount,
     String? notes,
+    int? colorValue,
   }) {
     return ClientPricing(
       companyName: companyName ?? this.companyName,
@@ -126,6 +131,7 @@ class ClientPricing {
       overKmRate: overKmRate ?? this.overKmRate,
       breakEvenAmount: breakEvenAmount ?? this.breakEvenAmount,
       notes: notes ?? this.notes,
+      colorValue: colorValue ?? this.colorValue,
     );
   }
 
@@ -152,6 +158,7 @@ class ClientPricing {
         'overKmRate': overKmRate,
         'breakEvenAmount': breakEvenAmount,
         'notes': notes,
+        'colorValue': colorValue,
       };
 
   factory ClientPricing.fromJson(Map<String, dynamic> json) {
@@ -215,6 +222,7 @@ class ClientPricing {
           ? (json['breakEvenAmount'] as num).toDouble()
           : null,
       notes: json['notes'] as String?,
+      colorValue: json['colorValue'] as int?,
     );
   }
 }

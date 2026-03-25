@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import '../utils/design_constants.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../providers/app_state.dart';
@@ -258,7 +259,7 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
         statusColor = Colors.green;
         break;
       default:
-        borderColor = Colors.black12;
+        borderColor = DC.border;
         bgColor = Colors.transparent;
         statusLabel = null;
         statusColor = null;
@@ -314,7 +315,7 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
           const SizedBox(width: 6),
           GestureDetector(
             onTap: () => _shareDocument(doc),
-            child: Icon(Icons.share_outlined, size: 18, color: Colors.grey.shade600),
+            child: Icon(Icons.share_outlined, size: 18, color: DC.textSecondary),
           ),
         ],
       ),

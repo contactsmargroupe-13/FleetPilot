@@ -5,6 +5,7 @@ class DriverDayEntry {
   final String truckPlate;
   final double kmTotal;
   final int clientsCount;
+  final int pickupCount; // nombre de ramasses
 
   const DriverDayEntry({
     required this.id,
@@ -13,6 +14,7 @@ class DriverDayEntry {
     required this.truckPlate,
     required this.kmTotal,
     required this.clientsCount,
+    this.pickupCount = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +24,7 @@ class DriverDayEntry {
     'truckPlate': truckPlate,
     'kmTotal': kmTotal,
     'clientsCount': clientsCount,
+    'pickupCount': pickupCount,
   };
 
   factory DriverDayEntry.fromJson(Map<String, dynamic> json) => DriverDayEntry(
@@ -31,5 +34,6 @@ class DriverDayEntry {
     truckPlate: json['truckPlate'] as String,
     kmTotal: (json['kmTotal'] as num).toDouble(),
     clientsCount: json['clientsCount'] as int,
+    pickupCount: json['pickupCount'] as int? ?? 0,
   );
 }

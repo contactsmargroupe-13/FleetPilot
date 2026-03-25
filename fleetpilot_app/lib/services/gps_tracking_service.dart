@@ -1,13 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class GpsTrackingService {
-  // ── Filtres ────────────────────────────────────────────────────────────────
-  static const double _minSpeedMs = 1.39; // 5 km/h en m/s
-  static const double _maxAccuracyM = 50.0; // ignorer si précision > 50m
+  // ── Filtres (optimisés livraison urbaine) ────────────────────────────────
+  static const double _minSpeedMs = 0.56; // 2 km/h — inclut manoeuvres lentes, exclut marche à pied
+  static const double _maxAccuracyM = 40.0; // ignorer si précision > 40m
   static const double _maxJumpM = 500.0; // ignorer les sauts GPS > 500m
+  static const double _minDistanceM = 5.0; // ignorer micro-mouvements < 5m (bruit GPS à l'arrêt)
 
   // ── Persistance (crash recovery) ───────────────────────────────────────────
   static const _keyCumulativeKm = 'gps_cumulative_km';
@@ -29,6 +31,38 @@ class GpsTrackingService {
   static final GpsTrackingService _instance = GpsTrackingService._();
   factory GpsTrackingService() => _instance;
   GpsTrackingService._();
+
+  // ── Settings cross-platform (optimisés batterie) ───────────────────────────
+
+  LocationSettings _buildSettings() {
+    if (Platform.isAndroid) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10, // 10m — bon compromis livraison urbaine / batterie
+        intervalDuration: const Duration(seconds: 5), // 5s pour capter les courts trajets
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'FleetPilot — Tournée en cours',
+          notificationText: 'Suivi kilométrique actif',
+          enableWakeLock: false, // pas de wakelock = économie batterie
+        ),
+      );
+    } else if (Platform.isIOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        activityType: ActivityType.automotiveNavigation,
+        distanceFilter: 10,
+        pauseLocationUpdatesAutomatically: true, // iOS pause auto si immobile
+        allowBackgroundLocationUpdates: true,
+        showBackgroundLocationIndicator: true, // flèche bleue iOS
+      );
+    } else {
+      // Web / desktop fallback
+      return const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+    }
+  }
 
   // ── Démarrer le tracking ───────────────────────────────────────────────────
 
@@ -56,20 +90,9 @@ class GpsTrackingService {
     await prefs.setBool(_keyTrackingActive, true);
     await prefs.setDouble(_keyCumulativeKm, 0.0);
 
-    // Configurer le stream de positions
-    final locationSettings = AndroidSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // callback seulement si déplacement > 10m
-      intervalDuration: const Duration(seconds: 5),
-      foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: 'FleetPilot — Tournée en cours',
-        notificationText: 'Suivi kilométrique actif',
-        enableWakeLock: false,
-      ),
-    );
-
+    // Démarrer le stream — compatible iOS + Android + Web
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
+      locationSettings: _buildSettings(),
     ).listen(_onPosition);
 
     _isTracking = true;
@@ -86,19 +109,8 @@ class GpsTrackingService {
     _cumulativeKm = prefs.getDouble(_keyCumulativeKm) ?? 0.0;
     _lastValidPosition = null;
 
-    final locationSettings = AndroidSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10,
-      intervalDuration: const Duration(seconds: 5),
-      foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: 'FleetPilot — Tournée en cours',
-        notificationText: 'Suivi kilométrique actif',
-        enableWakeLock: false,
-      ),
-    );
-
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
+      locationSettings: _buildSettings(),
     ).listen(_onPosition);
 
     _isTracking = true;
@@ -148,6 +160,9 @@ class GpsTrackingService {
         _lastValidPosition = position;
         return;
       }
+
+      // Filtre 4 : micro-mouvement (bruit GPS à l'arrêt)
+      if (distanceM < _minDistanceM) return;
 
       // Accumuler
       _cumulativeKm += distanceM / 1000.0;

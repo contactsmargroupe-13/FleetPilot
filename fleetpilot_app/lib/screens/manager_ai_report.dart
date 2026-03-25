@@ -143,7 +143,7 @@ class _ManagerAiReportPageState extends ConsumerState<ManagerAiReportPage> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Text('📊', style: TextStyle(fontSize: 22)),
+            Icon(Icons.analytics_outlined, size: 22, color: Colors.blue),
             SizedBox(width: 8),
             Text('Rapport IA'),
           ],
@@ -246,7 +246,7 @@ class _ManagerAiReportPageState extends ConsumerState<ManagerAiReportPage> {
                   children: [
                     const Row(
                       children: [
-                        Text('⚠️', style: TextStyle(fontSize: 18)),
+                        Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange),
                         SizedBox(width: 8),
                         Text('Alertes prédictives',
                             style: TextStyle(
@@ -287,7 +287,7 @@ class _ManagerAiReportPageState extends ConsumerState<ManagerAiReportPage> {
                   children: [
                     Row(
                       children: [
-                        const Text('📊', style: TextStyle(fontSize: 18)),
+                        const Icon(Icons.analytics_outlined, size: 18, color: Colors.blue),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text('Rapport $_monthLabel',
@@ -313,7 +313,7 @@ class _ManagerAiReportPageState extends ConsumerState<ManagerAiReportPage> {
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    const Text('🤖', style: TextStyle(fontSize: 40)),
+                    const Icon(Icons.smart_toy_outlined, size: 40, color: Colors.blue),
                     const SizedBox(height: 12),
                     const Text(
                       'Générez un rapport mensuel ou détectez les anomalies',

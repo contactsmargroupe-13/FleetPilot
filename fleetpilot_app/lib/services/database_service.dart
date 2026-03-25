@@ -19,6 +19,7 @@ import '../screens/models/equipment.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/message.dart';
 import '../screens/models/tour.dart';
+import '../screens/models/user_access.dart';
 import 'company_settings.dart';
 
 class DatabaseService {
@@ -475,4 +476,15 @@ class DatabaseService {
 
   Future<void> deleteMessage(String id) =>
       _delete('messages', 'id', id);
+
+  // ── Accès utilisateurs ──────────────────────────────────────────────
+
+  Future<List<UserAccess>> loadUserAccesses() =>
+      _loadAll('user_accesses', UserAccess.fromJson);
+
+  Future<void> saveUserAccess(UserAccess u) =>
+      _upsert('user_accesses', 'id', u.id, u.toJson());
+
+  Future<void> deleteUserAccess(String id) =>
+      _delete('user_accesses', 'id', id);
 }

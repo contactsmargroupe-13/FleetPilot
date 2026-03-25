@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/design_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -60,6 +61,7 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         .map((t) => '${t.date.year}-${t.date.month}-${t.date.day}')
         .toSet()
         .length;
+    final totalPickups = monthTours.fold(0, (s, t) => s + t.pickupCount);
     final handlingCount =
         monthTours.where((t) => t.hasHandling).length;
 
@@ -190,13 +192,16 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
             _statCard('Km total', '${totalKm.toStringAsFixed(0)}',
                 Icons.speed_outlined, Colors.teal),
             const SizedBox(width: 10),
-            _statCard('Clients', '$totalClients',
-                Icons.people_outline, Colors.indigo),
+            _statCard('Colis / Fiches', '$totalClients',
+                Icons.inventory_2_outlined, Colors.indigo),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
+            _statCard('Ramasses', '$totalPickups',
+                Icons.move_to_inbox_outlined, Colors.orange),
+            const SizedBox(width: 10),
             _statCard('Manutentions', '$handlingCount',
                 Icons.pan_tool_outlined, Colors.deepOrange),
             const SizedBox(width: 10),
@@ -310,7 +315,7 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
               child: LinearProgressIndicator(
                 value: progressClamped,
                 minHeight: 16,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: DC.surface2,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   progress >= 1.0
                       ? Colors.green
@@ -346,7 +351,7 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: DC.surface2,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -584,11 +589,20 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Km
-            Text(
-              '${t.kmTotal.toStringAsFixed(0)} km',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 13),
+            // Km + colis
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${t.kmTotal.toStringAsFixed(0)} km',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                Text(
+                  '${t.clientsCount} cl.${t.pickupCount > 0 ? ' · ${t.pickupCount} ram.' : ''}',
+                  style: TextStyle(fontSize: 10, color: DC.textSecondary),
+                ),
+              ],
             ),
             const SizedBox(width: 10),
             // Badges
