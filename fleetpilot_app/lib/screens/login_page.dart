@@ -54,11 +54,15 @@ class _LoginPageState extends State<LoginPage> {
           password: _passwordCtrl.text,
         );
       }
-      widget.onLoggedIn();
+      // Succès — le StreamBuilder dans app.dart détecte le login
+      // et redirige automatiquement, pas besoin de faire plus ici
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = _firebaseErrorMessage(e.code));
+      if (mounted) setState(() => _error = _firebaseErrorMessage(e.code));
     } catch (e) {
-      setState(() => _error = e.toString());
+      // Si l'auth a réussi mais Firestore a eu un souci,
+      // on laisse le StreamBuilder gérer la suite
+      if (AuthService.currentFirebaseUser != null) return;
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
