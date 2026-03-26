@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Fleetpilot App</string>
+	<string>FleetPilote</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,9 +48,9 @@
 		</dict>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>FleetPilot utilise votre position pour calculer les kilomètres parcourus pendant vos tournées.</string>
+	<string>FleetPilote utilise votre position pour calculer les kilomètres parcourus pendant vos tournées.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>FleetPilot a besoin de votre position en arrière-plan pour continuer à mesurer les kilomètres même lorsque l'écran est éteint.</string>
+	<string>FleetPilote a besoin de votre position en arrière-plan pour continuer à mesurer les kilomètres même lorsque l'écran est éteint.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

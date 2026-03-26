@@ -57,8 +57,8 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.role == AccessRole.manager
-            ? 'FleetPilot Manager'
-            : 'FleetPilot ${accessRoleLabel(widget.role)}'),
+            ? 'FleetPilote Manager'
+            : 'FleetPilote ${accessRoleLabel(widget.role)}'),
         actions: [
           IconButton(
             icon: Badge(
@@ -107,7 +107,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                       size: 36,
                       color: Theme.of(context).colorScheme.onPrimaryContainer),
                   const SizedBox(height: 8),
-                  Text('FleetPilot',
+                  Text('FleetPilote',
                       style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,

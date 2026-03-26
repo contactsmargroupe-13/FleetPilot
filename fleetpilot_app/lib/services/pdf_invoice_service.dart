@@ -366,7 +366,7 @@ class PdfInvoiceService {
   static pw.Widget _buildHeader(String monthLabel, String title) {
     final companyName = CompanySettings.name.isNotEmpty
         ? CompanySettings.name
-        : 'FleetPilot';
+        : 'FleetPilote';
     final companyAddress = CompanySettings.address;
     final companySiret = CompanySettings.siret;
     final companyTvaIntra = CompanySettings.tvaIntra;

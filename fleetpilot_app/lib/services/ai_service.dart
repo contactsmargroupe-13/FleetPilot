@@ -42,7 +42,7 @@ class AiService {
           'model': _model,
           'max_tokens': 1024,
           'system':
-              'Tu es l\'assistant IA de FleetPilot, une app de gestion de flotte de transport. '
+              'Tu es l\'assistant IA de FleetPilote, une app de gestion de flotte de transport. '
               'Réponds en français, de manière concise et utile. '
               'Utilise les données fournies pour donner des réponses précises.\n\n'
               'DONNÉES DE LA FLOTTE :\n$fleetContext',

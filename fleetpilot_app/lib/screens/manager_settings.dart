@@ -364,10 +364,10 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
       String email, String name, AccessRole role, String pin) {
     final companyName = CompanySettings.name.isNotEmpty
         ? CompanySettings.name
-        : 'FleetPilot';
+        : 'FleetPilote';
     final message =
         'Bonjour $name,\n\n'
-        'Vous avez été invité(e) à accéder à $companyName sur FleetPilot '
+        'Vous avez été invité(e) à accéder à $companyName sur FleetPilote '
         'en tant que ${accessRoleLabel(role)}.\n\n'
         'Votre code PIN : $pin\n\n'
         'Ouvrez l\'application et sélectionnez votre accès sur la page d\'accueil.\n\n'

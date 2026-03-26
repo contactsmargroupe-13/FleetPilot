@@ -197,7 +197,7 @@ class _ManagerAiChatPageState extends ConsumerState<ManagerAiChatPage> {
         const SizedBox(height: 12),
         const Center(
           child: Text(
-            'Assistant FleetPilot',
+            'Assistant FleetPilote',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
           ),
         ),

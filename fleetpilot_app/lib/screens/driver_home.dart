@@ -1862,7 +1862,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     final drivers = ref.read(appStateProvider).drivers;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('FleetPilot — Chauffeur')),
+      appBar: AppBar(title: const Text('FleetPilote — Chauffeur')),
       body: drivers.isEmpty
           ? const Center(
               child: Padding(

@@ -41,7 +41,7 @@ class GpsTrackingService {
         distanceFilter: 10, // 10m — bon compromis livraison urbaine / batterie
         intervalDuration: const Duration(seconds: 5), // 5s pour capter les courts trajets
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'FleetPilot — Tournée en cours',
+          notificationTitle: 'FleetPilote — Tournée en cours',
           notificationText: 'Suivi kilométrique actif',
           enableWakeLock: false, // pas de wakelock = économie batterie
         ),

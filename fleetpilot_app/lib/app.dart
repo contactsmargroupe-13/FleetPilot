@@ -9,7 +9,7 @@ class FleetPilotApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FleetPilot',
+      title: 'FleetPilote',
       debugShowCheckedModeBanner: false,
       theme: DC.theme,
       home: const _AppEntry(),

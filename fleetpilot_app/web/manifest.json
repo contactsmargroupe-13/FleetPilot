@@ -1,6 +1,6 @@
 {
-    "name": "fleetpilot_app",
-    "short_name": "fleetpilot_app",
+    "name": "FleetPilote",
+    "short_name": "FleetPilote",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

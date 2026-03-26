@@ -122,7 +122,7 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
     await SharePlus.instance.share(
       ShareParams(
         files: files,
-        subject: 'Export documents FleetPilot',
+        subject: 'Export documents FleetPilote',
       ),
     );
   }

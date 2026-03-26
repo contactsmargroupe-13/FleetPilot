@@ -102,7 +102,7 @@ class DC {
         color: color ?? textSecondary,
       );
 
-  // ── Logo FleetPilot ─────────────────────────────────────────────────────
+  // ── Logo FleetPilote ────────────────────────────────────────────────────
   static Widget logo({double size = 22}) => RichText(
         text: TextSpan(children: [
           TextSpan(
@@ -114,7 +114,7 @@ class DC {
             ),
           ),
           TextSpan(
-            text: 'Pilot',
+            text: 'Pilote',
             style: GoogleFonts.syne(
               fontSize: size,
               fontWeight: FontWeight.w800,
