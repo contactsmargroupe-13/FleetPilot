@@ -164,78 +164,7 @@ class DatabaseService {
   }
 
   Future<void> _seedDefaults() async {
-    // Seed default drivers if empty
-    final driverCount =
-        Sqflite.firstIntValue(await _db.rawQuery('SELECT COUNT(*) FROM drivers'));
-    if (driverCount == 0) {
-      const defaults = [
-        Driver(name: 'Karim', fixedSalary: 3000, bonus: 200),
-        Driver(name: 'Sofia', fixedSalary: 3100, bonus: 100),
-      ];
-      for (final d in defaults) {
-        await _db.insert('drivers', {'name': d.name, 'data': jsonEncode(d.toJson())});
-      }
-    }
-
-    // Seed default trucks if empty
-    final truckCount =
-        Sqflite.firstIntValue(await _db.rawQuery('SELECT COUNT(*) FROM trucks'));
-    if (truckCount == 0) {
-      const defaults = [
-        Truck(
-          plate: 'AB-123-CD',
-          model: 'Sprinter',
-          dailyRate: 230,
-          ownershipType: OwnershipType.location,
-          rentMonthly: 950,
-        ),
-      ];
-      for (final t in defaults) {
-        await _db.insert('trucks', {'plate': t.plate, 'data': jsonEncode(t.toJson())});
-      }
-    }
-
-    // Seed default client pricings if empty
-    final pricingCount = Sqflite.firstIntValue(
-        await _db.rawQuery('SELECT COUNT(*) FROM client_pricings'));
-    if (pricingCount == 0) {
-      const defaults = [
-        ClientPricing(
-          companyName: 'Amazon',
-          dailyRate: 280,
-          handlingEnabled: true,
-          handlingPrice: 35,
-          extraKmEnabled: true,
-          extraKmPrice: 1.8,
-          extraTourEnabled: true,
-          extraTourPrice: 90,
-        ),
-        ClientPricing(
-          companyName: 'Carrefour',
-          dailyRate: 250,
-          handlingEnabled: true,
-          handlingPrice: 25,
-          extraKmEnabled: true,
-          extraKmPrice: 1.4,
-          extraTourEnabled: true,
-          extraTourPrice: 75,
-        ),
-        ClientPricing(
-          companyName: 'DHL',
-          dailyRate: 260,
-          handlingEnabled: true,
-          handlingPrice: 30,
-          extraKmEnabled: true,
-          extraKmPrice: 1.6,
-          extraTourEnabled: true,
-          extraTourPrice: 85,
-        ),
-      ];
-      for (final cp in defaults) {
-        await _db.insert('client_pricings',
-            {'company_name': cp.companyName, 'data': jsonEncode(cp.toJson())});
-      }
-    }
+    // Plus de données de démo — l'app démarre vide
   }
 
   // ── Generic helpers ────────────────────────────────────────────────────────
