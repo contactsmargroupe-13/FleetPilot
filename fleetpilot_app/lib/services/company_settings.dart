@@ -42,7 +42,21 @@ class CompanySettings {
   /// Connecte les settings à la company Firestore (appelé après login)
   static Future<void> connectCompany(String companyId) async {
     _companyId = companyId;
-    // Charger la clé API depuis Firestore si elle existe
+
+    // 1. Clé globale du fondateur (partagée avec tous les utilisateurs)
+    try {
+      final globalDoc = await FirebaseFirestore.instance
+          .collection('config')
+          .doc('global')
+          .get();
+      final globalData = globalDoc.data();
+      if (globalData != null && (globalData['claudeApiKey'] as String?)?.isNotEmpty == true) {
+        _claudeApiKey = globalData['claudeApiKey'] as String;
+        return; // Clé globale trouvée, pas besoin de chercher plus loin
+      }
+    } catch (_) {}
+
+    // 2. Fallback : clé API spécifique à la company
     try {
       final doc = await FirebaseFirestore.instance
           .collection('companies')

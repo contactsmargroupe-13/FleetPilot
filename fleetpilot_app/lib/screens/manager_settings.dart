@@ -990,50 +990,31 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                const Text(
-                  'Clé API Anthropic (Claude)',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Colors.purple, size: 20),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Utilisée pour lire automatiquement les tickets carburant. '
-                  'Obtiens ta clé sur console.anthropic.com',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _apiKeyCtrl,
-                  obscureText: _apiKeyObscured,
-                  onChanged: (_) => setState(() => _apiKeySaved = false),
-                  decoration: InputDecoration(
-                    labelText: 'sk-ant-...',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.key_outlined),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _apiKeyObscured
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('IA intégrée',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        'Assistant, scan intelligent et rapports IA disponibles pour toute l\'équipe.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
-                      onPressed: () =>
-                          setState(() => _apiKeyObscured = !_apiKeyObscured),
-                    ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _saveApiKey,
-                    icon: Icon(
-                        _apiKeySaved ? Icons.check : Icons.save_outlined),
-                    label: Text(
-                        _apiKeySaved ? 'Clé enregistrée' : 'Enregistrer la clé'),
-                  ),
-                ),
+                const Icon(Icons.check_circle, color: Colors.green, size: 24),
               ],
             ),
           ),
