@@ -3,32 +3,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Profils utilisateurs — chacun lit le sien
+    // Profils utilisateurs — chacun lit/écrit le sien
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Données company — seuls les membres de la company y accèdent
+    // Company — création par tout utilisateur authentifié, lecture/écriture par membres
     match /companies/{companyId} {
+      allow create: if request.auth != null;
       allow read: if isCompanyMember(companyId);
-      allow write: if isCompanyManager(companyId);
+      allow update, delete: if isCompanyManager(companyId);
 
-      // Toutes les sous-collections (drivers, trucks, tours, etc.)
+      // Sous-collections (drivers, trucks, tours, etc.)
       match /{collection}/{docId} {
-        allow read: if isCompanyMember(companyId);
-        allow write: if isCompanyMember(companyId);
+        allow read, write: if isCompanyMember(companyId);
       }
     }
 
-    // Helper : l'utilisateur appartient à cette company
     function isCompanyMember(companyId) {
       return request.auth != null &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
     }
 
-    // Helper : l'utilisateur est manager de cette company
     function isCompanyManager(companyId) {
       return isCompanyMember(companyId) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';

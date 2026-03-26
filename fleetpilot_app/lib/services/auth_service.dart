@@ -61,15 +61,10 @@ class AuthService {
     );
     final uid = cred.user!.uid;
 
-    // Créer la company
+    // Créer la company d'abord (ID généré)
     final companyRef = _firestore.collection('companies').doc();
-    await companyRef.set({
-      'name': companyName,
-      'createdBy': uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
 
-    // Créer le profil utilisateur
+    // Créer le profil utilisateur EN PREMIER (les rules en dépendent)
     final appUser = AppUser(
       uid: uid,
       email: email,
@@ -78,6 +73,13 @@ class AuthService {
       companyId: companyRef.id,
     );
     await _firestore.collection('users').doc(uid).set(appUser.toJson());
+
+    // Puis créer la company
+    await companyRef.set({
+      'name': companyName,
+      'createdBy': uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
     return appUser;
   }
