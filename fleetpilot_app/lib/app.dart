@@ -79,14 +79,8 @@ class _PostLoginLoaderState extends ConsumerState<_PostLoginLoader> {
       final appState = ref.read(appStateProvider);
       appState.connectFirestore(fs);
 
-      // Si Firestore est vide, upload les données locales
-      final firestoreDrivers = await fs.loadDrivers();
-      if (firestoreDrivers.isEmpty && appState.drivers.isNotEmpty) {
-        await appState.uploadToFirestore();
-      } else if (firestoreDrivers.isNotEmpty) {
-        // Sinon, charger depuis Firestore
-        await appState.loadFromFirestore();
-      }
+      // Charger les données depuis Firestore (source de vérité)
+      await appState.loadFromFirestore();
 
       final show = await OnboardingPage.shouldShow();
       if (mounted) {
