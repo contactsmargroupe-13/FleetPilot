@@ -10,6 +10,7 @@ import 'screens/onboarding_page.dart';
 import 'screens/role_selector.dart';
 import 'screens/models/user_access.dart';
 import 'services/auth_service.dart';
+import 'services/company_settings.dart';
 import 'services/firestore_service.dart';
 import 'utils/design_constants.dart';
 
@@ -78,6 +79,9 @@ class _PostLoginLoaderState extends ConsumerState<_PostLoginLoader> {
 
       final appState = ref.read(appStateProvider);
       appState.connectFirestore(fs);
+
+      // Connecter les settings company (clé API partagée)
+      await CompanySettings.connectCompany(appUser.companyId);
 
       // Charger les données depuis Firestore (source de vérité)
       await appState.loadFromFirestore();

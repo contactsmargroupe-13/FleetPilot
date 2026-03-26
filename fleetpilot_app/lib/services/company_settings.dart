@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,7 +14,7 @@ class CompanySettings {
   static const _keyTvaIntra = 'company_tva_intra';
   static const _keyManagerPinHash = 'manager_pin_hash';
 
-  // Secure storage for API key
+  // Secure storage for API key (local fallback)
   static const _secureKeyClaudeApiKey = 'claude_api_key';
   static const _secureStorage = FlutterSecureStorage();
 
@@ -21,6 +22,9 @@ class CompanySettings {
 
   // Cached API key (loaded once at init)
   static String _claudeApiKey = '';
+
+  // Company ID for Firestore (set after login)
+  static String? _companyId;
 
   static Future<void> init(SharedPreferences prefs) async {
     _prefs = prefs;
@@ -31,8 +35,24 @@ class CompanySettings {
     // Migrate plaintext PIN to hashed PIN
     _migratePinToHash(prefs);
 
-    // Load API key from secure storage
+    // Load API key from secure storage (local fallback)
     _claudeApiKey = await _secureStorage.read(key: _secureKeyClaudeApiKey) ?? '';
+  }
+
+  /// Connecte les settings à la company Firestore (appelé après login)
+  static Future<void> connectCompany(String companyId) async {
+    _companyId = companyId;
+    // Charger la clé API depuis Firestore si elle existe
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(companyId)
+          .get();
+      final data = doc.data();
+      if (data != null && data['claudeApiKey'] != null) {
+        _claudeApiKey = data['claudeApiKey'] as String;
+      }
+    } catch (_) {}
   }
 
   /// Migrate plaintext API key → FlutterSecureStorage (one-time)
@@ -83,6 +103,16 @@ class CompanySettings {
   static Future<void> saveClaudeApiKey(String key) async {
     await _secureStorage.write(key: _secureKeyClaudeApiKey, value: key);
     _claudeApiKey = key;
+
+    // Sauver dans Firestore pour toute l'équipe
+    if (_companyId != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('companies')
+            .doc(_companyId)
+            .update({'claudeApiKey': key});
+      } catch (_) {}
+    }
   }
 
   static Future<void> saveManagerPin(String pin) async {
