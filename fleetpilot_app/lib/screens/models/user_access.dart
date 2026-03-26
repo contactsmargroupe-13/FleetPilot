@@ -1,6 +1,7 @@
 enum AccessRole {
   manager,
   comptable,
+  chauffeur,
 }
 
 String accessRoleLabel(AccessRole role) {
@@ -9,6 +10,8 @@ String accessRoleLabel(AccessRole role) {
       return 'Manager';
     case AccessRole.comptable:
       return 'Comptable';
+    case AccessRole.chauffeur:
+      return 'Chauffeur';
   }
 }
 
@@ -18,6 +21,8 @@ String accessRoleDescription(AccessRole role) {
       return 'Accès complet à toutes les fonctionnalités';
     case AccessRole.comptable:
       return 'Dépenses, facturation, URSSAF, actifs';
+    case AccessRole.chauffeur:
+      return 'Tournées, GPS, messagerie';
   }
 }
 

@@ -17,6 +17,8 @@ import '../screens/models/message.dart';
 import '../screens/models/tour.dart';
 import '../screens/models/user_access.dart';
 import '../services/database_service.dart';
+import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
 
 /// Provider global pour le DatabaseService (overridden dans main.dart)
 final databaseProvider = Provider<DatabaseService>((ref) {
@@ -28,8 +30,15 @@ final appStateProvider = ChangeNotifierProvider<AppState>((ref) {
   throw UnimplementedError('appStateProvider must be overridden');
 });
 
+/// Provider pour le FirestoreService (initialisé après login)
+final firestoreProvider = Provider<FirestoreService?>((ref) => null);
+
+/// Provider pour l'utilisateur connecté
+final currentUserProvider = StateProvider<AppUser?>((ref) => null);
+
 class AppState extends ChangeNotifier {
   final DatabaseService _db;
+  FirestoreService? _fs;
 
   List<Truck> trucks = [];
   List<Driver> drivers = [];
@@ -48,6 +57,53 @@ class AppState extends ChangeNotifier {
   List<UserAccess> userAccesses = [];
 
   AppState(this._db);
+
+  /// Connecte Firestore après le login
+  void connectFirestore(FirestoreService fs) {
+    _fs = fs;
+  }
+
+  /// Upload toutes les données locales vers Firestore
+  Future<void> uploadToFirestore() async {
+    if (_fs == null) return;
+    await _fs!.uploadLocalData(
+      drivers: drivers,
+      trucks: trucks,
+      tours: tours,
+      expenses: expenses,
+      dayEntries: driverDayEntries,
+      clientPricings: clientPricings,
+      driverDocuments: driverDocuments,
+      candidates: candidates,
+      adminDocuments: adminDocuments,
+      driverNotifications: driverNotifications,
+      managerAlerts: managerAlerts,
+      equipment: equipment,
+      assignments: assignments,
+      messages: messages,
+    );
+  }
+
+  /// Charge les données depuis Firestore (remplace le local)
+  Future<void> loadFromFirestore() async {
+    if (_fs == null) return;
+    trucks = await _fs!.loadTrucks();
+    drivers = await _fs!.loadDrivers();
+    tours = await _fs!.loadTours();
+    expenses = await _fs!.loadExpenses();
+    driverDayEntries = await _fs!.loadDayEntries();
+    clientPricings = await _fs!.loadClientPricings();
+    driverDocuments = await _fs!.loadDriverDocuments();
+    candidates = await _fs!.loadCandidates();
+    adminDocuments = await _fs!.loadAdminDocuments();
+    driverNotifications = await _fs!.loadDriverNotifications();
+    managerAlerts = await _fs!.loadManagerAlerts();
+    equipment = await _fs!.loadEquipment();
+    assignments = await _fs!.loadAssignments();
+    messages = await _fs!.loadMessages();
+    userAccesses = await _fs!.loadUserAccesses();
+    notifyListeners();
+  }
 
   Future<void> init() async {
     trucks = await _db.loadTrucks();
@@ -73,6 +129,7 @@ class AppState extends ChangeNotifier {
   void addTruck(Truck truck) {
     trucks.add(truck);
     _db.saveTruck(truck);
+    _fs?.saveTruck(truck);
     notifyListeners();
   }
 
@@ -81,14 +138,17 @@ class AppState extends ChangeNotifier {
     if (index != -1) trucks[index] = updated;
     if (originalPlate != updated.plate) {
       _db.deleteTruck(originalPlate);
+      _fs?.deleteTruck(originalPlate);
     }
     _db.saveTruck(updated);
+    _fs?.saveTruck(updated);
     notifyListeners();
   }
 
   void deleteTruck(String plate) {
     trucks.removeWhere((t) => t.plate == plate);
     _db.deleteTruck(plate);
+    _fs?.deleteTruck(plate);
     notifyListeners();
   }
 
@@ -97,6 +157,7 @@ class AppState extends ChangeNotifier {
   void addDriver(Driver driver) {
     drivers.add(driver);
     _db.saveDriver(driver);
+    _fs?.saveDriver(driver);
     notifyListeners();
   }
 
@@ -150,10 +211,14 @@ class AppState extends ChangeNotifier {
 
     if (originalName.toLowerCase() != updated.name.toLowerCase()) {
       _db.deleteDriver(originalName);
+      _fs?.deleteDriver(originalName);
     }
     _db.saveDriver(updated);
+    _fs?.saveDriver(updated);
     _db.saveAllDayEntries(driverDayEntries);
+    _fs?.saveAllDayEntries(driverDayEntries);
     _db.saveAllTours(tours);
+    _fs?.saveAllTours(tours);
     notifyListeners();
   }
 
@@ -162,6 +227,7 @@ class AppState extends ChangeNotifier {
       (item) => item.name.toLowerCase() == name.toLowerCase(),
     );
     _db.deleteDriver(name);
+    _fs?.deleteDriver(name);
 
     // Cascade : supprimer les day entries orphelines
     final orphanEntries = driverDayEntries
@@ -170,6 +236,7 @@ class AppState extends ChangeNotifier {
     for (final e in orphanEntries) {
       driverDayEntries.remove(e);
       _db.deleteDayEntry(e.id);
+      _fs?.deleteDayEntry(e.id);
     }
 
     // Cascade : supprimer les notifications orphelines
@@ -179,6 +246,7 @@ class AppState extends ChangeNotifier {
     for (final n in orphanNotifs) {
       driverNotifications.remove(n);
       _db.deleteDriverNotification(n.id);
+      _fs?.deleteDriverNotification(n.id);
     }
 
     // Cascade : supprimer les documents orphelins
@@ -188,6 +256,7 @@ class AppState extends ChangeNotifier {
     for (final d in orphanDocs) {
       driverDocuments.remove(d);
       _db.deleteDriverDocument(d.id);
+      _fs?.deleteDriverDocument(d.id);
     }
 
     notifyListeners();
@@ -198,6 +267,7 @@ class AppState extends ChangeNotifier {
   void addDriverDayEntry(DriverDayEntry entry) {
     driverDayEntries.add(entry);
     _db.saveDayEntry(entry);
+    _fs?.saveDayEntry(entry);
     notifyListeners();
   }
 
@@ -222,6 +292,7 @@ class AppState extends ChangeNotifier {
         );
         driverDayEntries[i] = updated;
         _db.saveDayEntry(updated);
+        _fs?.saveDayEntry(updated);
       }
     }
     notifyListeners();
@@ -232,6 +303,7 @@ class AppState extends ChangeNotifier {
   void addTour(Tour tour) {
     tours.add(tour);
     _db.saveTour(tour);
+    _fs?.saveTour(tour);
     notifyListeners();
   }
 
@@ -239,6 +311,7 @@ class AppState extends ChangeNotifier {
     final index = tours.indexWhere((item) => item.id == id);
     if (index != -1) tours[index] = updated;
     _db.saveTour(updated);
+    _fs?.saveTour(updated);
 
     // Recalculer le day entry à partir de toutes les tours du jour
     _recalcDayEntry(updated.driverName, updated.date);
@@ -249,6 +322,7 @@ class AppState extends ChangeNotifier {
     final tour = tours.where((item) => item.id == id).firstOrNull;
     tours.removeWhere((item) => item.id == id);
     _db.deleteTour(id);
+    _fs?.deleteTour(id);
 
     // Recalculer les day entries pour ce chauffeur/jour
     if (tour != null) {
@@ -278,6 +352,7 @@ class AppState extends ChangeNotifier {
         final entryId = driverDayEntries[entryIdx].id;
         driverDayEntries.removeAt(entryIdx);
         _db.deleteDayEntry(entryId);
+        _fs?.deleteDayEntry(entryId);
       }
     } else if (entryIdx != -1) {
       // Mettre à jour avec les totaux agrégés
@@ -293,6 +368,7 @@ class AppState extends ChangeNotifier {
       );
       driverDayEntries[entryIdx] = updated;
       _db.saveDayEntry(updated);
+      _fs?.saveDayEntry(updated);
     }
   }
 
@@ -301,6 +377,7 @@ class AppState extends ChangeNotifier {
   void addExpense(Expense expense) {
     expenses.add(expense);
     _db.saveExpense(expense);
+    _fs?.saveExpense(expense);
     _syncExpenseToTruckHistory(expense);
     notifyListeners();
   }
@@ -309,6 +386,7 @@ class AppState extends ChangeNotifier {
     final index = expenses.indexWhere((e) => e.id == id);
     if (index != -1) expenses[index] = updated;
     _db.saveExpense(updated);
+    _fs?.saveExpense(updated);
     // Supprimer l'ancienne entrée et re-sync
     _removeServiceEntryFromTruck(id);
     _syncExpenseToTruckHistory(updated);
@@ -318,6 +396,7 @@ class AppState extends ChangeNotifier {
   void deleteExpense(String id) {
     expenses.removeWhere((e) => e.id == id);
     _db.deleteExpense(id);
+    _fs?.deleteExpense(id);
     _removeServiceEntryFromTruck(id);
     notifyListeners();
   }
@@ -347,6 +426,7 @@ class AppState extends ChangeNotifier {
       );
     }
     _db.saveTruck(trucks[truckIdx]);
+    _fs?.saveTruck(trucks[truckIdx]);
   }
 
   /// Supprime une entrée liée à une dépense de l'historique camion
@@ -378,6 +458,7 @@ class AppState extends ChangeNotifier {
   void addDriverDocument(DriverDocument doc) {
     driverDocuments.add(doc);
     _db.saveDriverDocument(doc);
+    _fs?.saveDriverDocument(doc);
     notifyListeners();
   }
 
@@ -385,12 +466,14 @@ class AppState extends ChangeNotifier {
     final index = driverDocuments.indexWhere((d) => d.id == id);
     if (index != -1) driverDocuments[index] = updated;
     _db.saveDriverDocument(updated);
+    _fs?.saveDriverDocument(updated);
     notifyListeners();
   }
 
   void deleteDriverDocument(String id) {
     driverDocuments.removeWhere((d) => d.id == id);
     _db.deleteDriverDocument(id);
+    _fs?.deleteDriverDocument(id);
     notifyListeners();
   }
 
@@ -410,6 +493,7 @@ class AppState extends ChangeNotifier {
   void addCandidate(Candidate candidate) {
     candidates.add(candidate);
     _db.saveCandidate(candidate);
+    _fs?.saveCandidate(candidate);
     notifyListeners();
   }
 
@@ -417,12 +501,14 @@ class AppState extends ChangeNotifier {
     final index = candidates.indexWhere((c) => c.id == id);
     if (index != -1) candidates[index] = updated;
     _db.saveCandidate(updated);
+    _fs?.saveCandidate(updated);
     notifyListeners();
   }
 
   void deleteCandidate(String id) {
     candidates.removeWhere((c) => c.id == id);
     _db.deleteCandidate(id);
+    _fs?.deleteCandidate(id);
     notifyListeners();
   }
 
@@ -431,6 +517,7 @@ class AppState extends ChangeNotifier {
   void addAdminDocument(AdminDocument doc) {
     adminDocuments.add(doc);
     _db.saveAdminDocument(doc);
+    _fs?.saveAdminDocument(doc);
     _syncAdminDocToTruck(doc);
     notifyListeners();
   }
@@ -439,6 +526,7 @@ class AppState extends ChangeNotifier {
     final i = adminDocuments.indexWhere((d) => d.id == id);
     if (i != -1) adminDocuments[i] = updated;
     _db.saveAdminDocument(updated);
+    _fs?.saveAdminDocument(updated);
     _syncAdminDocToTruck(updated);
     notifyListeners();
   }
@@ -446,6 +534,7 @@ class AppState extends ChangeNotifier {
   void deleteAdminDocument(String id) {
     adminDocuments.removeWhere((d) => d.id == id);
     _db.deleteAdminDocument(id);
+    _fs?.deleteAdminDocument(id);
     notifyListeners();
   }
 
@@ -465,6 +554,7 @@ class AppState extends ChangeNotifier {
         insuranceStart: doc.date,
       );
       _db.saveTruck(trucks[truckIdx]);
+    _fs?.saveTruck(trucks[truckIdx]);
     }
 
     // Contrat location → met à jour le loueur
@@ -473,6 +563,7 @@ class AppState extends ChangeNotifier {
         rentCompany: doc.title,
       );
       _db.saveTruck(trucks[truckIdx]);
+      _fs?.saveTruck(trucks[truckIdx]);
     }
 
     // Facture prestataire → ajoute dans l'historique entretiens/réparations
@@ -486,6 +577,7 @@ class AppState extends ChangeNotifier {
         maintenances: [...truck.maintenances, entry],
       );
       _db.saveTruck(trucks[truckIdx]);
+      _fs?.saveTruck(trucks[truckIdx]);
     }
   }
 
@@ -494,6 +586,7 @@ class AppState extends ChangeNotifier {
   void addClientPricing(ClientPricing pricing) {
     clientPricings.add(pricing);
     _db.saveClientPricing(pricing);
+    _fs?.saveClientPricing(pricing);
     notifyListeners();
   }
 
@@ -504,8 +597,10 @@ class AppState extends ChangeNotifier {
     if (index != -1) clientPricings[index] = updated;
     if (companyName.toLowerCase() != updated.companyName.toLowerCase()) {
       _db.deleteClientPricing(companyName);
+      _fs?.deleteClientPricing(companyName);
     }
     _db.saveClientPricing(updated);
+    _fs?.saveClientPricing(updated);
     notifyListeners();
   }
 
@@ -514,6 +609,7 @@ class AppState extends ChangeNotifier {
       (item) => item.companyName.toLowerCase() == companyName.toLowerCase(),
     );
     _db.deleteClientPricing(companyName);
+    _fs?.deleteClientPricing(companyName);
     notifyListeners();
   }
 
@@ -547,6 +643,7 @@ class AppState extends ChangeNotifier {
   void addDriverNotification(DriverNotification n) {
     driverNotifications.add(n);
     _db.saveDriverNotification(n);
+    _fs?.saveDriverNotification(n);
     notifyListeners();
   }
 
@@ -555,6 +652,7 @@ class AppState extends ChangeNotifier {
     if (i != -1) {
       driverNotifications[i] = driverNotifications[i].copyWith(read: true);
       _db.saveDriverNotification(driverNotifications[i]);
+      _fs?.saveDriverNotification(driverNotifications[i]);
       notifyListeners();
     }
   }
@@ -562,6 +660,7 @@ class AppState extends ChangeNotifier {
   void deleteDriverNotification(String id) {
     driverNotifications.removeWhere((n) => n.id == id);
     _db.deleteDriverNotification(id);
+    _fs?.deleteDriverNotification(id);
     notifyListeners();
   }
 
@@ -573,6 +672,7 @@ class AppState extends ChangeNotifier {
   void addManagerAlert(ManagerAlert alert) {
     managerAlerts.add(alert);
     _db.saveManagerAlert(alert);
+    _fs?.saveManagerAlert(alert);
     notifyListeners();
   }
 
@@ -581,6 +681,7 @@ class AppState extends ChangeNotifier {
     if (i != -1) {
       managerAlerts[i] = managerAlerts[i].copyWith(read: true);
       _db.saveManagerAlert(managerAlerts[i]);
+      _fs?.saveManagerAlert(managerAlerts[i]);
       notifyListeners();
     }
   }
@@ -588,6 +689,7 @@ class AppState extends ChangeNotifier {
   void deleteManagerAlert(String id) {
     managerAlerts.removeWhere((a) => a.id == id);
     _db.deleteManagerAlert(id);
+    _fs?.deleteManagerAlert(id);
     notifyListeners();
   }
 
@@ -638,6 +740,7 @@ class AppState extends ChangeNotifier {
   void addMessage(Message m) {
     messages.add(m);
     _db.saveMessage(m);
+    _fs?.saveMessage(m);
     notifyListeners();
   }
 
@@ -646,6 +749,7 @@ class AppState extends ChangeNotifier {
     if (i != -1) {
       messages[i] = messages[i].copyWith(read: true);
       _db.saveMessage(messages[i]);
+      _fs?.saveMessage(messages[i]);
       notifyListeners();
     }
   }
@@ -658,6 +762,7 @@ class AppState extends ChangeNotifier {
           (asManager ? !m.isFromManager : m.isFromManager)) {
         messages[i] = m.copyWith(read: true);
         _db.saveMessage(messages[i]);
+        _fs?.saveMessage(messages[i]);
       }
     }
     notifyListeners();
@@ -666,6 +771,7 @@ class AppState extends ChangeNotifier {
   void deleteMessage(String id) {
     messages.removeWhere((m) => m.id == id);
     _db.deleteMessage(id);
+    _fs?.deleteMessage(id);
     notifyListeners();
   }
 
@@ -674,6 +780,7 @@ class AppState extends ChangeNotifier {
   void addEquipment(Equipment e) {
     equipment.add(e);
     _db.saveEquipment(e);
+    _fs?.saveEquipment(e);
     notifyListeners();
   }
 
@@ -681,12 +788,14 @@ class AppState extends ChangeNotifier {
     final i = equipment.indexWhere((e) => e.id == id);
     if (i != -1) equipment[i] = updated;
     _db.saveEquipment(updated);
+    _fs?.saveEquipment(updated);
     notifyListeners();
   }
 
   void deleteEquipment(String id) {
     equipment.removeWhere((e) => e.id == id);
     _db.deleteEquipment(id);
+    _fs?.deleteEquipment(id);
     notifyListeners();
   }
 
@@ -712,6 +821,7 @@ class AppState extends ChangeNotifier {
       assignments.add(assignment);
     }
     _db.saveAssignment(assignment);
+    _fs?.saveAssignment(assignment);
     notifyListeners();
   }
 
@@ -720,6 +830,7 @@ class AppState extends ChangeNotifier {
       (a) => a.driverName.toLowerCase() == driverName.toLowerCase(),
     );
     _db.deleteAssignment(driverName);
+    _fs?.deleteAssignment(driverName);
     notifyListeners();
   }
 
@@ -728,6 +839,7 @@ class AppState extends ChangeNotifier {
   void addUserAccess(UserAccess u) {
     userAccesses.add(u);
     _db.saveUserAccess(u);
+    _fs?.saveUserAccess(u);
     notifyListeners();
   }
 
@@ -735,12 +847,14 @@ class AppState extends ChangeNotifier {
     final i = userAccesses.indexWhere((u) => u.id == id);
     if (i != -1) userAccesses[i] = updated;
     _db.saveUserAccess(updated);
+    _fs?.saveUserAccess(updated);
     notifyListeners();
   }
 
   void deleteUserAccess(String id) {
     userAccesses.removeWhere((u) => u.id == id);
     _db.deleteUserAccess(id);
+    _fs?.deleteUserAccess(id);
     notifyListeners();
   }
 }

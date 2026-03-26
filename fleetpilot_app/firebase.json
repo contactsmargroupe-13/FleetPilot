@@ -1,0 +1,34 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "fleetpilote",
+          "appId": "1:706985453197:android:8ac83a499697a5c9dca4c4",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "fleetpilote",
+          "appId": "1:706985453197:ios:2ccba0b895fc921ddca4c4",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "fleetpilote",
+          "configurations": {
+            "android": "1:706985453197:android:8ac83a499697a5c9dca4c4",
+            "ios": "1:706985453197:ios:2ccba0b895fc921ddca4c4",
+            "web": "1:706985453197:web:0a1939c2f7846333dca4c4"
+          }
+        }
+      }
+    }
+  }
+}

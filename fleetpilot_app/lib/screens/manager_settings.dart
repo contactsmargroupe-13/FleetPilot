@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../services/auth_service.dart';
 import '../services/company_settings.dart';
 import '../utils/design_constants.dart';
 import 'manager_client_pricing.dart';
@@ -427,6 +428,153 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
     );
   }
 
+  void _inviteMember() {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    AccessRole selectedRole = AccessRole.chauffeur;
+    bool loading = false;
+    String? error;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) {
+          return AlertDialog(
+            title: const Text('Inviter un membre'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Nom *',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email *',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passwordCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Mot de passe initial *',
+                      prefixIcon: Icon(Icons.lock_outline),
+                      helperText: '6 caractères minimum',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<AccessRole>(
+                    value: selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Rôle',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                    items: [AccessRole.chauffeur, AccessRole.comptable]
+                        .map((r) => DropdownMenuItem(
+                              value: r,
+                              child: Text(accessRoleLabel(r)),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) set(() => selectedRole = v);
+                    },
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(error!,
+                        style: const TextStyle(fontSize: 12, color: Colors.red)),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  nameCtrl.dispose();
+                  emailCtrl.dispose();
+                  passwordCtrl.dispose();
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: loading
+                    ? null
+                    : () async {
+                        final name = nameCtrl.text.trim();
+                        final email = emailCtrl.text.trim();
+                        final password = passwordCtrl.text;
+
+                        if (name.isEmpty || email.isEmpty || password.length < 6) {
+                          set(() => error = 'Remplissez tous les champs (mdp 6 car. min.)');
+                          return;
+                        }
+
+                        set(() {
+                          loading = true;
+                          error = null;
+                        });
+
+                        try {
+                          // Récupérer le companyId du manager connecté
+                          final currentUser = AuthService.currentFirebaseUser;
+                          if (currentUser == null) throw Exception('Non connecté');
+                          final managerProfile =
+                              await AuthService.getAppUser(currentUser.uid);
+
+                          await AuthService.registerMember(
+                            email: email,
+                            password: password,
+                            name: name,
+                            role: selectedRole,
+                            companyId: managerProfile.companyId,
+                          );
+
+                          nameCtrl.dispose();
+                          emailCtrl.dispose();
+                          passwordCtrl.dispose();
+                          if (ctx.mounted) Navigator.pop(ctx);
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Compte créé pour $name ($email)'),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          set(() {
+                            loading = false;
+                            error = e.toString();
+                          });
+                        }
+                      },
+                child: loading
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Créer le compte'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _deleteAccess(UserAccess access) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -684,7 +832,7 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Créez des accès avec des droits limités (ex: comptable)',
+          'Invitez chauffeurs et comptables — chacun aura son propre compte',
           style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
         const SizedBox(height: 8),
@@ -693,7 +841,13 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
         FilledButton.icon(
           onPressed: _addAccess,
           icon: const Icon(Icons.person_add_outlined, size: 18),
-          label: const Text('Ajouter un accès'),
+          label: const Text('Ajouter un accès (PIN local)'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _inviteMember,
+          icon: const Icon(Icons.mail_outline, size: 18),
+          label: const Text('Inviter un membre (compte Firebase)'),
         ),
 
         const SizedBox(height: 32),
@@ -793,18 +947,20 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
-                  title: const Text('Retour à l\'accueil ?'),
+                  title: const Text('Se déconnecter ?'),
                   content: const Text(
-                      'Tu seras redirigé vers l\'écran de sélection Manager / Chauffeur.'),
+                      'Vous serez redirigé vers l\'écran de connexion.'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Annuler'),
                     ),
                     FilledButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(context); // fermer dialog
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        await AuthService.signOut();
+                        // Le StreamBuilder dans app.dart détecte le signOut
+                        // et redirige automatiquement vers LoginPage
                       },
                       style: FilledButton.styleFrom(backgroundColor: Colors.red),
                       child: const Text('Se déconnecter'),

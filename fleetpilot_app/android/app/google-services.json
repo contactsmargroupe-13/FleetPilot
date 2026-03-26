@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "706985453197",
+    "project_id": "fleetpilote",
+    "storage_bucket": "fleetpilote.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:706985453197:android:8ac83a499697a5c9dca4c4",
+        "android_client_info": {
+          "package_name": "com.example.fleetpilot_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLtbZz3eDMByyhFCAXtDV4C5kQ-yz-lIw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
