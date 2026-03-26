@@ -17,6 +17,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
   bool _isRegister = false;
+  bool _isJoin = false; // Mode "rejoindre" (membre invité)
   bool _obscure = true;
   String? _error;
 
@@ -41,7 +42,13 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      if (_isRegister) {
+      if (_isJoin) {
+        // Membre invité — cherche l'invitation et crée le compte
+        await AuthService.registerWithInvite(
+          email: _emailCtrl.text.trim(),
+          password: _passwordCtrl.text,
+        );
+      } else if (_isRegister) {
         await AuthService.registerManager(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
@@ -125,19 +132,25 @@ class _LoginPageState extends State<LoginPage> {
                     DC.logo(size: 32),
                     const SizedBox(height: 8),
                     Text(
-                      _isRegister ? 'Créer votre compte' : 'Connexion',
+                      _isJoin
+                          ? 'Rejoindre une entreprise'
+                          : _isRegister
+                              ? 'Créer votre entreprise'
+                              : 'Connexion',
                       style: DC.title(20),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _isRegister
-                          ? 'Inscrivez-vous pour gérer votre flotte'
-                          : 'Connectez-vous à votre espace',
+                      _isJoin
+                          ? 'Votre manager vous a invité'
+                          : _isRegister
+                              ? 'Inscrivez-vous pour gérer votre flotte'
+                              : 'Connectez-vous à votre espace',
                       style: DC.body(14, color: DC.textSecondary),
                     ),
                     const SizedBox(height: 32),
 
-                    // Champs inscription
+                    // Champs inscription manager
                     if (_isRegister) ...[
                       TextFormField(
                         controller: _nameCtrl,
@@ -244,34 +257,63 @@ class _LoginPageState extends State<LoginPage> {
                                   color: Colors.white,
                                 ),
                               )
-                            : Text(_isRegister ? 'Créer le compte' : 'Se connecter'),
+                            : Text(_isJoin
+                                ? 'Rejoindre'
+                                : _isRegister
+                                    ? 'Créer le compte'
+                                    : 'Se connecter'),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Toggle inscription/connexion
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _isRegister
-                              ? 'Déjà un compte ?'
-                              : 'Pas encore de compte ?',
-                          style: DC.body(14, color: DC.textSecondary),
-                        ),
-                        TextButton(
-                          onPressed: () => setState(() {
-                            _isRegister = !_isRegister;
-                            _error = null;
-                          }),
-                          child: Text(
-                            _isRegister ? 'Se connecter' : 'S\'inscrire',
-                            style: DC.body(14,
-                                weight: FontWeight.w600, color: DC.primary),
+                    // Liens de navigation entre modes
+                    if (!_isRegister && !_isJoin) ...[
+                      // Mode connexion
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('Pas de compte ?',
+                              style: DC.body(13, color: DC.textSecondary)),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _isRegister = true;
+                              _error = null;
+                            }),
+                            child: Text('Créer une entreprise',
+                                style: DC.body(13,
+                                    weight: FontWeight.w600, color: DC.primary)),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('Invité par un manager ?',
+                              style: DC.body(13, color: DC.textSecondary)),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _isJoin = true;
+                              _error = null;
+                            }),
+                            child: Text('Rejoindre',
+                                style: DC.body(13,
+                                    weight: FontWeight.w600, color: DC.success)),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      // Mode inscription ou rejoindre
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _isRegister = false;
+                          _isJoin = false;
+                          _error = null;
+                        }),
+                        child: Text('Retour à la connexion',
+                            style: DC.body(14,
+                                weight: FontWeight.w600, color: DC.primary)),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -84,14 +84,46 @@ class AuthService {
     return appUser;
   }
 
-  /// Inscription membre (chauffeur/comptable) — invité par le manager
-  static Future<AppUser> registerMember({
+  /// Créer une invitation pour un membre (chauffeur/comptable)
+  /// L'invitation est stockée dans Firestore, le membre crée son compte lui-même
+  static Future<void> inviteMember({
     required String email,
-    required String password,
     required String name,
     required AccessRole role,
     required String companyId,
   }) async {
+    await _firestore
+        .collection('companies')
+        .doc(companyId)
+        .collection('invitations')
+        .doc(email.toLowerCase())
+        .set({
+      'email': email.toLowerCase(),
+      'name': name,
+      'role': role.name,
+      'companyId': companyId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Inscription membre — vérifie s'il y a une invitation en attente
+  static Future<AppUser> registerWithInvite({
+    required String email,
+    required String password,
+  }) async {
+    // Chercher une invitation pour cet email
+    final inviteQuery = await _firestore
+        .collectionGroup('invitations')
+        .where('email', isEqualTo: email.toLowerCase())
+        .limit(1)
+        .get();
+
+    if (inviteQuery.docs.isEmpty) {
+      throw Exception('Aucune invitation trouvée pour cet email. '
+          'Demandez à votre manager de vous inviter.');
+    }
+
+    final invite = inviteQuery.docs.first.data();
     final cred = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
@@ -101,11 +133,17 @@ class AuthService {
     final appUser = AppUser(
       uid: uid,
       email: email,
-      name: name,
-      role: role,
-      companyId: companyId,
+      name: invite['name'] as String,
+      role: AccessRole.values.firstWhere(
+        (e) => e.name == invite['role'],
+        orElse: () => AccessRole.chauffeur,
+      ),
+      companyId: invite['companyId'] as String,
     );
     await _firestore.collection('users').doc(uid).set(appUser.toJson());
+
+    // Supprimer l'invitation
+    await inviteQuery.docs.first.reference.delete();
 
     return appUser;
   }

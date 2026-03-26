@@ -431,7 +431,6 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
   void _inviteMember() {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
     AccessRole selectedRole = AccessRole.chauffeur;
     bool loading = false;
     String? error;
@@ -461,15 +460,7 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                     decoration: const InputDecoration(
                       labelText: 'Email *',
                       prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: passwordCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Mot de passe initial *',
-                      prefixIcon: Icon(Icons.lock_outline),
-                      helperText: '6 caractères minimum',
+                      helperText: 'Le membre créera son mot de passe lui-même',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -502,7 +493,6 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                 onPressed: () {
                   nameCtrl.dispose();
                   emailCtrl.dispose();
-                  passwordCtrl.dispose();
                   Navigator.pop(ctx);
                 },
                 child: const Text('Annuler'),
@@ -513,10 +503,9 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                     : () async {
                         final name = nameCtrl.text.trim();
                         final email = emailCtrl.text.trim();
-                        final password = passwordCtrl.text;
 
-                        if (name.isEmpty || email.isEmpty || password.length < 6) {
-                          set(() => error = 'Remplissez tous les champs (mdp 6 car. min.)');
+                        if (name.isEmpty || email.isEmpty || !email.contains('@')) {
+                          set(() => error = 'Remplissez le nom et un email valide');
                           return;
                         }
 
@@ -526,15 +515,13 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                         });
 
                         try {
-                          // Récupérer le companyId du manager connecté
                           final currentUser = AuthService.currentFirebaseUser;
                           if (currentUser == null) throw Exception('Non connecté');
                           final managerProfile =
                               await AuthService.getAppUser(currentUser.uid);
 
-                          await AuthService.registerMember(
+                          await AuthService.inviteMember(
                             email: email,
-                            password: password,
                             name: name,
                             role: selectedRole,
                             companyId: managerProfile.companyId,
@@ -542,14 +529,13 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
 
                           nameCtrl.dispose();
                           emailCtrl.dispose();
-                          passwordCtrl.dispose();
                           if (ctx.mounted) Navigator.pop(ctx);
 
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    'Compte créé pour $name ($email)'),
+                                    'Invitation envoyée à $name ($email)'),
                               ),
                             );
                           }
@@ -566,7 +552,7 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                         width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Créer le compte'),
+                    : const Text('Inviter'),
               ),
             ],
           );

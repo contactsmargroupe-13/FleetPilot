@@ -14,7 +14,14 @@ service cloud.firestore {
       allow read: if isCompanyMember(companyId);
       allow update, delete: if isCompanyManager(companyId);
 
-      // Sous-collections (drivers, trucks, tours, etc.)
+      // Invitations — lisibles par tout utilisateur authentifié (pour rejoindre)
+      match /invitations/{email} {
+        allow read: if request.auth != null;
+        allow write: if isCompanyMember(companyId);
+        allow delete: if request.auth != null;
+      }
+
+      // Sous-collections data (drivers, trucks, tours, etc.)
       match /{collection}/{docId} {
         allow read, write: if isCompanyMember(companyId);
       }
