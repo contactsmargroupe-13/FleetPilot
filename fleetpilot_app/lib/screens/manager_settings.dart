@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -430,25 +431,75 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
   }
 
   Future<void> _resetData() async {
+    final passwordCtrl = TextEditingController();
+    String? error;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Réinitialiser les données ?'),
-        content: const Text(
-          'Toutes les données seront supprimées : chauffeurs, camions, tournées, dépenses, etc.\n\n'
-          'Cette action est irréversible.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Réinitialiser ?'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Toutes les données seront supprimées : chauffeurs, camions, tournées, dépenses, etc.\n\n'
+                'Confirmez avec votre mot de passe :',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Mot de passe',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                passwordCtrl.dispose();
+                Navigator.pop(ctx, false);
+              },
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final password = passwordCtrl.text;
+                if (password.isEmpty) {
+                  set(() => error = 'Entrez votre mot de passe');
+                  return;
+                }
+                // Vérifier le mot de passe via Firebase re-auth
+                try {
+                  final user = AuthService.currentFirebaseUser;
+                  if (user == null || user.email == null) return;
+                  final cred = EmailAuthProvider.credential(
+                    email: user.email!,
+                    password: password,
+                  );
+                  await user.reauthenticateWithCredential(cred);
+                  passwordCtrl.dispose();
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                } catch (e) {
+                  set(() => error = 'Mot de passe incorrect');
+                }
+              },
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Tout supprimer'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Tout supprimer'),
-          ),
-        ],
       ),
     );
     if (confirm != true) return;
@@ -896,15 +947,9 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
         _buildAccessList(),
         const SizedBox(height: 8),
         FilledButton.icon(
-          onPressed: _addAccess,
-          icon: const Icon(Icons.person_add_outlined, size: 18),
-          label: const Text('Ajouter un accès (PIN local)'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
           onPressed: _inviteMember,
-          icon: const Icon(Icons.mail_outline, size: 18),
-          label: const Text('Inviter un membre (compte Firebase)'),
+          icon: const Icon(Icons.person_add_outlined, size: 18),
+          label: const Text('Inviter un membre'),
         ),
 
         const SizedBox(height: 32),
