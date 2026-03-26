@@ -331,7 +331,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
   late DateTime _selectedMonth;
 
   final Set<String> _visibleSections = {
-    'profit', 'sante', 'metrics',
+    'profit', 'sante', 'metrics', 'seuil', 'classement',
   };
 
   final Map<String, TextEditingController> _daysCtrls = {};
@@ -594,156 +594,96 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         );
       }
 
-      final Color truckBarColor = profitTruck >= 0 ? Colors.green : Colors.red;
+      final Color profitC = profitTruck >= 0 ? DC.success : DC.error;
+      final severity = _analysisSeverity(analysis);
 
       cards.add(
-        Card(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(width: 5, color: truckBarColor),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: DC.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: DC.border),
+          ),
+          child: Column(
+            children: [
+              // Header camion
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: profitC.withValues(alpha: 0.05),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: profitC.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.local_shipping_rounded, color: profitC, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: daysCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: "Jours travaillés (mois)",
-                          border: OutlineInputBorder(),
+                          Text(t.plate, style: DC.mono(13, weight: FontWeight.w700, color: DC.textPrimary)),
+                          if (t.model.isNotEmpty)
+                            Text(t.model, style: DC.body(11, color: DC.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${profitTruck >= 0 ? '+' : ''}${profitTruck.toStringAsFixed(0)} €',
+                          style: DC.title(16, color: profitC),
                         ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatBox(
-                        label: "Revenus",
-                        value: "${revenue.toStringAsFixed(0)} €",
-                        icon: Icons.payments_outlined,
-                      ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _severityColor(severity).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Score ${analysis.score}',
+                            style: DC.mono(10, color: _severityColor(severity)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Row(
+              ),
+              // Données compactes en grille
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
                   children: [
-                    Expanded(
-                      child: _StatBox(
-                        label: "Dépenses",
-                        value: "${expenses.toStringAsFixed(0)} €",
-                        icon: Icons.receipt_long,
-                      ),
+                    Row(
+                      children: [
+                        _miniStat('CA', '${revenue.toStringAsFixed(0)} €', Icons.payments_outlined, DC.primary),
+                        _miniStat('Dépenses', '${expenses.toStringAsFixed(0)} €', Icons.receipt_long_outlined, DC.error),
+                        _miniStat('Fixe', '${fixed.toStringAsFixed(0)} €', Icons.home_work_outlined, DC.textSecondary),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatBox(
-                        label: "Fixe camion",
-                        value: "${fixed.toStringAsFixed(0)} €",
-                        icon: Icons.home_work_outlined,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatBox(
-                        label: "Carburant",
-                        value: "${fuelExpenses.toStringAsFixed(0)} €",
-                        icon: Icons.local_gas_station_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatBox(
-                        label: "Réparations",
-                        value: "${maintenanceExpenses.toStringAsFixed(0)} €",
-                        icon: Icons.build_outlined,
-                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _miniStat('Km', '${kmTruckMonth.toStringAsFixed(0)}', Icons.route_rounded, const Color(0xFF0D9488)),
+                        _miniStat('Coût/km', kmTruckMonth > 0 ? '${costPerKm.toStringAsFixed(2)} €' : '-', Icons.speed_rounded, const Color(0xFF64748B)),
+                        _miniStat('L/100', litersPer100 > 0 ? litersPer100.toStringAsFixed(1) : '-', Icons.local_gas_station_rounded, const Color(0xFFF59E0B)),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatBox(
-                        label: "Km camion",
-                        value: "${kmTruckMonth.toStringAsFixed(0)} km",
-                        icon: Icons.route_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatBox(
-                        label: "Profit camion",
-                        value: "${profitTruck.toStringAsFixed(0)} €",
-                        icon: Icons.trending_up,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatBox(
-                        label: "Coût / km",
-                        value: kmTruckMonth > 0
-                            ? "${costPerKm.toStringAsFixed(2)} €"
-                            : "-",
-                        icon: Icons.speed_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatBox(
-                        label: "L / 100 km",
-                        value: litersPer100 > 0
-                            ? litersPer100.toStringAsFixed(1)
-                            : "-",
-                        icon: Icons.local_gas_station,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _ScoreCard(score: analysis.score),
-                const SizedBox(height: 12),
-                _AiAnalysisCard(
-                  analysis: analysis,
-                  severityColor: _severityColor(_analysisSeverity(analysis)),
-                  severityIcon: _severityIcon(_analysisSeverity(analysis)),
-                  severityLabel: _severityLabel(_analysisSeverity(analysis)),
-                  reasons: _analysisReasons(analysis),
-                  actions: _analysisActions(analysis),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // close Expanded
-          ),
-          // close Row children
-          ],
         ),
-        // close IntrinsicHeight
-        ),
-        // close ClipRRect
-        ),
-      ),
-      // close Card
       );
     }
 
@@ -1441,6 +1381,26 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         children: [
           Text(value, style: DC.mono(12, color: color)),
           Text(label, style: DC.body(10, color: DC.textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color.withValues(alpha: 0.6)),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: DC.mono(11, weight: FontWeight.w600, color: DC.textPrimary)),
+                Text(label, style: DC.body(9, color: DC.textTertiary)),
+              ],
+            ),
+          ),
         ],
       ),
     );

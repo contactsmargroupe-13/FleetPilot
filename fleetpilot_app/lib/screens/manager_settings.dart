@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../services/auth_service.dart';
 import '../services/company_settings.dart';
+import '../services/firestore_service.dart';
 import '../utils/design_constants.dart';
 import 'manager_client_pricing.dart';
 import 'models/user_access.dart';
@@ -426,6 +427,76 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _resetData() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Réinitialiser les données ?'),
+        content: const Text(
+          'Toutes les données seront supprimées : chauffeurs, camions, tournées, dépenses, etc.\n\n'
+          'Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Tout supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final appState = ref.read(appStateProvider);
+
+    // Vider toutes les listes en mémoire
+    appState.trucks.clear();
+    appState.drivers.clear();
+    appState.tours.clear();
+    appState.expenses.clear();
+    appState.driverDayEntries.clear();
+    appState.clientPricings.clear();
+    appState.driverDocuments.clear();
+    appState.candidates.clear();
+    appState.adminDocuments.clear();
+    appState.driverNotifications.clear();
+    appState.managerAlerts.clear();
+    appState.equipment.clear();
+    appState.assignments.clear();
+    appState.messages.clear();
+    appState.userAccesses.clear();
+
+    // Notifier l'UI
+    // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    appState.notifyListeners();
+
+    // Vider Firestore si connecté
+    try {
+      final currentUser = AuthService.currentFirebaseUser;
+      if (currentUser != null) {
+        final profile = await AuthService.getAppUser(currentUser.uid);
+        final fs = FirestoreService(companyId: profile.companyId);
+        // Upload empty data
+        await fs.uploadLocalData(
+          drivers: [], trucks: [], tours: [], expenses: [],
+          dayEntries: [], clientPricings: [], driverDocuments: [],
+          candidates: [], adminDocuments: [], driverNotifications: [],
+          managerAlerts: [], equipment: [], assignments: [], messages: [],
+        );
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Toutes les données ont été supprimées')),
+      );
+    }
   }
 
   void _inviteMember() {
@@ -919,6 +990,30 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 32),
+
+        // ── Réinitialiser les données ─────────────────────────────────
+        const Text(
+          'Données',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _resetData,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.orange,
+              side: const BorderSide(color: Colors.orange),
+            ),
+            icon: const Icon(Icons.delete_sweep_outlined),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text('Réinitialiser toutes les données'),
             ),
           ),
         ),
