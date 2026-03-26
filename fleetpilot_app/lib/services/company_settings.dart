@@ -49,10 +49,20 @@ class CompanySettings {
           .collection('config')
           .doc('global')
           .get();
-      final globalData = globalDoc.data();
-      if (globalData != null && (globalData['claudeApiKey'] as String?)?.isNotEmpty == true) {
-        _claudeApiKey = globalData['claudeApiKey'] as String;
-        return; // Clé globale trouvée, pas besoin de chercher plus loin
+      if (globalDoc.exists) {
+        final globalData = globalDoc.data() ?? {};
+        // Cherche le champ clé API (insensible à la casse du champ)
+        for (final entry in globalData.entries) {
+          if (entry.key.toLowerCase().contains('apikey') ||
+              entry.key.toLowerCase().contains('api_key') ||
+              entry.key.toLowerCase().contains('claude')) {
+            final val = entry.value?.toString() ?? '';
+            if (val.startsWith('sk-')) {
+              _claudeApiKey = val;
+              return;
+            }
+          }
+        }
       }
     } catch (_) {}
 
@@ -62,9 +72,19 @@ class CompanySettings {
           .collection('companies')
           .doc(companyId)
           .get();
-      final data = doc.data();
-      if (data != null && data['claudeApiKey'] != null) {
-        _claudeApiKey = data['claudeApiKey'] as String;
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        for (final entry in data.entries) {
+          if (entry.key.toLowerCase().contains('apikey') ||
+              entry.key.toLowerCase().contains('api_key') ||
+              entry.key.toLowerCase().contains('claude')) {
+            final val = entry.value?.toString() ?? '';
+            if (val.startsWith('sk-')) {
+              _claudeApiKey = val;
+              return;
+            }
+          }
+        }
       }
     } catch (_) {}
   }
