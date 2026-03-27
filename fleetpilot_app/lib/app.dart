@@ -23,6 +23,7 @@ class FleetPilotApp extends StatelessWidget {
       title: 'FleetPilote',
       debugShowCheckedModeBanner: false,
       theme: DC.theme,
+      themeMode: ThemeMode.light,
       home: const _AuthGate(),
     );
   }
