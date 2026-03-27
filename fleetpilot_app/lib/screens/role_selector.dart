@@ -4,7 +4,6 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-import '../services/company_settings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
@@ -79,7 +78,10 @@ class RoleSelectorPage extends ConsumerWidget {
                 label: 'Manager',
                 subtitle: 'Tableau de bord & gestion',
                 color: DC.primary,
-                onTap: () => _onManagerTap(context),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ManagerShell()),
+                ),
               ),
 
               const SizedBox(height: 16),
@@ -241,31 +243,6 @@ class RoleSelectorPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _onManagerTap(BuildContext context) async {
-    if (!CompanySettings.hasPinSet) {
-      // Pas de PIN défini → créer le PIN
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const _PinDialog(mode: _PinMode.create),
-      );
-      return;
-    }
-
-    // PIN défini → vérifier
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const _PinDialog(mode: _PinMode.verify),
-    );
-
-    if (ok == true && context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ManagerShell()),
-      );
-    }
-  }
 }
 
 // ── Carte de rôle ────────────────────────────────────────────────────────────
@@ -567,190 +544,7 @@ class _PublicCandidatePageState extends ConsumerState<_PublicCandidatePage> {
       );
 }
 
-// ── Dialog PIN ───────────────────────────────────────────────────────────────
-
-enum _PinMode { create, verify }
-
-class _PinDialog extends StatefulWidget {
-  const _PinDialog({required this.mode});
-  final _PinMode mode;
-
-  @override
-  State<_PinDialog> createState() => _PinDialogState();
-}
-
-class _PinDialogState extends State<_PinDialog> {
-  String _pin = '';
-  String _confirmPin = '';
-  bool _confirming = false;
-  String? _error;
-
-  void _onKey(String digit) {
-    setState(() {
-      _error = null;
-      if (_confirming) {
-        if (_confirmPin.length < 4) _confirmPin += digit;
-        if (_confirmPin.length == 4) _validate();
-      } else {
-        if (_pin.length < 4) _pin += digit;
-        if (widget.mode == _PinMode.verify && _pin.length == 4) _validate();
-        if (widget.mode == _PinMode.create && _pin.length == 4) {
-          _confirming = true;
-        }
-      }
-    });
-  }
-
-  void _onDelete() {
-    setState(() {
-      _error = null;
-      if (_confirming) {
-        if (_confirmPin.isNotEmpty) {
-          _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1);
-        }
-      } else {
-        if (_pin.isNotEmpty) {
-          _pin = _pin.substring(0, _pin.length - 1);
-        }
-      }
-    });
-  }
-
-  Future<void> _validate() async {
-    if (widget.mode == _PinMode.verify) {
-      if (CompanySettings.checkPin(_pin)) {
-        Navigator.of(context).pop(true);
-      } else {
-        setState(() {
-          _pin = '';
-          _error = 'Code incorrect, réessayez';
-        });
-      }
-    } else {
-      // Création
-      if (_pin == _confirmPin) {
-        await CompanySettings.saveManagerPin(_pin);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Code PIN manager enregistré')),
-          );
-          Navigator.of(context).pop();
-          // Naviguer directement vers le manager après création
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ManagerShell()),
-          );
-        }
-      } else {
-        setState(() {
-          _confirmPin = '';
-          _confirming = false;
-          _pin = '';
-          _error = 'Les codes ne correspondent pas, recommencez';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final currentPin = _confirming ? _confirmPin : _pin;
-
-    String title;
-    String subtitle;
-    if (widget.mode == _PinMode.verify) {
-      title = 'Espace Manager';
-      subtitle = 'Entrez votre code PIN';
-    } else if (_confirming) {
-      title = 'Confirmer le code';
-      subtitle = 'Saisissez à nouveau le code';
-    } else {
-      title = 'Créer un code PIN';
-      subtitle = 'Protège l\'accès manager (4 chiffres)';
-    }
-
-    return Dialog(
-      backgroundColor: DC.surface2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DC.rCard),
-        side: const BorderSide(color: DC.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icône
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: DC.primary.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.lock_outline, color: DC.primary, size: 28),
-            ),
-            const SizedBox(height: 16),
-
-            Text(title, style: DC.title(20)),
-            const SizedBox(height: 4),
-            Text(subtitle,
-                style: DC.body(13, color: DC.textSecondary),
-                textAlign: TextAlign.center),
-
-            const SizedBox(height: 28),
-
-            // Indicateurs chiffres
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(4, (i) {
-                final filled = i < currentPin.length;
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: filled ? DC.primary : Colors.transparent,
-                    border: Border.all(
-                      color: filled ? DC.primary : DC.textSecondary,
-                      width: 2,
-                    ),
-                  ),
-                );
-              }),
-            ),
-
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: DC.body(12, color: DC.error),
-                textAlign: TextAlign.center,
-              ),
-            ],
-
-            const SizedBox(height: 28),
-
-            // Pavé numérique
-            _NumPad(onKey: _onKey, onDelete: _onDelete),
-
-            const SizedBox(height: 16),
-
-            // Annuler
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text('Annuler',
-                  style: DC.body(14, color: DC.textSecondary)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Pavé numérique ───────────────────────────────────────────────────────────
+// ── Pavé numérique (accès supplémentaires) ───────────────────────────────────
 
 class _NumPad extends StatelessWidget {
   const _NumPad({required this.onKey, required this.onDelete});

@@ -823,8 +823,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
         // ── Header ──────────────────────────────────────────────────────
         Row(
           children: [
-            Expanded(child: DC.logo(size: 24)),
-            _monthPill(),
+            Expanded(child: _monthPill()),
             const SizedBox(width: 8),
             GestureDetector(
               onTap: _showCustomizeDialog,
