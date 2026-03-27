@@ -56,19 +56,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DC.logo(size: 20),
-            const SizedBox(width: 8),
-            Text(
-              widget.role == AccessRole.manager
-                  ? 'Manager'
-                  : accessRoleLabel(widget.role),
-              style: DC.body(13, color: DC.textSecondary, weight: FontWeight.w500),
-            ),
-          ],
-        ),
+        title: DC.logo(size: 20),
         actions: [
           IconButton(
             icon: Badge(
@@ -105,7 +93,9 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            DrawerHeader(
+            // ── Header épuré ──
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -115,25 +105,23 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.local_shipping_rounded,
-                        size: 28, color: Colors.white),
+                  DC.logo(size: 26, light: true),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.role == AccessRole.manager
+                        ? 'Manager'
+                        : accessRoleLabel(widget.role),
+                    style: DC.body(12, color: Colors.white.withValues(alpha: 0.7)),
                   ),
-                  const SizedBox(height: 12),
-                  DC.logo(size: 24, light: true),
-                  const SizedBox(height: 2),
-                  Text('Gestion de flotte',
-                      style: DC.body(12, color: Colors.white.withValues(alpha: 0.8))),
                 ],
               ),
             ),
+
+            const SizedBox(height: 8),
+
+            // ── FLOTTE ──
+            _drawerSection('FLOTTE'),
             if (_hasAccess('flotte'))
               _drawerTile(Icons.hub_outlined, 'Flotte', () {
                 Navigator.pop(context);
@@ -177,7 +165,9 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const ManagerClientPricingPage()));
               }),
-            const Divider(),
+
+            // ── FINANCES ──
+            _drawerSection('FINANCES'),
             if (_hasAccess('actifs'))
               _drawerTile(Icons.savings_outlined, 'Actifs', () {
                 Navigator.pop(context);
@@ -226,7 +216,9 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const ManagerUrssafPage()));
               }),
-            const Divider(),
+
+            // ── GESTION ──
+            _drawerSection('GESTION'),
             if (_hasAccess('administratif'))
               _drawerTile(Icons.folder_outlined, 'Administratif', () {
                 Navigator.pop(context);
@@ -240,13 +232,15 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                     MaterialPageRoute(builder: (_) => const ManagerRecruitmentPage()));
               }),
             if (_hasAccess('messages'))
-              _drawerTile(Icons.chat_outlined, 'Messages${unreadMsgCount > 0 ? ' ($unreadMsgCount)' : ''}', () {
+              _drawerTile(Icons.chat_outlined, 'Messages', () {
                 Navigator.pop(context);
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const ManagerMessagesPage()));
-              }),
+              }, badge: unreadMsgCount),
+
+            // ── INTELLIGENCE ──
             if (_hasAccess('ia_chat') || _hasAccess('scan') || _hasAccess('rapport_ia'))
-              const Divider(),
+              _drawerSection('INTELLIGENCE'),
             if (_hasAccess('ia_chat'))
               _drawerTile(Icons.auto_awesome, 'Assistant IA', () {
                 Navigator.pop(context);
@@ -265,8 +259,12 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const ManagerAiReportPage()));
               }),
-            if (_hasAccess('parametres'))
-              const Divider(),
+
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 4),
+
+            // ── Paramètres + déconnexion ──
             if (_hasAccess('parametres'))
               _drawerTile(Icons.settings_outlined, 'Paramètres', () {
                 Navigator.pop(context);
@@ -286,16 +284,18 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
                       body: const ManagerSettingsPage(),
                     )));
               }),
-            const Divider(),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Retour accueil',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+              leading: const Icon(Icons.logout, color: DC.error, size: 20),
+              title: Text('Retour accueil',
+                  style: DC.body(14, color: DC.error, weight: FontWeight.w500)),
+              dense: true,
+              visualDensity: VisualDensity.compact,
               onTap: () {
-                Navigator.pop(context); // fermer drawer
+                Navigator.pop(context);
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -325,10 +325,33 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     );
   }
 
-  Widget _drawerTile(IconData icon, String title, VoidCallback onTap) {
+  Widget _drawerSection(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Text(
+        label,
+        style: DC.mono(10, color: DC.textTertiary, weight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _drawerTile(IconData icon, String title, VoidCallback onTap, {int badge = 0}) {
     return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
+      leading: Icon(icon, size: 20),
+      title: Text(title, style: DC.body(14)),
+      trailing: badge > 0
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: DC.primary,
+                borderRadius: BorderRadius.circular(DC.rBadge),
+              ),
+              child: Text('$badge',
+                  style: DC.mono(11, color: Colors.white, weight: FontWeight.w600)),
+            )
+          : null,
+      dense: true,
+      visualDensity: VisualDensity.compact,
       onTap: onTap,
     );
   }
