@@ -1,11 +1,14 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../services/auth_service.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
 import 'models/driver.dart';
 import 'models/driver_document.dart';
+import 'models/user_access.dart';
 
 class ManagerDriversPage extends ConsumerStatefulWidget {
   const ManagerDriversPage({super.key});
@@ -61,6 +64,36 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
         ],
       ),
     );
+  }
+
+  // ── Invitation chauffeur ────────────────────────────────────────────────
+
+  Future<void> _inviteDriver(Driver driver) async {
+    if (driver.email == null || driver.email!.isEmpty) {
+      _msg('Ajoute d\'abord un email au chauffeur');
+      return;
+    }
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+      final managerProfile = await AuthService.getAppUser(currentUser.uid);
+
+      await AuthService.inviteMember(
+        email: driver.email!,
+        name: driver.name,
+        role: AccessRole.chauffeur,
+        companyId: managerProfile.companyId,
+      );
+
+      if (mounted) {
+        _msg('Invitation envoyee a ${driver.email}');
+      }
+    } catch (e) {
+      if (mounted) {
+        _msg('Erreur : $e');
+      }
+    }
   }
 
   // ── Documents administratifs ─────────────────────────────────────────────
@@ -282,6 +315,16 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
               spacing: 10,
               runSpacing: 10,
               children: [
+                if (driver.email != null && driver.email!.isNotEmpty)
+                  FilledButton.icon(
+                    onPressed: () => _inviteDriver(driver),
+                    icon: const Icon(Icons.send_outlined, size: 16),
+                    label: const Text('Inviter'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: DC.success,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    ),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => _openDocuments(driver),
                   icon: const Icon(Icons.folder_outlined),
