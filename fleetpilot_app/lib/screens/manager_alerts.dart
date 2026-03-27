@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
@@ -210,7 +209,8 @@ class _AlertTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _colorForType(alert.type);
     final icon = _iconForType(alert.type);
-    final dateStr = DateFormat('dd/MM/yy HH:mm').format(alert.date);
+    final d = alert.date;
+    final dateStr = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year % 100} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
     return Container(
       color: alert.validated
@@ -274,7 +274,7 @@ class _AlertTile extends StatelessWidget {
                 if (alert.validatedAt != null) ...[
                   const SizedBox(width: 8),
                   Text(
-                    'Valide le ${DateFormat('dd/MM').format(alert.validatedAt!)}',
+                    'Valide le ${alert.validatedAt!.day.toString().padLeft(2, '0')}/${alert.validatedAt!.month.toString().padLeft(2, '0')}',
                     style: DC.mono(10, color: DC.success),
                   ),
                 ],
