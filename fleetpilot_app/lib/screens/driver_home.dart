@@ -21,7 +21,10 @@ import 'models/manager_alert.dart';
 import 'models/tour.dart';
 
 class DriverHomePage extends ConsumerStatefulWidget {
-  const DriverHomePage({super.key});
+  final String? firebaseEmail;
+  final String? firebaseName;
+
+  const DriverHomePage({super.key, this.firebaseEmail, this.firebaseName});
 
   @override
   ConsumerState<DriverHomePage> createState() => _DriverHomePageState();
@@ -66,8 +69,35 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
   Future<void> _init() async {
     await DriverSession.init();
+
+    // Auto-link : si pas de session, chercher le chauffeur par email Firebase
+    String? name = DriverSession.driverName;
+    if (name == null && widget.firebaseEmail != null) {
+      final drivers = ref.read(appStateProvider).drivers;
+      final match = drivers.cast<Driver?>().firstWhere(
+        (d) => d!.email?.toLowerCase() == widget.firebaseEmail!.toLowerCase(),
+        orElse: () => null,
+      );
+      if (match != null) {
+        name = match.name;
+        await DriverSession.setDriverName(name);
+      }
+    }
+    // Fallback : chercher par nom Firebase
+    if (name == null && widget.firebaseName != null) {
+      final drivers = ref.read(appStateProvider).drivers;
+      final match = drivers.cast<Driver?>().firstWhere(
+        (d) => d!.name.toLowerCase() == widget.firebaseName!.toLowerCase(),
+        orElse: () => null,
+      );
+      if (match != null) {
+        name = match.name;
+        await DriverSession.setDriverName(name);
+      }
+    }
+
     setState(() {
-      _driverName = DriverSession.driverName;
+      _driverName = name;
       _tourStart = DriverSession.tourStartTime;
       _loading = false;
     });
@@ -467,24 +497,6 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   Future<void> _selectProfile(Driver driver) async {
-    if (driver.hasPinSet) {
-      // Driver has a PIN → verify it
-      final ok = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _DriverPinDialog(driver: driver, mode: _DriverPinMode.verify),
-      );
-      if (ok != true) return;
-    } else {
-      // No PIN → create one
-      final ok = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _DriverPinDialog(driver: driver, mode: _DriverPinMode.create),
-      );
-      if (ok != true) return;
-    }
-
     await DriverSession.setDriverName(driver.name);
     setState(() {
       _driverName = driver.name;
@@ -1280,25 +1292,6 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         ),
         const SizedBox(height: 8),
         _SettingsTile(
-          icon: Icons.lock_reset,
-          title: 'Modifier mon PIN',
-          onTap: () async {
-            final driver = ref.read(appStateProvider).drivers
-                .where((d) => d.name == _driverName)
-                .firstOrNull;
-            if (driver == null) return;
-            await showDialog<bool>(
-              context: context,
-              barrierDismissible: false,
-              builder: (_) => _DriverPinDialog(
-                driver: driver,
-                mode: _DriverPinMode.change,
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        _SettingsTile(
           icon: Icons.logout,
           title: 'Se déconnecter',
           color: Colors.red,
@@ -1888,7 +1881,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                 const Padding(
                   padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
                   child: Text(
-                    'Sélectionne ton nom et saisis ton code PIN.',
+                    'Sélectionne ton profil pour commencer.',
                     style: TextStyle(color: DC.textSecondary),
                   ),
                 ),
@@ -1912,14 +1905,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (d.hasPinSet)
-                                const Icon(Icons.lock_outline,
-                                    size: 16, color: Colors.green)
-                              else
-                                const Icon(Icons.lock_open_outlined,
-                                    size: 16, color: Colors.orange),
-                              const SizedBox(width: 8),
-                              const Icon(Icons.arrow_forward_ios, size: 16),
+                              const Icon(Icons.arrow_forward_ios, size: 16, color: DC.textSecondary),
                             ],
                           ),
                           onTap: () => _selectProfile(d),
@@ -2190,291 +2176,3 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-// ── Dialog PIN chauffeur ──────────────────────────────────────────────────────
-
-enum _DriverPinMode { create, verify, change }
-
-class _DriverPinDialog extends StatefulWidget {
-  const _DriverPinDialog({required this.driver, required this.mode});
-  final Driver driver;
-  final _DriverPinMode mode;
-
-  @override
-  State<_DriverPinDialog> createState() => _DriverPinDialogState();
-}
-
-class _DriverPinDialogState extends State<_DriverPinDialog> {
-  String _pin = '';
-  String _confirmPin = '';
-  bool _confirming = false;
-  String? _error;
-
-  // Pour le mode change : étape 0 = ancien PIN, étape 1 = nouveau, étape 2 = confirmer
-  int _changeStep = 0;
-  String _oldPin = '';
-  String _newPin = '';
-
-  void _onKey(String digit) {
-    setState(() {
-      _error = null;
-
-      if (widget.mode == _DriverPinMode.change) {
-        _onKeyChange(digit);
-        return;
-      }
-
-      if (_confirming) {
-        if (_confirmPin.length < 4) _confirmPin += digit;
-        if (_confirmPin.length == 4) _validate();
-      } else {
-        if (_pin.length < 4) _pin += digit;
-        if (widget.mode == _DriverPinMode.verify && _pin.length == 4) {
-          _validate();
-        }
-        if (widget.mode == _DriverPinMode.create && _pin.length == 4) {
-          _confirming = true;
-        }
-      }
-    });
-  }
-
-  void _onKeyChange(String digit) {
-    if (_changeStep == 0) {
-      if (_oldPin.length < 4) _oldPin += digit;
-      if (_oldPin.length == 4) {
-        if (widget.driver.checkPin(_oldPin)) {
-          _changeStep = 1;
-        } else {
-          _oldPin = '';
-          _error = 'Code actuel incorrect';
-        }
-      }
-    } else if (_changeStep == 1) {
-      if (_newPin.length < 4) _newPin += digit;
-      if (_newPin.length == 4) {
-        _changeStep = 2;
-      }
-    } else {
-      if (_confirmPin.length < 4) _confirmPin += digit;
-      if (_confirmPin.length == 4) {
-        if (_newPin == _confirmPin) {
-          final container = ProviderScope.containerOf(context);
-          final appState = container.read(appStateProvider);
-          final updated = widget.driver.withPin(_newPin);
-          appState.updateDriver(widget.driver.name, updated);
-          Navigator.of(context).pop(true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('PIN modifié avec succès')),
-          );
-        } else {
-          _confirmPin = '';
-          _changeStep = 1;
-          _newPin = '';
-          _error = 'Les codes ne correspondent pas, recommencez';
-        }
-      }
-    }
-  }
-
-  void _onDelete() {
-    setState(() {
-      _error = null;
-
-      if (widget.mode == _DriverPinMode.change) {
-        if (_changeStep == 0) {
-          if (_oldPin.isNotEmpty) _oldPin = _oldPin.substring(0, _oldPin.length - 1);
-        } else if (_changeStep == 1) {
-          if (_newPin.isNotEmpty) _newPin = _newPin.substring(0, _newPin.length - 1);
-        } else {
-          if (_confirmPin.isNotEmpty) _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1);
-        }
-        return;
-      }
-
-      if (_confirming) {
-        if (_confirmPin.isNotEmpty) {
-          _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1);
-        }
-      } else {
-        if (_pin.isNotEmpty) {
-          _pin = _pin.substring(0, _pin.length - 1);
-        }
-      }
-    });
-  }
-
-  void _validate() {
-    if (widget.mode == _DriverPinMode.verify) {
-      if (widget.driver.checkPin(_pin)) {
-        Navigator.of(context).pop(true);
-      } else {
-        setState(() {
-          _pin = '';
-          _error = 'Code incorrect, réessayez';
-        });
-      }
-    } else {
-      // Création
-      if (_pin == _confirmPin) {
-        // Save the PIN hash on the driver via AppState
-        final container = ProviderScope.containerOf(context);
-        final appState = container.read(appStateProvider);
-        final updated = widget.driver.withPin(_pin);
-        appState.updateDriver(widget.driver.name, updated);
-        Navigator.of(context).pop(true);
-      } else {
-        setState(() {
-          _confirmPin = '';
-          _confirming = false;
-          _pin = '';
-          _error = 'Les codes ne correspondent pas, recommencez';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    String currentPin;
-    if (widget.mode == _DriverPinMode.change) {
-      currentPin = _changeStep == 0 ? _oldPin : (_changeStep == 1 ? _newPin : _confirmPin);
-    } else {
-      currentPin = _confirming ? _confirmPin : _pin;
-    }
-
-    String title;
-    String subtitle;
-    if (widget.mode == _DriverPinMode.change) {
-      if (_changeStep == 0) {
-        title = 'Modifier le PIN';
-        subtitle = 'Entrez votre code actuel';
-      } else if (_changeStep == 1) {
-        title = 'Nouveau code PIN';
-        subtitle = 'Choisissez 4 chiffres';
-      } else {
-        title = 'Confirmer le nouveau code';
-        subtitle = 'Saisissez à nouveau le code';
-      }
-    } else if (widget.mode == _DriverPinMode.verify) {
-      title = widget.driver.name;
-      subtitle = 'Entrez votre code PIN';
-    } else if (_confirming) {
-      title = 'Confirmer le code';
-      subtitle = 'Saisissez à nouveau le code';
-    } else {
-      title = 'Créer votre code PIN';
-      subtitle = '${widget.driver.name} — choisissez 4 chiffres';
-    }
-
-    return Dialog(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icône
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.lock_outline, color: Colors.green, size: 28),
-            ),
-            const SizedBox(height: 16),
-
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(subtitle,
-                style: const TextStyle(fontSize: 13, color: DC.textSecondary),
-                textAlign: TextAlign.center),
-
-            const SizedBox(height: 28),
-
-            // Indicateurs chiffres
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(4, (i) {
-                final filled = i < currentPin.length;
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: filled ? Colors.green : Colors.transparent,
-                    border: Border.all(
-                      color: filled ? Colors.green : Colors.grey,
-                      width: 2,
-                    ),
-                  ),
-                );
-              }),
-            ),
-
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: const TextStyle(fontSize: 12, color: Colors.red),
-                textAlign: TextAlign.center,
-              ),
-            ],
-
-            const SizedBox(height: 28),
-
-            // Pavé numérique
-            for (final row in [
-              ['1', '2', '3'],
-              ['4', '5', '6'],
-              ['7', '8', '9'],
-              ['', '0', '⌫'],
-            ])
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: row.map((k) {
-                  if (k.isEmpty) return const SizedBox(width: 68, height: 52);
-                  return GestureDetector(
-                    onTap: () => k == '⌫' ? _onDelete() : _onKey(k),
-                    child: Container(
-                      width: 68,
-                      height: 52,
-                      margin: const EdgeInsets.all(5),
-                      decoration: k == '⌫'
-                          ? null
-                          : BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Theme.of(context).dividerColor),
-                            ),
-                      alignment: Alignment.center,
-                      child: k == '⌫'
-                          ? const Icon(Icons.backspace_outlined,
-                              color: DC.textSecondary, size: 20)
-                          : Text(k,
-                              style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold)),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-            const SizedBox(height: 16),
-
-            // Annuler
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Annuler',
-                  style: TextStyle(color: DC.textSecondary)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -150,7 +150,10 @@ class _PostLoginLoaderState extends ConsumerState<_PostLoginLoader> {
     if (_appUser != null) {
       switch (_appUser!.role) {
         case AccessRole.chauffeur:
-          return const DriverHomePage();
+          return DriverHomePage(
+            firebaseEmail: _appUser!.email,
+            firebaseName: _appUser!.name,
+          );
         case AccessRole.comptable:
           return ManagerShell(role: AccessRole.comptable);
         case AccessRole.manager:
