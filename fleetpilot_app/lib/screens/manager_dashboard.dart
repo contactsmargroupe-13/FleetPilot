@@ -56,9 +56,19 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.role == AccessRole.manager
-            ? 'FleetPilote Manager'
-            : 'FleetPilote ${accessRoleLabel(widget.role)}'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DC.logo(size: 20),
+            const SizedBox(width: 8),
+            Text(
+              widget.role == AccessRole.manager
+                  ? 'Manager'
+                  : accessRoleLabel(widget.role),
+              style: DC.body(13, color: DC.textSecondary, weight: FontWeight.w500),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: Badge(
@@ -96,26 +106,31 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [DC.primary, DC.primaryDark],
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Icon(Icons.local_shipping,
-                      size: 36,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer),
-                  const SizedBox(height: 8),
-                  Text('FleetPilote',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer)),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.local_shipping_rounded,
+                        size: 28, color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  DC.logo(size: 24, light: true),
+                  const SizedBox(height: 2),
                   Text('Gestion de flotte',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7))),
+                      style: DC.body(12, color: Colors.white.withValues(alpha: 0.8))),
                 ],
               ),
             ),

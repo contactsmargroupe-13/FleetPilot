@@ -103,14 +103,14 @@ class DC {
       );
 
   // ── Logo FleetPilote ────────────────────────────────────────────────────
-  static Widget logo({double size = 22}) => RichText(
+  static Widget logo({double size = 22, bool light = false}) => RichText(
         text: TextSpan(children: [
           TextSpan(
             text: 'Fleet',
             style: GoogleFonts.syne(
               fontSize: size,
               fontWeight: FontWeight.w800,
-              color: textPrimary,
+              color: light ? Colors.white : textPrimary,
             ),
           ),
           TextSpan(
@@ -118,7 +118,7 @@ class DC {
             style: GoogleFonts.syne(
               fontSize: size,
               fontWeight: FontWeight.w800,
-              color: primary,
+              color: light ? const Color(0xFFBFDBFE) : primary,
             ),
           ),
         ]),
