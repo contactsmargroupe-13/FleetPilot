@@ -686,6 +686,33 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void validateManagerAlert(String id) {
+    final i = managerAlerts.indexWhere((a) => a.id == id);
+    if (i != -1) {
+      managerAlerts[i] = managerAlerts[i].copyWith(
+        validated: true,
+        validatedAt: DateTime.now(),
+        read: true,
+      );
+      _db.saveManagerAlert(managerAlerts[i]);
+      _fs?.saveManagerAlert(managerAlerts[i]);
+      notifyListeners();
+    }
+  }
+
+  void unvalidateManagerAlert(String id) {
+    final i = managerAlerts.indexWhere((a) => a.id == id);
+    if (i != -1) {
+      managerAlerts[i] = managerAlerts[i].copyWith(validated: false);
+      _db.saveManagerAlert(managerAlerts[i]);
+      _fs?.saveManagerAlert(managerAlerts[i]);
+      notifyListeners();
+    }
+  }
+
+  int get pendingManagerAlertCount =>
+      managerAlerts.where((a) => !a.validated).length;
+
   void deleteManagerAlert(String id) {
     managerAlerts.removeWhere((a) => a.id == id);
     _db.deleteManagerAlert(id);

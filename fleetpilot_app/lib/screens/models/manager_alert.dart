@@ -26,6 +26,12 @@ class ManagerAlert {
   final DateTime date;
   final bool read;
 
+  /// Marquée comme prise en compte par le manager
+  final bool validated;
+
+  /// Date de validation
+  final DateTime? validatedAt;
+
   /// Chauffeur concerné
   final String? driverName;
 
@@ -42,6 +48,8 @@ class ManagerAlert {
     required this.date,
     this.message,
     this.read = false,
+    this.validated = false,
+    this.validatedAt,
     this.driverName,
     this.oldTruckPlate,
     this.newTruckPlate,
@@ -51,6 +59,8 @@ class ManagerAlert {
     String? title,
     String? message,
     bool? read,
+    bool? validated,
+    DateTime? validatedAt,
   }) {
     return ManagerAlert(
       id: id,
@@ -59,6 +69,8 @@ class ManagerAlert {
       date: date,
       message: message ?? this.message,
       read: read ?? this.read,
+      validated: validated ?? this.validated,
+      validatedAt: validatedAt ?? this.validatedAt,
       driverName: driverName,
       oldTruckPlate: oldTruckPlate,
       newTruckPlate: newTruckPlate,
@@ -72,6 +84,8 @@ class ManagerAlert {
         'message': message,
         'date': date.toIso8601String(),
         'read': read,
+        'validated': validated,
+        'validatedAt': validatedAt?.toIso8601String(),
         'driverName': driverName,
         'oldTruckPlate': oldTruckPlate,
         'newTruckPlate': newTruckPlate,
@@ -87,6 +101,10 @@ class ManagerAlert {
         message: json['message'] as String?,
         date: DateTime.parse(json['date'] as String),
         read: json['read'] as bool? ?? false,
+        validated: json['validated'] as bool? ?? false,
+        validatedAt: json['validatedAt'] != null
+            ? DateTime.parse(json['validatedAt'] as String)
+            : null,
         driverName: json['driverName'] as String?,
         oldTruckPlate: json['oldTruckPlate'] as String?,
         newTruckPlate: json['newTruckPlate'] as String?,

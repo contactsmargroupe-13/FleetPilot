@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
@@ -37,6 +38,7 @@ class CompanySettings {
 
     // Load API key from secure storage (local fallback)
     _claudeApiKey = await _secureStorage.read(key: _secureKeyClaudeApiKey) ?? '';
+    dev.log('[CompanySettings] init: local key=${_claudeApiKey.isEmpty ? "VIDE" : "sk-...${_claudeApiKey.substring(_claudeApiKey.length - 4)}"}');
   }
 
   /// Connecte les settings à la company Firestore (appelé après login)
@@ -49,22 +51,29 @@ class CompanySettings {
           .collection('config')
           .doc('global')
           .get();
+      dev.log('[CompanySettings] Firestore config/global exists=${globalDoc.exists}');
       if (globalDoc.exists) {
         final globalData = globalDoc.data() ?? {};
+        dev.log('[CompanySettings] config/global fields: ${globalData.keys.toList()}');
         // Cherche le champ clé API (insensible à la casse du champ)
         for (final entry in globalData.entries) {
           if (entry.key.toLowerCase().contains('apikey') ||
               entry.key.toLowerCase().contains('api_key') ||
               entry.key.toLowerCase().contains('claude')) {
             final val = entry.value?.toString() ?? '';
+            dev.log('[CompanySettings] Found key field "${entry.key}" → starts with sk-: ${val.startsWith("sk-")}');
             if (val.startsWith('sk-')) {
               _claudeApiKey = val;
+              dev.log('[CompanySettings] ✓ API key loaded from config/global');
               return;
             }
           }
         }
+        dev.log('[CompanySettings] ✗ No valid API key in config/global');
       }
-    } catch (_) {}
+    } catch (e) {
+      dev.log('[CompanySettings] Error reading config/global: $e');
+    }
 
     // 2. Fallback : clé API spécifique à la company
     try {

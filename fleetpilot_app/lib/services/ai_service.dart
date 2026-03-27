@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -22,6 +23,7 @@ class AiService {
     required String userMessage,
     List<Map<String, String>> history = const [],
   }) async {
+    dev.log('[AiService] chat called, apiKey empty=${CompanySettings.claudeApiKey.isEmpty}');
     if (CompanySettings.claudeApiKey.isEmpty) {
       return 'Clé API non configurée. Va dans Paramètres > IA.';
     }
@@ -50,13 +52,16 @@ class AiService {
         }),
       );
 
+      dev.log('[AiService] response status=${response.statusCode}');
       if (response.statusCode != 200) {
+        dev.log('[AiService] error body: ${response.body}');
         return 'Erreur API (${response.statusCode}). Vérifie ta clé.';
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return (data['content'] as List).first['text'] as String;
     } catch (e) {
+      dev.log('[AiService] exception: $e');
       return 'Erreur : $e';
     }
   }
