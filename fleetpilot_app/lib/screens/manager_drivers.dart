@@ -1,14 +1,11 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
-import '../services/auth_service.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
 import 'models/driver.dart';
 import 'models/driver_document.dart';
-import 'models/user_access.dart';
 
 class ManagerDriversPage extends ConsumerStatefulWidget {
   const ManagerDriversPage({super.key});
@@ -64,36 +61,6 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
         ],
       ),
     );
-  }
-
-  // ── Invitation chauffeur ────────────────────────────────────────────────
-
-  Future<void> _inviteDriver(Driver driver) async {
-    if (driver.email == null || driver.email!.isEmpty) {
-      _msg('Ajoute d\'abord un email au chauffeur');
-      return;
-    }
-
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
-      final managerProfile = await AuthService.getAppUser(currentUser.uid);
-
-      await AuthService.inviteMember(
-        email: driver.email!,
-        name: driver.name,
-        role: AccessRole.chauffeur,
-        companyId: managerProfile.companyId,
-      );
-
-      if (mounted) {
-        _msg('Invitation envoyee a ${driver.email}');
-      }
-    } catch (e) {
-      if (mounted) {
-        _msg('Erreur : $e');
-      }
-    }
   }
 
   // ── Documents administratifs ─────────────────────────────────────────────
@@ -310,21 +277,41 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
             ),
             const SizedBox(height: 14),
 
+            // Indicateur d'accès — le chauffeur peut se connecter dès qu'il a un email
+            if (driver.email != null && driver.email!.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: DC.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(DC.rChip),
+                  border: Border.all(color: DC.success.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 14, color: DC.success),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Peut se connecter avec ${driver.email}',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: DC.success,
+                            fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
             // Actions
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                if (driver.email != null && driver.email!.isNotEmpty)
-                  FilledButton.icon(
-                    onPressed: () => _inviteDriver(driver),
-                    icon: const Icon(Icons.send_outlined, size: 16),
-                    label: const Text('Inviter'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: DC.success,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    ),
-                  ),
                 OutlinedButton.icon(
                   onPressed: () => _openDocuments(driver),
                   icon: const Icon(Icons.folder_outlined),

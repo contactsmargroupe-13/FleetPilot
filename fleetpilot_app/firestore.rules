@@ -13,6 +13,19 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Collection group : permet le lookup "drivers par email" au moment du signup
+    // (pour rattacher automatiquement un chauffeur à sa company sans étape Inviter).
+    // Un utilisateur ne peut lire qu'une fiche dont l'email matche son auth.
+    match /{path=**}/drivers/{driverId} {
+      allow read: if request.auth != null &&
+        resource.data.email == request.auth.token.email;
+    }
+
+    // Collection group : lookup invitations au signup (comptables / co-managers)
+    match /{path=**}/invitations/{email} {
+      allow read: if request.auth != null;
+    }
+
     // Company — création par tout utilisateur authentifié, lecture/écriture par membres
     match /companies/{companyId} {
       allow create: if request.auth != null;
@@ -26,9 +39,121 @@ service cloud.firestore {
         allow delete: if request.auth != null;
       }
 
-      // Sous-collections data (drivers, trucks, tours, etc.)
+      // Drivers — les managers voient tout ; un chauffeur ne voit que sa propre fiche
+      match /drivers/{driverId} {
+        allow read: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.email == request.auth.token.email);
+        allow write: if isCompanyManager(companyId);
+      }
+
+      // ─── Sous-collections PAR CHAUFFEUR ────────────────────────────────────
+      // Manager : accès complet. Chauffeur : lecture uniquement sur ses propres
+      // documents (match via driverEmail dénormalisé). Écriture toujours
+      // autorisée pour tout membre (le driver crée ses propres entries).
+
+      match /tours/{docId} {
+        allow read: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+        // Manager : écriture libre. Chauffeur : doit écrire un doc dont
+        // le driverEmail matche son propre email (empêche de créer/modifier
+        // des tours au nom d'un autre chauffeur).
+        allow create, update: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            request.resource.data.driverEmail == request.auth.token.email);
+        allow delete: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+      }
+
+      match /driver_day_entries/{docId} {
+        allow read: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+        allow create, update: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            request.resource.data.driverEmail == request.auth.token.email);
+        allow delete: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+      }
+
+      match /driver_documents/{docId} {
+        allow read: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+        allow write: if isCompanyManager(companyId);
+      }
+
+      match /driver_notifications/{docId} {
+        allow read, write: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+      }
+
+      match /driver_assignments/{docId} {
+        allow read: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+        allow write: if isCompanyManager(companyId);
+      }
+
+      // ─── Collections BLOQUÉES pour les chauffeurs ──────────────────────────
+      // Données métier / RH / admin : managers uniquement.
+
+      match /client_pricings/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      match /candidates/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      match /admin_documents/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      match /manager_alerts/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      match /user_accesses/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      match /expenses/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      match /equipment/{docId} {
+        allow read, write: if isCompanyManager(companyId);
+      }
+
+      // ─── Collections PARTAGÉES ─────────────────────────────────────────────
+
+      match /trucks/{docId} {
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyManager(companyId);
+      }
+
+      match /messages/{docId} {
+        // Chat manager↔chauffeur : le chauffeur ne voit que ses propres messages
+        // (match sur `driverEmail` dénormalisé = email du chauffeur de la conversation)
+        allow read: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+        allow create, update: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            request.resource.data.driverEmail == request.auth.token.email);
+        allow delete: if isCompanyManager(companyId) ||
+          (isCompanyMember(companyId) &&
+            resource.data.driverEmail == request.auth.token.email);
+      }
+
+      // Fallback : toute autre sous-collection → manager uniquement
       match /{collection}/{docId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read, write: if isCompanyManager(companyId);
       }
     }
 

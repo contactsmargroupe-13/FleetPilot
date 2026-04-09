@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../screens/models/driver.dart';
 import '../screens/models/user_access.dart';
 
 /// Profil utilisateur stocké dans Firestore /users/{uid}
@@ -106,46 +107,85 @@ class AuthService {
     });
   }
 
-  /// Inscription membre — vérifie s'il y a une invitation en attente
+  /// Inscription membre — rattachement automatique à la company.
+  ///
+  /// Cherche dans l'ordre :
+  /// 1. Une fiche chauffeur avec cet email (collection `drivers`) → rôle chauffeur
+  /// 2. Une invitation explicite (collection `invitations`) → rôle comptable/manager
+  ///
+  /// Dans le cas 1 aucun "invite" n'est nécessaire côté manager : créer la fiche
+  /// chauffeur avec son email suffit à lui donner accès.
   static Future<AppUser> registerWithInvite({
     required String email,
     required String password,
   }) async {
-    // Chercher une invitation pour cet email
-    final inviteQuery = await _firestore
-        .collectionGroup('invitations')
-        .where('email', isEqualTo: email.toLowerCase())
-        .limit(1)
-        .get();
+    final lower = email.toLowerCase();
 
-    if (inviteQuery.docs.isEmpty) {
-      throw Exception('Aucune invitation trouvée pour cet email. '
-          'Demandez à votre manager de vous inviter.');
-    }
-
-    final invite = inviteQuery.docs.first.data();
+    // Crée d'abord le compte Firebase — nécessaire pour que les règles
+    // `request.auth.token.email` autorisent la lecture des drivers/invitations.
     final cred = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
     final uid = cred.user!.uid;
 
-    final appUser = AppUser(
-      uid: uid,
-      email: email,
-      name: invite['name'] as String,
-      role: AccessRole.values.firstWhere(
-        (e) => e.name == invite['role'],
-        orElse: () => AccessRole.chauffeur,
-      ),
-      companyId: invite['companyId'] as String,
-    );
-    await _firestore.collection('users').doc(uid).set(appUser.toJson());
+    try {
+      // 1. Cherche une fiche chauffeur correspondante dans n'importe quelle company
+      final driverQuery = await _firestore
+          .collectionGroup('drivers')
+          .where('email', isEqualTo: lower)
+          .limit(1)
+          .get();
 
-    // Supprimer l'invitation
-    await inviteQuery.docs.first.reference.delete();
+      if (driverQuery.docs.isNotEmpty) {
+        final driverDoc = driverQuery.docs.first;
+        // Chemin : companies/{companyId}/drivers/{driverId}
+        final companyId = driverDoc.reference.parent.parent!.id;
+        final driver = Driver.fromJson(driverDoc.data());
+        final appUser = AppUser(
+          uid: uid,
+          email: lower,
+          name: driver.fullName,
+          role: AccessRole.chauffeur,
+          companyId: companyId,
+        );
+        await _firestore.collection('users').doc(uid).set(appUser.toJson());
+        return appUser;
+      }
 
-    return appUser;
+      // 2. Sinon, cherche une invitation explicite (comptable / co-manager)
+      final inviteQuery = await _firestore
+          .collectionGroup('invitations')
+          .where('email', isEqualTo: lower)
+          .limit(1)
+          .get();
+
+      if (inviteQuery.docs.isEmpty) {
+        throw Exception('Aucun accès trouvé pour cet email. '
+            'Demandez à votre manager de vous ajouter comme chauffeur ou comptable.');
+      }
+
+      final invite = inviteQuery.docs.first.data();
+      final appUser = AppUser(
+        uid: uid,
+        email: lower,
+        name: invite['name'] as String,
+        role: AccessRole.values.firstWhere(
+          (e) => e.name == invite['role'],
+          orElse: () => AccessRole.chauffeur,
+        ),
+        companyId: invite['companyId'] as String,
+      );
+      await _firestore.collection('users').doc(uid).set(appUser.toJson());
+      await inviteQuery.docs.first.reference.delete();
+      return appUser;
+    } catch (e) {
+      // Rollback du compte Firebase si le rattachement a échoué
+      try {
+        await cred.user?.delete();
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   /// Connexion email/password

@@ -112,6 +112,8 @@ class Truck {
   final String? insurerName;
   final DateTime? insuranceStart;
   final DateTime? insuranceExpiry;
+  /// Montant mensuel de l'assurance (€ / mois). Inclus dans les coûts fixes du camion.
+  final double? insuranceMonthly;
 
   // Contrôle technique
   final DateTime? ctDate;
@@ -157,6 +159,7 @@ class Truck {
     this.insurerName,
     this.insuranceStart,
     this.insuranceExpiry,
+    this.insuranceMonthly,
     this.ctDate,
     this.ctExpiry,
     this.repairs = const [],
@@ -166,7 +169,8 @@ class Truck {
     this.truckStatus = TruckStatus.fonctionnel,
   });
 
-  double? get monthlyCost {
+  /// Coût mensuel de détention pur (amortissement OU loyer), sans assurance.
+  double? get ownershipMonthlyCost {
     if (ownershipType == OwnershipType.achat) {
       if (purchasePrice == null || amortMonths == null || amortMonths! <= 0) {
         return null;
@@ -175,6 +179,15 @@ class Truck {
     }
     return rentMonthly;
   }
+
+  /// Coût mensuel total du camion (détention + assurance).
+  /// Utilisé par le dashboard pour calculer le profit.
+  double get totalMonthlyCost {
+    return (ownershipMonthlyCost ?? 0) + (insuranceMonthly ?? 0);
+  }
+
+  /// Alias historique — conservé pour compat avec le code existant.
+  double? get monthlyCost => ownershipMonthlyCost;
 
   String get monthlyCostLabel {
     final cost = monthlyCost;
@@ -210,6 +223,7 @@ class Truck {
     String? insurerName,
     DateTime? insuranceStart,
     DateTime? insuranceExpiry,
+    double? insuranceMonthly,
     DateTime? ctDate,
     DateTime? ctExpiry,
     List<ServiceEntry>? repairs,
@@ -234,6 +248,7 @@ class Truck {
         insurerName: insurerName ?? this.insurerName,
         insuranceStart: insuranceStart ?? this.insuranceStart,
         insuranceExpiry: insuranceExpiry ?? this.insuranceExpiry,
+        insuranceMonthly: insuranceMonthly ?? this.insuranceMonthly,
         ctDate: ctDate ?? this.ctDate,
         ctExpiry: ctExpiry ?? this.ctExpiry,
         repairs: repairs ?? this.repairs,
@@ -263,6 +278,7 @@ static const Object _sentinel = Object();
         'insurerName': insurerName,
         'insuranceStart': insuranceStart?.toIso8601String(),
         'insuranceExpiry': insuranceExpiry?.toIso8601String(),
+        'insuranceMonthly': insuranceMonthly,
         'ctDate': ctDate?.toIso8601String(),
         'ctExpiry': ctExpiry?.toIso8601String(),
         'repairs': repairs.map((e) => e.toJson()).toList(),
@@ -302,6 +318,9 @@ static const Object _sentinel = Object();
             : null,
         insuranceExpiry: json['insuranceExpiry'] != null
             ? DateTime.parse(json['insuranceExpiry'] as String)
+            : null,
+        insuranceMonthly: json['insuranceMonthly'] != null
+            ? (json['insuranceMonthly'] as num).toDouble()
             : null,
         ctDate: json['ctDate'] != null
             ? DateTime.parse(json['ctDate'] as String)
@@ -353,6 +372,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
   late final TextEditingController _rentCompanyCtrl;
   late final TextEditingController _companyCtrl;
   late final TextEditingController _insurerCtrl;
+  late final TextEditingController _insuranceMonthlyCtrl;
   late final TextEditingController _monthlyKmThresholdCtrl;
 
   late OwnershipType _ownershipType;
@@ -392,6 +412,11 @@ class _AddTruckPageState extends State<AddTruckPage> {
     _rentCompanyCtrl = TextEditingController(text: t?.rentCompany ?? '');
     _companyCtrl = TextEditingController(text: t?.companyName ?? '');
     _insurerCtrl = TextEditingController(text: t?.insurerName ?? '');
+    _insuranceMonthlyCtrl = TextEditingController(
+      text: t?.insuranceMonthly != null
+          ? t!.insuranceMonthly!.toStringAsFixed(0)
+          : '',
+    );
     _monthlyKmThresholdCtrl = TextEditingController(
       text: t?.monthlyKmThreshold != null
           ? t!.monthlyKmThreshold!.toStringAsFixed(0)
@@ -421,6 +446,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
     _rentCompanyCtrl.dispose();
     _companyCtrl.dispose();
     _insurerCtrl.dispose();
+    _insuranceMonthlyCtrl.dispose();
     _monthlyKmThresholdCtrl.dispose();
     super.dispose();
   }
@@ -458,6 +484,9 @@ class _AddTruckPageState extends State<AddTruckPage> {
     final insurer = _insurerCtrl.text.trim().isEmpty
         ? null
         : _insurerCtrl.text.trim();
+    final insuranceMonthly = _insuranceMonthlyCtrl.text.trim().isEmpty
+        ? null
+        : _d(_insuranceMonthlyCtrl.text);
     final monthlyKmThreshold = _monthlyKmThresholdCtrl.text.trim().isEmpty
         ? null
         : _d(_monthlyKmThresholdCtrl.text);
@@ -497,6 +526,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
           insurerName: insurer,
           insuranceStart: _insuranceStart,
           insuranceExpiry: _insuranceExpiry,
+          insuranceMonthly: insuranceMonthly,
           ctDate: _ctDate,
           ctExpiry: _ctExpiry,
           repairs: _repairs,
@@ -535,6 +565,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
           insurerName: insurer,
           insuranceStart: _insuranceStart,
           insuranceExpiry: _insuranceExpiry,
+          insuranceMonthly: insuranceMonthly,
           ctDate: _ctDate,
           ctExpiry: _ctExpiry,
           repairs: _repairs,
@@ -782,6 +813,19 @@ class _AddTruckPageState extends State<AddTruckPage> {
               decoration: const InputDecoration(
                 labelText: "Nom de l'assureur (optionnel)",
                 prefixIcon: Icon(Icons.shield_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
+              controller: _insuranceMonthlyCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Prime mensuelle assurance (€)',
+                helperText:
+                    'Inclus dans les coûts fixes du camion sur le dashboard',
+                prefixIcon: Icon(Icons.euro_outlined),
                 border: OutlineInputBorder(),
               ),
             ),

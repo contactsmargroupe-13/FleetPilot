@@ -84,24 +84,72 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Charge les données depuis Firestore (remplace le local)
-  Future<void> loadFromFirestore() async {
+  /// Charge les données depuis Firestore (remplace le local).
+  ///
+  /// Si [asUser] est un chauffeur :
+  ///   - `drivers` = sa propre fiche uniquement
+  ///   - tours / day entries / documents / notifications / assignments =
+  ///     uniquement ceux qui lui appartiennent (via `driverEmail` dénormalisé)
+  ///   - collections métier/RH (client_pricings, candidates, admin_documents,
+  ///     manager_alerts, expenses, equipment, user_accesses) = non chargées
+  ///   - trucks et messages = complets (accès partagé)
+  ///
+  /// Imposé aussi côté règles Firestore (defense in depth).
+  Future<void> loadFromFirestore({AppUser? asUser}) async {
     if (_fs == null) return;
+
+    final isDriver = asUser != null && asUser.role == AccessRole.chauffeur;
+    final driverEmail = asUser?.email.toLowerCase() ?? '';
+
     trucks = await _fs!.loadTrucks();
-    drivers = await _fs!.loadDrivers();
-    tours = await _fs!.loadTours();
-    expenses = await _fs!.loadExpenses();
-    driverDayEntries = await _fs!.loadDayEntries();
-    clientPricings = await _fs!.loadClientPricings();
-    driverDocuments = await _fs!.loadDriverDocuments();
-    candidates = await _fs!.loadCandidates();
-    adminDocuments = await _fs!.loadAdminDocuments();
-    driverNotifications = await _fs!.loadDriverNotifications();
-    managerAlerts = await _fs!.loadManagerAlerts();
-    equipment = await _fs!.loadEquipment();
-    assignments = await _fs!.loadAssignments();
-    messages = await _fs!.loadMessages();
-    userAccesses = await _fs!.loadUserAccesses();
+
+    if (isDriver) {
+      drivers = await _fs!.loadDriversForEmail(driverEmail);
+      tours = await _fs!.loadToursForDriverEmail(driverEmail);
+      driverDayEntries = await _fs!.loadDayEntriesForDriverEmail(driverEmail);
+      driverDocuments =
+          await _fs!.loadDriverDocumentsForDriverEmail(driverEmail);
+      driverNotifications =
+          await _fs!.loadDriverNotificationsForDriverEmail(driverEmail);
+      assignments = await _fs!.loadAssignmentsForDriverEmail(driverEmail);
+      messages = await _fs!.loadMessagesForDriverEmail(driverEmail);
+
+      // Collections bloquées pour les chauffeurs — rester vides
+      expenses = [];
+      clientPricings = [];
+      candidates = [];
+      adminDocuments = [];
+      managerAlerts = [];
+      equipment = [];
+      userAccesses = [];
+    } else {
+      drivers = await _fs!.loadDrivers();
+      // Alimente le cache name→email pour dénormaliser `driverEmail` au save
+      _fs!.cacheDriverEmails(drivers);
+
+      // Migration one-shot : backfill driverEmail sur les docs existants
+      // pour que les règles Firestore côté chauffeur fonctionnent.
+      try {
+        await _fs!.backfillDriverEmails();
+      } catch (_) {
+        // non bloquant — logué silencieusement, le manager continue
+      }
+
+      tours = await _fs!.loadTours();
+      expenses = await _fs!.loadExpenses();
+      driverDayEntries = await _fs!.loadDayEntries();
+      clientPricings = await _fs!.loadClientPricings();
+      driverDocuments = await _fs!.loadDriverDocuments();
+      candidates = await _fs!.loadCandidates();
+      adminDocuments = await _fs!.loadAdminDocuments();
+      driverNotifications = await _fs!.loadDriverNotifications();
+      managerAlerts = await _fs!.loadManagerAlerts();
+      equipment = await _fs!.loadEquipment();
+      assignments = await _fs!.loadAssignments();
+      userAccesses = await _fs!.loadUserAccesses();
+      messages = await _fs!.loadMessages();
+    }
+
     notifyListeners();
   }
 
@@ -158,6 +206,7 @@ class AppState extends ChangeNotifier {
     drivers.add(driver);
     _db.saveDriver(driver);
     _fs?.saveDriver(driver);
+    _fs?.cacheDriverEmails(drivers);
     notifyListeners();
   }
 
@@ -215,6 +264,9 @@ class AppState extends ChangeNotifier {
     }
     _db.saveDriver(updated);
     _fs?.saveDriver(updated);
+    // Rafraîchir le cache name→email avant les re-saves en cascade
+    // pour que `driverEmail` soit bien dénormalisé sur les tours/entries.
+    _fs?.cacheDriverEmails(drivers);
     _db.saveAllDayEntries(driverDayEntries);
     _fs?.saveAllDayEntries(driverDayEntries);
     _db.saveAllTours(tours);

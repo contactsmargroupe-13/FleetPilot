@@ -85,7 +85,7 @@ class _PostLoginLoaderState extends ConsumerState<_PostLoginLoader> {
       await CompanySettings.connectCompany(appUser.companyId);
 
       // Charger les données depuis Firestore (source de vérité)
-      await appState.loadFromFirestore();
+      await appState.loadFromFirestore(asUser: appUser);
 
       final show = await OnboardingPage.shouldShow();
       if (mounted) {

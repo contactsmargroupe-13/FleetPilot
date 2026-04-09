@@ -27,6 +27,7 @@ import 'manager_vehicles.dart';
 import 'models/client_pricing.dart';
 import 'models/driver.dart';
 import 'models/expense.dart';
+import 'models/tour.dart';
 import 'models/user_access.dart';
 
 class ManagerShell extends ConsumerStatefulWidget {
@@ -39,6 +40,16 @@ class ManagerShell extends ConsumerStatefulWidget {
 
 class _ManagerShellState extends ConsumerState<ManagerShell> {
   int index = 0;
+
+  /// Controller persistant pour le drawer — conserve la position de scroll
+  /// entre les ouvertures successives du menu latéral.
+  final ScrollController _drawerScrollCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _drawerScrollCtrl.dispose();
+    super.dispose();
+  }
 
   bool _hasAccess(String page) =>
       rolePages[widget.role]?.contains(page) ?? false;
@@ -91,6 +102,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
       ),
       drawer: Drawer(
         child: ListView(
+          controller: _drawerScrollCtrl,
           padding: EdgeInsets.zero,
           children: [
             // ── Header épuré ──
@@ -365,37 +377,13 @@ class ManagerDashboardPage extends ConsumerStatefulWidget {
 }
 
 class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
-  String? _selectedPlate;
   late DateTime _selectedMonth;
-
-  final Set<String> _visibleSections = {
-    'profit', 'sante', 'metrics', 'seuil', 'classement',
-  };
-
-  final Map<String, TextEditingController> _daysCtrls = {};
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month, 1);
-  }
-
-  String _monthKey(DateTime m) => "${m.year}-${m.month.toString().padLeft(2, '0')}";
-
-  String _daysKey(String plate, DateTime m) => "$plate|${_monthKey(m)}";
-
-  TextEditingController _daysCtrlFor(String plate, DateTime month) {
-    final key = _daysKey(plate, month);
-    return _daysCtrls.putIfAbsent(
-      key,
-      () => TextEditingController(text: "22"),
-    );
-  }
-
-  int _parseDays(String s) {
-    final v = int.tryParse(s.trim());
-    return (v == null || v < 0) ? 0 : v;
   }
 
   Iterable<Expense> _truckExpensesForMonth(String plate, DateTime month) {
@@ -442,18 +430,23 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
 
   double _truckFixedMonthlyCost(dynamic t) {
     try {
+      // Assurance mensuelle — s'ajoute quel que soit le mode d'ownership
+      final insurance =
+          (t.insuranceMonthly as num?)?.toDouble() ?? 0.0;
+
       final ownership = t.ownershipType.toString().toLowerCase();
 
       if (ownership.contains("location") ||
           ownership.contains("leasing") ||
           ownership.contains("lease")) {
-        return (t.rentMonthly as num?)?.toDouble() ?? 0.0;
+        final rent = (t.rentMonthly as num?)?.toDouble() ?? 0.0;
+        return rent + insurance;
       }
 
       final purchase = (t.purchasePrice as num?)?.toDouble() ?? 0.0;
       final months = (t.amortMonths as num?)?.toDouble() ?? 0.0;
-      if (months <= 0) return 0.0;
-      return purchase / months;
+      final amort = months > 0 ? purchase / months : 0.0;
+      return amort + insurance;
     } catch (_) {
       return 0.0;
     }
@@ -477,44 +470,14 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     return (liters / km) * 100;
   }
 
-  Color _severityColor(String severity) {
-    switch (severity) {
-      case 'danger':
-        return Colors.red;
-      case 'warning':
-        return Colors.orange;
-      default:
-        return Colors.green;
-    }
-  }
-
-  IconData _severityIcon(String severity) {
-    switch (severity) {
-      case 'danger':
-        return Icons.warning_amber_rounded;
-      case 'warning':
-        return Icons.error_outline;
-      default:
-        return Icons.check_circle_outline;
-    }
-  }
-
-  String _severityLabel(String severity) {
-    switch (severity) {
-      case 'danger':
-        return 'Critique';
-      case 'warning':
-        return 'À surveiller';
-      default:
-        return 'Correct';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final allTrucks = ref.read(appStateProvider).trucks;
+    // Watch pour que le dashboard se rafraîchisse automatiquement quand
+    // une tournée est ajoutée/modifiée (sinon il fallait changer d'onglet).
+    final appState = ref.watch(appStateProvider);
+    final allTrucks = appState.trucks;
     final trucks = allTrucks;
-    final List<Driver> drivers = ref.read(appStateProvider).drivers;
+    final List<Driver> drivers = appState.drivers;
 
     final double totalSalaries =
         drivers.fold<double>(0.0, (sum, d) => sum + d.totalSalary);
@@ -527,18 +490,11 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     double totalRevenue = 0;
     double totalExpenses = 0;
     double totalFixed = 0;
-    double totalFuelLiters = 0;
 
-    final List<_TruckProfitData> chartData = [];
-    final List<Widget> cards = [];
     final List<_TruckComputedData> computedTrucks = [];
 
     for (final t in trucks) {
-      final daysCtrl = _daysCtrlFor(t.plate, _selectedMonth);
-      final days = _parseDays(daysCtrl.text);
-
       // Revenu = somme des tarifs commissionnaire pour chaque tournée du camion
-      final appState = ref.read(appStateProvider);
       final truckTours = appState.tours.where((tour) =>
           tour.truckPlate == t.plate &&
           tour.date.year == _selectedMonth.year &&
@@ -558,29 +514,21 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
       }
 
       final expenses = _sumExpensesForTruckInMonth(t.plate, _selectedMonth);
-
       final fuelExpenses =
           _sumFuelExpensesForTruckInMonth(t.plate, _selectedMonth);
-
       final fuelLiters =
           _sumFuelLitersForTruckInMonth(t.plate, _selectedMonth);
-
       final maintenanceExpenses =
           _sumMaintenanceExpensesForTruckInMonth(t.plate, _selectedMonth);
-
       final kmTruckMonth = _sumKmForTruckInMonth(t.plate, _selectedMonth);
-
       final fixed = _truckFixedMonthlyCost(t);
-
       final profitTruck = revenue - expenses - fixed;
-
       final costPerKm = _costPerKm(
         expenses: expenses,
         fixed: fixed,
         salaryShare: salarySharePerTruck,
         km: kmTruckMonth,
       );
-
       final litersPer100 = _litersPer100(
         liters: fuelLiters,
         km: kmTruckMonth,
@@ -589,7 +537,6 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
       totalRevenue += revenue;
       totalExpenses += expenses;
       totalFixed += fixed;
-      totalFuelLiters += fuelLiters;
 
       final analysis = ManagerAiService.analyzeTruckLoss(
         truckName: t.plate,
@@ -622,666 +569,776 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
           analysis: analysis,
         ),
       );
-
-      if (_selectedPlate == null) {
-        chartData.add(
-          _TruckProfitData(
-            plate: t.plate,
-            profit: profitTruck,
-          ),
-        );
-      }
-
-      final Color profitC = profitTruck >= 0 ? DC.success : DC.error;
-      final severity = _analysisSeverity(analysis);
-
-      cards.add(
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: DC.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: DC.border),
-          ),
-          child: Column(
-            children: [
-              // Header camion
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: profitC.withValues(alpha: 0.05),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: profitC.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(Icons.local_shipping_rounded, color: profitC, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t.plate, style: DC.mono(13, weight: FontWeight.w700, color: DC.textPrimary)),
-                          if (t.model.isNotEmpty)
-                            Text(t.model, style: DC.body(11, color: DC.textSecondary)),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${profitTruck >= 0 ? '+' : ''}${profitTruck.toStringAsFixed(0)} €',
-                          style: DC.title(16, color: profitC),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _severityColor(severity).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Score ${analysis.score}',
-                            style: DC.mono(10, color: _severityColor(severity)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              // Données compactes en grille
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        _miniStat('CA', '${revenue.toStringAsFixed(0)} €', Icons.payments_outlined, DC.primary),
-                        _miniStat('Dépenses', '${expenses.toStringAsFixed(0)} €', Icons.receipt_long_outlined, DC.error),
-                        _miniStat('Fixe', '${fixed.toStringAsFixed(0)} €', Icons.home_work_outlined, DC.textSecondary),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _miniStat('Km', '${kmTruckMonth.toStringAsFixed(0)}', Icons.route_rounded, const Color(0xFF0D9488)),
-                        _miniStat('Coût/km', kmTruckMonth > 0 ? '${costPerKm.toStringAsFixed(2)} €' : '-', Icons.speed_rounded, const Color(0xFF64748B)),
-                        _miniStat('L/100', litersPer100 > 0 ? litersPer100.toStringAsFixed(1) : '-', Icons.local_gas_station_rounded, const Color(0xFFF59E0B)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
     }
 
-    final totalProfit =
-        totalRevenue - totalExpenses - totalFixed - totalSalaries;
-
-    final totalCostPerKm = totalKmMonth > 0
-        ? (totalExpenses + totalFixed + totalSalaries) / totalKmMonth
-        : 0.0;
-
-    final totalLitersPer100 = totalKmMonth > 0 && totalFuelLiters > 0
-        ? (totalFuelLiters / totalKmMonth) * 100
-        : 0.0;
-
-    int profitableCount = 0;
-    int warningCount = 0;
-    int lossCount = 0;
-
-    for (final truck in computedTrucks) {
-      if (truck.profit < 0 || truck.score < 40) {
-        lossCount++;
-      } else if (truck.score < 70) {
-        warningCount++;
-      } else {
-        profitableCount++;
-      }
-    }
-
-    final profitableTrucks = [...computedTrucks]
-      ..sort((a, b) => b.profit.compareTo(a.profit));
-    final warningTrucks = computedTrucks
-        .where((t) => !(t.profit < 0 || t.score < 40) && t.score < 70)
-        .toList()
-      ..sort((a, b) => a.score.compareTo(b.score));
-    final lossTrucks = computedTrucks
-        .where((t) => t.profit < 0 || t.score < 40)
-        .toList()
-      ..sort((a, b) => a.profit.compareTo(b.profit));
-
-    final bestTruck = computedTrucks.isEmpty
-        ? null
-        : ([...computedTrucks]..sort((a, b) => b.profit.compareTo(a.profit))).first;
-
-    final worstTruck = computedTrucks.isEmpty
-        ? null
-        : ([...computedTrucks]..sort((a, b) => a.profit.compareTo(b.profit))).first;
-
-    // Seuil de rentabilité
-    final totalCosts = totalExpenses + totalFixed + totalSalaries;
-    final seuilAtteint = totalRevenue >= totalCosts;
-
-    // Prev month trends
-    final prevMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
-    double prevRevenue = 0;
-    double prevExpenses = 0;
-    double prevFixed = 0;
-    for (final t in allTrucks) {
-      // Revenu mois précédent via tournées réelles
-      final prevAppState = ref.read(appStateProvider);
-      final prevTours = prevAppState.tours.where((tour) =>
-          tour.truckPlate == t.plate &&
-          tour.date.year == prevMonth.year &&
-          tour.date.month == prevMonth.month).toList();
-      for (final tour in prevTours) {
-        final pricing = prevAppState.getClientPricing(tour.companyName);
-        final assign = prevAppState.getAssignment(tour.driverName);
-        if (pricing != null) {
-          if (pricing.billingMode == BillingMode.auPoint) {
-            final pp = assign?.customPricePerPoint ?? pricing.pricePerPoint ?? 0;
-            prevRevenue += tour.clientsCount * pp;
-          } else {
-            prevRevenue += assign?.customDailyRate ?? pricing.dailyRate;
-          }
-        }
-      }
-      prevExpenses += _sumExpensesForTruckInMonth(t.plate, prevMonth);
-      prevFixed += _truckFixedMonthlyCost(t);
-    }
-    final prevCosts = prevExpenses + prevFixed + totalSalaries;
-    final prevProfit = prevRevenue - prevCosts;
-    final profitTrend = totalProfit - prevProfit;
-
-    // Sorted trucks for ranking
+    // Classement camions par profit (pour section ③)
     final sortedByProfit = [...computedTrucks]
       ..sort((a, b) => b.profit.compareTo(a.profit));
-    final maxAbsProfit = sortedByProfit.isEmpty
-        ? 1.0
-        : sortedByProfit.map((t) => t.profit.abs()).reduce((a, b) => a > b ? a : b).clamp(1.0, double.infinity);
 
-    final toursThisMonth = ref.read(appStateProvider).tours
+    final toursThisMonth = appState.tours
         .where((t) => t.date.year == _selectedMonth.year && t.date.month == _selectedMonth.month)
         .length;
 
-    final profitColor = totalProfit >= 0 ? DC.success : DC.error;
+    // ─── Nouvelles métriques pour le layout refondé ─────────────────────
+
+    final now = DateTime.now();
+    final isCurrentMonth =
+        now.year == _selectedMonth.year && now.month == _selectedMonth.month;
+
+    // Nombre de jours dans le mois sélectionné
+    final daysInMonth =
+        DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0).day;
+    // Nombre de jours écoulés (cap à daysInMonth si on regarde un mois passé)
+    final daysElapsed = isCurrentMonth ? now.day : daysInMonth;
+    final monthRatio =
+        daysInMonth > 0 ? (daysElapsed / daysInMonth).clamp(0.0, 1.0) : 0.0;
+
+    // Coûts fixes au prorata temporis : ce qu'on « devrait » avoir dépensé
+    // en fixes à ce stade du mois. C'est la référence pour juger si on est
+    // en retard ou pas — bien plus parlant que comparer à un mois complet.
+    final totalFixedProrata = (totalFixed + totalSalaries) * monthRatio;
+    final profitProrata = totalRevenue - totalExpenses - totalFixedProrata;
+
+    // Détection tournées sans tarif configuré
+    final allToursThisMonth = appState.tours
+        .where((t) =>
+            t.date.year == _selectedMonth.year &&
+            t.date.month == _selectedMonth.month)
+        .toList();
+    final toursWithoutPricing = allToursThisMonth.where((t) {
+      if (t.companyName == null || t.companyName!.trim().isEmpty) {
+        return true; // pas de commissionnaire → pas facturable
+      }
+      return appState.getClientPricing(t.companyName) == null;
+    }).toList();
+
+    // ── Aujourd'hui / hier / semaine ─────────────────────────────────────
+    double todayRevenue = 0;
+    int todayToursCount = 0;
+    double yesterdayRevenue = 0;
+    double weekRevenue = 0;
+
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final weekStart = today.subtract(const Duration(days: 6)); // 7 derniers jours
+
+    double tourRevenue(Tour tour) {
+      final pricing = appState.getClientPricing(tour.companyName);
+      if (pricing == null) return 0;
+      final assign = appState.getAssignment(tour.driverName);
+      if (pricing.billingMode == BillingMode.auPoint) {
+        final pp = assign?.customPricePerPoint ?? pricing.pricePerPoint ?? 0;
+        return tour.clientsCount * pp;
+      }
+      return assign?.customDailyRate ?? pricing.dailyRate;
+    }
+
+    for (final tour in appState.tours) {
+      final d = DateTime(tour.date.year, tour.date.month, tour.date.day);
+      if (d == today) {
+        todayRevenue += tourRevenue(tour);
+        todayToursCount++;
+      } else if (d == yesterday) {
+        yesterdayRevenue += tourRevenue(tour);
+      }
+      if (!d.isBefore(weekStart) && !d.isAfter(today)) {
+        weekRevenue += tourRevenue(tour);
+      }
+    }
+
+    // Coût fixe journalier pour calculer le profit du jour
+    final dailyFixedCost =
+        daysInMonth > 0 ? (totalFixed + totalSalaries) / daysInMonth : 0.0;
+    // Approximation dépenses du jour (fuel/maintenance enregistrés today)
+    final todayExpenses = appState.expenses
+        .where((e) =>
+            e.date.year == today.year &&
+            e.date.month == today.month &&
+            e.date.day == today.day)
+        .fold<double>(0.0, (s, e) => s + e.amount);
+    final todayProfit = todayRevenue - dailyFixedCost - todayExpenses;
+
+    // ── CA par chauffeur sur le mois (pour classement) ───────────────────
+    final Map<String, double> revenueByDriver = {};
+    final Map<String, int> toursByDriver = {};
+    for (final tour in allToursThisMonth) {
+      final rev = tourRevenue(tour);
+      revenueByDriver[tour.driverName] =
+          (revenueByDriver[tour.driverName] ?? 0) + rev;
+      toursByDriver[tour.driverName] =
+          (toursByDriver[tour.driverName] ?? 0) + 1;
+    }
+    final topDrivers = revenueByDriver.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    // ── Décomposition coûts fixes pour section ⑥ ─────────────────────────
+    double totalInsurance = 0;
+    double totalOwnership = 0; // amort + loyers
+    for (final t in allTrucks) {
+      totalInsurance += (t.insuranceMonthly ?? 0);
+      totalOwnership += (t.ownershipMonthlyCost ?? 0);
+    }
+    final totalFixedAll = totalSalaries + totalOwnership + totalInsurance;
+
+    // ── Alertes expiration (section ⑤) ───────────────────────────────────
+    final trucksInsuranceWarn = allTrucks
+        .where((t) => t.insuranceStatus >= 2) // <30j ou expiré
+        .toList();
+    final trucksCtWarn = allTrucks
+        .where((t) => t.ctStatus >= 3) // <1 semaine ou expiré
+        .toList();
+
+    final unreadMessages = appState.unreadManagerMessages;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: DC.screenH, vertical: 20),
       children: [
-        // ── Header ──────────────────────────────────────────────────────
-        Row(
-          children: [
-            Expanded(child: _monthPill()),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _showCustomizeDialog,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: DC.surface2,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.tune_rounded, size: 18, color: DC.textSecondary),
-              ),
-            ),
-          ],
-        ),
+        // ── Sélecteur de mois ────────────────────────────────────────────
+        _monthPill(),
         const SizedBox(height: 20),
 
-        // ── Profit hero ─────────────────────────────────────────────────
-        if (_visibleSections.contains('profit')) ...[
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: totalProfit >= 0
-                    ? [const Color(0xFF059669), const Color(0xFF10B981)]
-                    : [const Color(0xFFDC2626), const Color(0xFFEF4444)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      totalProfit >= 0 ? 'Bénéfice du mois' : 'Perte du mois',
-                      style: DC.body(13, color: Colors.white.withValues(alpha: 0.8)),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            profitTrend >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                            size: 14, color: Colors.white,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${profitTrend >= 0 ? '+' : ''}${profitTrend.toStringAsFixed(0)} €',
-                            style: DC.mono(11, color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${totalProfit >= 0 ? '+' : ''}${totalProfit.toStringAsFixed(0)} €',
-                  style: DC.title(34, color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    _heroKpi('CA', '${totalRevenue.toStringAsFixed(0)} €'),
-                    _heroKpi('Coûts', '${totalCosts.toStringAsFixed(0)} €'),
-                    _heroKpi('Camions', '${allTrucks.length}'),
-                    _heroKpi('Chauffeurs', '${drivers.length}'),
-                  ],
-                ),
-              ],
-            ),
+        // ═══════════════════════════════════════════════════════════════
+        // ①  AUJOURD'HUI
+        // ═══════════════════════════════════════════════════════════════
+        if (isCurrentMonth) ...[
+          _sectionTodayCard(
+            todayRevenue: todayRevenue,
+            todayProfit: todayProfit,
+            todayToursCount: todayToursCount,
+            yesterdayRevenue: yesterdayRevenue,
+            weekRevenue: weekRevenue,
           ),
           const SizedBox(height: 16),
         ],
 
-        // ── Santé flotte ────────────────────────────────────────────────
-        if (_visibleSections.contains('sante')) ...[
-          Row(
-            children: [
-              _healthPill('Rentables', profitableCount, DC.success, Icons.check_circle_rounded),
-              const SizedBox(width: 8),
-              _healthPill('À surveiller', warningCount, DC.warning, Icons.warning_amber_rounded),
-              const SizedBox(width: 8),
-              _healthPill('En perte', lossCount, DC.error, Icons.error_rounded),
-            ],
+        // ═══════════════════════════════════════════════════════════════
+        // ②  CE MOIS — vue prorata (honnête, sans projection)
+        // ═══════════════════════════════════════════════════════════════
+        _sectionMonthCard(
+          totalRevenue: totalRevenue,
+          totalExpenses: totalExpenses,
+          totalFixedProrata: totalFixedProrata,
+          profitProrata: profitProrata,
+          monthRatio: monthRatio,
+          daysElapsed: daysElapsed,
+          daysInMonth: daysInMonth,
+          toursCount: toursThisMonth,
+          totalKm: totalKmMonth,
+        ),
+        const SizedBox(height: 16),
+
+        // ═══════════════════════════════════════════════════════════════
+        // ③  TES CAMIONS (classement par profit)
+        // ═══════════════════════════════════════════════════════════════
+        if (computedTrucks.isNotEmpty) ...[
+          _sectionTrucksCard(
+            trucks: sortedByProfit,
+            toursWithoutPricing: toursWithoutPricing,
           ),
           const SizedBox(height: 16),
         ],
 
-        // ── Metrics grid ────────────────────────────────────────────────
-        if (_visibleSections.contains('metrics')) ...[
-          Row(
-            children: [
-              Expanded(child: _metricTile(
-                'Km total',
-                totalKmMonth > 0 ? '${totalKmMonth.toStringAsFixed(0)}' : '-',
-                'km',
-                Icons.route_rounded,
-                DC.primary,
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _metricTile(
-                'Tournées',
-                '$toursThisMonth',
-                'ce mois',
-                Icons.local_shipping_rounded,
-                const Color(0xFF6366F1),
-              )),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: _metricTile(
-                'Coût / km',
-                totalCostPerKm > 0 ? totalCostPerKm.toStringAsFixed(2) : '-',
-                '€/km',
-                Icons.speed_rounded,
-                const Color(0xFF64748B),
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _metricTile(
-                'Carburant',
-                totalLitersPer100 > 0 ? totalLitersPer100.toStringAsFixed(1) : '-',
-                'L/100km',
-                Icons.local_gas_station_rounded,
-                const Color(0xFFF59E0B),
-              )),
-            ],
+        // ═══════════════════════════════════════════════════════════════
+        // ④  TES CHAUFFEURS (top performeurs)
+        // ═══════════════════════════════════════════════════════════════
+        if (topDrivers.isNotEmpty) ...[
+          _sectionDriversCard(
+            topDrivers: topDrivers,
+            toursByDriver: toursByDriver,
           ),
           const SizedBox(height: 16),
         ],
 
-        // ── Seuil de rentabilité ────────────────────────────────────────
-        if (_visibleSections.contains('seuil')) ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: DC.card,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      seuilAtteint ? Icons.check_circle_rounded : Icons.flag_rounded,
-                      color: seuilAtteint ? DC.success : DC.warning,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text('Seuil de rentabilité', style: DC.body(14, weight: FontWeight.w600)),
-                    const Spacer(),
-                    Text(
-                      '${totalCosts > 0 ? (totalRevenue / totalCosts * 100).toStringAsFixed(0) : 0}%',
-                      style: DC.title(16, color: seuilAtteint ? DC.success : DC.warning),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: totalCosts > 0 ? (totalRevenue / totalCosts).clamp(0.0, 1.0) : 0.0,
-                    minHeight: 8,
-                    backgroundColor: DC.surface2,
-                    valueColor: AlwaysStoppedAnimation(seuilAtteint ? DC.success : DC.warning),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _costLine('Fixes', totalFixed),
-                    const SizedBox(width: 12),
-                    _costLine('Dépenses', totalExpenses),
-                    const SizedBox(width: 12),
-                    _costLine('Salaires', totalSalaries),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
+        // ═══════════════════════════════════════════════════════════════
+        // ⑤  ACTIONS À FAIRE
+        // ═══════════════════════════════════════════════════════════════
+        _sectionActionsCard(
+          toursWithoutPricing: toursWithoutPricing,
+          trucksInsuranceWarn: trucksInsuranceWarn,
+          trucksCtWarn: trucksCtWarn,
+          unreadMessages: unreadMessages,
+        ),
+        const SizedBox(height: 16),
 
-        // ── Classement camions ──────────────────────────────────────────
-        if (_visibleSections.contains('classement')) ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: DC.card,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Classement camions', style: DC.body(14, weight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                if (sortedByProfit.isEmpty)
-                  Text('Aucun camion', style: DC.body(13, color: DC.textSecondary)),
-                ...sortedByProfit.map((t) {
-                  final barRatio = (t.profit / maxAbsProfit).clamp(-1.0, 1.0);
-                  final isPositive = t.profit >= 0;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          child: Text(t.plate, style: DC.mono(11)),
-                        ),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Stack(
-                              children: [
-                                Container(height: 20, color: DC.surface2),
-                                FractionallySizedBox(
-                                  widthFactor: barRatio.abs(),
-                                  child: Container(
-                                    height: 20,
-                                    decoration: BoxDecoration(
-                                      color: isPositive
-                                          ? DC.success.withValues(alpha: 0.5)
-                                          : DC.error.withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 72,
-                          child: Text(
-                            '${t.profit >= 0 ? '+' : ''}${t.profit.toStringAsFixed(0)} €',
-                            textAlign: TextAlign.right,
-                            style: DC.mono(11, color: isPositive ? DC.success : DC.error),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // ── Cartes détail par camion ────────────────────────────────────
-        if (_visibleSections.contains('cartes')) ...[
-          Text('Détail par camion', style: DC.body(14, weight: FontWeight.w600)),
-          const SizedBox(height: 10),
-          ...cards,
-        ],
-
-        // ── Suggestions ─────────────────────────────────────────────────
-        _buildSuggestions(
-          computedTrucks: computedTrucks,
-          totalProfit: totalProfit,
-          totalKmMonth: totalKmMonth,
-          totalLitersPer100: totalLitersPer100,
-          lossCount: lossCount,
-          drivers: drivers,
+        // ═══════════════════════════════════════════════════════════════
+        // ⑥  COÛTS FIXES DU MOIS (transparence)
+        // ═══════════════════════════════════════════════════════════════
+        _sectionFixedCostsCard(
+          totalSalaries: totalSalaries,
+          totalOwnership: totalOwnership,
+          totalInsurance: totalInsurance,
+          totalFixedAll: totalFixedAll,
         ),
         const SizedBox(height: 20),
       ],
     );
   }
 
-  Widget _buildSuggestions({
-    required List<_TruckComputedData> computedTrucks,
-    required double totalProfit,
-    required double totalKmMonth,
-    required double totalLitersPer100,
-    required int lossCount,
-    required List<Driver> drivers,
+  // ══════════════════════════════════════════════════════════════════════
+  //  SECTIONS DU DASHBOARD REFONDÉ
+  // ══════════════════════════════════════════════════════════════════════
+
+  Widget _sectionTodayCard({
+    required double todayRevenue,
+    required double todayProfit,
+    required int todayToursCount,
+    required double yesterdayRevenue,
+    required double weekRevenue,
   }) {
-    final suggestions = <_Suggestion>[];
-
-    // Camions en perte
-    if (lossCount > 0) {
-      suggestions.add(_Suggestion(
-        icon: Icons.build_outlined,
-        title: '$lossCount camion${lossCount > 1 ? 's' : ''} en perte',
-        subtitle: 'Vérifiez les dépenses et revenus de ces camions.',
-        color: Colors.red,
-      ));
-    }
-
-    // Consommation élevée
-    if (totalLitersPer100 > 18) {
-      suggestions.add(_Suggestion(
-        icon: Icons.local_gas_station_outlined,
-        title: 'Consommation élevée (${totalLitersPer100.toStringAsFixed(1)} L/100)',
-        subtitle: 'Au-dessus de 18 L/100 km. Vérifiez l\'état des véhicules.',
-        color: Colors.orange,
-      ));
-    }
-
-    // Peu de km
-    if (totalKmMonth > 0 && totalKmMonth < 1000 && computedTrucks.isNotEmpty) {
-      suggestions.add(_Suggestion(
-        icon: Icons.bar_chart_rounded,
-        title: 'Activité faible ce mois',
-        subtitle: 'Seulement ${totalKmMonth.toStringAsFixed(0)} km. Optimisez les plannings.',
-        color: Colors.blue,
-      ));
-    }
-
-    // Tous rentables
-    if (lossCount == 0 && computedTrucks.isNotEmpty) {
-      suggestions.add(_Suggestion(
-        icon: Icons.track_changes_rounded,
-        title: 'Tous les camions sont rentables !',
-        subtitle: 'Continuez sur cette lancée.',
-        color: Colors.green,
-      ));
-    }
-
-    // Profit en hausse
-    if (totalProfit > 0 && computedTrucks.isNotEmpty) {
-      final marge = computedTrucks.isEmpty ? 0.0 :
-          (totalProfit / computedTrucks.fold(0.0, (s, t) => s + t.revenue).clamp(1, double.infinity) * 100);
-      if (marge > 20) {
-        suggestions.add(_Suggestion(
-          icon: Icons.savings_outlined,
-          title: 'Marge de ${marge.toStringAsFixed(0)}%',
-          subtitle: 'Excellente rentabilité. Pensez à investir dans la flotte.',
-          color: Colors.green,
-        ));
-      }
-    }
-
-    // Manque chauffeurs
-    if (drivers.length < computedTrucks.length) {
-      suggestions.add(_Suggestion(
-        icon: Icons.person_outline,
-        title: 'Plus de camions que de chauffeurs',
-        subtitle: '${computedTrucks.length} camions pour ${drivers.length} chauffeurs. Recrutez !',
-        color: Colors.purple,
-      ));
-    }
-
-    if (suggestions.isEmpty) return const SizedBox.shrink();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Text('💡', style: TextStyle(fontSize: 18)),
-                SizedBox(width: 8),
-                Text('Suggestions',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ...suggestions.map((s) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(s.icon, size: 20, color: s.color),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(s.title,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: s.color)),
-                            Text(s.subtitle,
-                                style: const TextStyle(
-                                    fontSize: 12, color: DC.textSecondary)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          ],
+    final profitPositive = todayProfit >= 0;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: profitPositive
+              ? [const Color(0xFF059669), const Color(0xFF10B981)]
+              : [const Color(0xFFDC2626), const Color(0xFFEF4444)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.today_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                "AUJOURD'HUI",
+                style: DC.mono(11,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    weight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text(
+                '$todayToursCount tournée${todayToursCount > 1 ? 's' : ''}',
+                style: DC.body(12, color: Colors.white.withValues(alpha: 0.9)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('CA du jour',
+              style: DC.body(12, color: Colors.white.withValues(alpha: 0.8))),
+          Text(
+            '${todayRevenue.toStringAsFixed(0)} €',
+            style: DC.title(30, color: Colors.white),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                profitPositive
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${todayProfit >= 0 ? '+' : ''}${todayProfit.toStringAsFixed(0)} €',
+                style: DC.mono(13,
+                    color: Colors.white, weight: FontWeight.w700),
+              ),
+              const SizedBox(width: 6),
+              Text('profit',
+                  style:
+                      DC.body(12, color: Colors.white.withValues(alpha: 0.75))),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: Colors.white.withValues(alpha: 0.2)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Hier',
+                        style: DC.body(11,
+                            color: Colors.white.withValues(alpha: 0.7))),
+                    Text('${yesterdayRevenue.toStringAsFixed(0)} €',
+                        style: DC.mono(14, color: Colors.white)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('7 derniers jours',
+                        style: DC.body(11,
+                            color: Colors.white.withValues(alpha: 0.7))),
+                    Text('${weekRevenue.toStringAsFixed(0)} €',
+                        style: DC.mono(14, color: Colors.white)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  void _showCustomizeDialog() {
-    final sections = {
-      'profit': 'Profit / Perte global',
-      'seuil': 'Seuil de rentabilité',
-      'sante': 'Santé de la flotte',
-      'classement': 'Classement camions',
-      'metrics': 'Coût/km & Consommation',
-      'cartes': 'Cartes détail camions',
-    };
-
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Row(
+  Widget _sectionMonthCard({
+    required double totalRevenue,
+    required double totalExpenses,
+    required double totalFixedProrata,
+    required double profitProrata,
+    required double monthRatio,
+    required int daysElapsed,
+    required int daysInMonth,
+    required int toursCount,
+    required double totalKm,
+  }) {
+    final onTrack = profitProrata >= 0;
+    final statusColor = onTrack ? DC.success : DC.error;
+    final statusLabel = onTrack ? 'DANS LES CLOUS' : 'EN RETARD';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: DC.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              const Icon(Icons.tune, size: 22),
+              const Icon(Icons.calendar_month_rounded,
+                  size: 18, color: DC.textSecondary),
+              const SizedBox(width: 6),
+              Text('CE MOIS',
+                  style: DC.mono(11,
+                      color: DC.textSecondary, weight: FontWeight.w700)),
               const SizedBox(width: 8),
-              const Expanded(
-                child: Text('Personnaliser',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              ),
-              TextButton(
-                onPressed: () {
-                  setDialogState(() {});
-                  setState(() {
-                    _visibleSections.addAll(sections.keys);
-                  });
-                },
-                child: const Text('Tout afficher', style: TextStyle(fontSize: 12)),
+              Text('(jour $daysElapsed/$daysInMonth)',
+                  style: DC.body(11, color: DC.textTertiary)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(statusLabel,
+                    style: DC.mono(10,
+                        color: statusColor, weight: FontWeight.w700)),
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: sections.entries.map((e) {
-              return SwitchListTile(
-                dense: true,
-                title: Text(e.value, style: const TextStyle(fontSize: 14)),
-                value: _visibleSections.contains(e.key),
-                onChanged: (val) {
-                  setDialogState(() {});
-                  setState(() {
-                    if (val) {
-                      _visibleSections.add(e.key);
-                    } else {
-                      _visibleSections.remove(e.key);
-                    }
-                  });
-                },
-              );
-            }).toList(),
+          const SizedBox(height: 14),
+
+          // Barre de progression du mois
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: monthRatio,
+              minHeight: 6,
+              backgroundColor: DC.surface2,
+              valueColor: AlwaysStoppedAnimation(DC.primary),
+            ),
           ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+          const SizedBox(height: 14),
+
+          // CA réalisé
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('CA réalisé',
+                  style: DC.body(13, color: DC.textSecondary)),
+              Text('${totalRevenue.toStringAsFixed(0)} €',
+                  style: DC.title(18, color: DC.primary)),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Coûts fixes au prorata
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Coûts fixes (prorata $daysElapsed j)',
+                  style: DC.body(13, color: DC.textSecondary)),
+              Text('− ${totalFixedProrata.toStringAsFixed(0)} €',
+                  style: DC.mono(14, color: DC.textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 4),
+
+          // Dépenses réelles
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Dépenses réelles',
+                  style: DC.body(13, color: DC.textSecondary)),
+              Text('− ${totalExpenses.toStringAsFixed(0)} €',
+                  style: DC.mono(14, color: DC.textPrimary)),
+            ],
+          ),
+          const Divider(height: 20),
+
+          // Résultat
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Résultat au prorata',
+                  style: DC.body(14, weight: FontWeight.w600)),
+              Text(
+                '${profitProrata >= 0 ? '+' : ''}${profitProrata.toStringAsFixed(0)} €',
+                style: DC.title(20, color: statusColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Petits stats secondaires
+          Row(
+            children: [
+              Expanded(
+                child: _inlineMetric(
+                    'Tournées', '$toursCount', Icons.local_shipping_outlined),
+              ),
+              Expanded(
+                child: _inlineMetric('Km',
+                    totalKm > 0 ? totalKm.toStringAsFixed(0) : '0', Icons.route_rounded),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineMetric(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: DC.textTertiary),
+        const SizedBox(width: 4),
+        Text(label, style: DC.body(11, color: DC.textTertiary)),
+        const SizedBox(width: 4),
+        Text(value, style: DC.mono(12, weight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _sectionTrucksCard({
+    required List<_TruckComputedData> trucks,
+    required List<Tour> toursWithoutPricing,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: DC.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.local_shipping_outlined,
+                  size: 18, color: DC.textSecondary),
+              const SizedBox(width: 6),
+              Text('TES CAMIONS',
+                  style: DC.mono(11,
+                      color: DC.textSecondary, weight: FontWeight.w700)),
+              const Spacer(),
+              Text('classés par profit',
+                  style: DC.body(11, color: DC.textTertiary)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...trucks.map((t) {
+            final isPositive = t.profit >= 0;
+            final color = isPositive ? DC.success : DC.error;
+            // Tournées sans tarif pour CE camion
+            final missing = toursWithoutPricing
+                .where((tour) => tour.truckPlate == t.plate)
+                .length;
+            // Marge en %
+            final margin = t.revenue > 0 ? (t.profit / t.revenue * 100) : 0.0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.plate,
+                            style: DC.mono(12, weight: FontWeight.w700)),
+                        if (t.model.isNotEmpty)
+                          Text(t.model,
+                              style: DC.body(11, color: DC.textTertiary)),
+                        if (missing > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '⚠ $missing tournée${missing > 1 ? 's' : ''} sans tarif',
+                              style:
+                                  DC.body(10, color: DC.warning),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${t.profit >= 0 ? '+' : ''}${t.profit.toStringAsFixed(0)} €',
+                        style: DC.mono(13,
+                            color: color, weight: FontWeight.w700),
+                      ),
+                      if (t.revenue > 0)
+                        Text('${margin.toStringAsFixed(0)}% marge',
+                            style: DC.body(10, color: DC.textTertiary)),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionDriversCard({
+    required List<MapEntry<String, double>> topDrivers,
+    required Map<String, int> toursByDriver,
+  }) {
+    final top3 = topDrivers.take(3).toList();
+    final medals = ['🥇', '🥈', '🥉'];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: DC.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.groups_outlined,
+                  size: 18, color: DC.textSecondary),
+              const SizedBox(width: 6),
+              Text('TES CHAUFFEURS',
+                  style: DC.mono(11,
+                      color: DC.textSecondary, weight: FontWeight.w700)),
+              const Spacer(),
+              Text('top du mois', style: DC.body(11, color: DC.textTertiary)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...List.generate(top3.length, (i) {
+            final e = top3[i];
+            final tours = toursByDriver[e.key] ?? 0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Text(medals[i], style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(e.key,
+                        style: DC.body(13, weight: FontWeight.w600)),
+                  ),
+                  Text('$tours tours',
+                      style: DC.body(11, color: DC.textTertiary)),
+                  const SizedBox(width: 10),
+                  Text('${e.value.toStringAsFixed(0)} €',
+                      style: DC.mono(13,
+                          color: DC.primary, weight: FontWeight.w700)),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionActionsCard({
+    required List<Tour> toursWithoutPricing,
+    required List<dynamic> trucksInsuranceWarn,
+    required List<dynamic> trucksCtWarn,
+    required int unreadMessages,
+  }) {
+    final actions = <_ActionItem>[];
+
+    if (toursWithoutPricing.isNotEmpty) {
+      actions.add(_ActionItem(
+        icon: Icons.warning_amber_rounded,
+        color: DC.warning,
+        title:
+            '${toursWithoutPricing.length} tournée${toursWithoutPricing.length > 1 ? 's' : ''} sans tarif',
+        subtitle: 'Configure le commissionnaire dans Tarifs clients',
+      ));
+    }
+    for (final t in trucksInsuranceWarn) {
+      actions.add(_ActionItem(
+        icon: Icons.shield_outlined,
+        color: DC.error,
+        title: 'Assurance ${t.plate}',
+        subtitle: t.insuranceStatus == 3
+            ? 'Expirée — à renouveler'
+            : 'Expire dans moins de 30 jours',
+      ));
+    }
+    for (final t in trucksCtWarn) {
+      actions.add(_ActionItem(
+        icon: Icons.rule_folder_outlined,
+        color: DC.error,
+        title: 'Contrôle technique ${t.plate}',
+        subtitle: t.ctStatus == 4
+            ? 'Expiré — à refaire immédiatement'
+            : 'Expire dans moins d\'une semaine',
+      ));
+    }
+    if (unreadMessages > 0) {
+      actions.add(_ActionItem(
+        icon: Icons.chat_bubble_outline,
+        color: DC.primary,
+        title:
+            '$unreadMessages message${unreadMessages > 1 ? 's' : ''} non lu${unreadMessages > 1 ? 's' : ''}',
+        subtitle: 'Ouvre la messagerie',
+      ));
+    }
+
+    if (actions.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: DC.card,
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                color: DC.success, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Aucune action à faire — tout est à jour',
+                  style: DC.body(13, color: DC.textSecondary)),
             ),
           ],
         ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: DC.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.task_alt_rounded,
+                  size: 18, color: DC.textSecondary),
+              const SizedBox(width: 6),
+              Text('ACTIONS À FAIRE',
+                  style: DC.mono(11,
+                      color: DC.textSecondary, weight: FontWeight.w700)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: DC.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('${actions.length}',
+                    style: DC.mono(11,
+                        color: DC.warning, weight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...actions.map((a) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(a.icon, size: 18, color: a.color),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a.title,
+                              style: DC.body(13,
+                                  weight: FontWeight.w600, color: a.color)),
+                          Text(a.subtitle,
+                              style:
+                                  DC.body(11, color: DC.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionFixedCostsCard({
+    required double totalSalaries,
+    required double totalOwnership,
+    required double totalInsurance,
+    required double totalFixedAll,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: DC.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.home_work_outlined,
+                  size: 18, color: DC.textSecondary),
+              const SizedBox(width: 6),
+              Text('COÛTS FIXES MENSUELS',
+                  style: DC.mono(11,
+                      color: DC.textSecondary, weight: FontWeight.w700)),
+              const Spacer(),
+              Text('transparence',
+                  style: DC.body(11, color: DC.textTertiary)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _fixedCostLine('Salaires chauffeurs', totalSalaries),
+          _fixedCostLine('Amortissements / loyers', totalOwnership),
+          _fixedCostLine('Assurances', totalInsurance),
+          const Divider(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('TOTAL FIXE', style: DC.body(14, weight: FontWeight.w700)),
+              Text('${totalFixedAll.toStringAsFixed(0)} €',
+                  style: DC.title(18, color: DC.textPrimary)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fixedCostLine(String label, double amount) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: DC.body(13, color: DC.textSecondary)),
+          Text('${amount.toStringAsFixed(0)} €',
+              style: DC.mono(13, weight: FontWeight.w600)),
+        ],
       ),
     );
   }
@@ -1325,163 +1382,6 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
     );
   }
 
-  Widget _heroKpi(String label, String value) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value, style: DC.mono(12, color: Colors.white)),
-          const SizedBox(height: 2),
-          Text(label, style: DC.body(10, color: Colors.white.withValues(alpha: 0.7))),
-        ],
-      ),
-    );
-  }
-
-  Widget _healthPill(String label, int count, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text('$count', style: DC.title(18, color: color)),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(label,
-                  style: DC.body(10, color: color),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _metricTile(String label, String value, String unit, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: DC.card,
-      child: Row(
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: DC.body(11, color: DC.textSecondary)),
-                const SizedBox(height: 2),
-                RichText(
-                  text: TextSpan(children: [
-                    TextSpan(text: value, style: DC.title(18, color: DC.textPrimary)),
-                    TextSpan(text: ' $unit', style: DC.body(11, color: DC.textTertiary)),
-                  ]),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _costLine(String label, double amount) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text('${amount.toStringAsFixed(0)} €',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-          Text(label,
-              style: const TextStyle(fontSize: 10, color: DC.textSecondary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _kpiMini(String label, String value, Color color) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value, style: DC.mono(12, color: color)),
-          Text(label, style: DC.body(10, color: DC.textSecondary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniStat(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: color.withValues(alpha: 0.6)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value, style: DC.mono(11, weight: FontWeight.w600, color: DC.textPrimary)),
-                Text(label, style: DC.body(9, color: DC.textTertiary)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _analysisSeverity(AiLossAnalysis analysis) {
-    try {
-      final dynamic a = analysis;
-      final value = a.severity;
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    } catch (_) {}
-
-    if (analysis.score < 40) {
-      return 'danger';
-    }
-    if (analysis.score < 70) {
-      return 'warning';
-    }
-    return 'ok';
-  }
-
-  List<String> _analysisReasons(AiLossAnalysis analysis) {
-    try {
-      final dynamic a = analysis;
-      final dynamic reasons = a.reasons;
-      if (reasons is List) {
-        return reasons.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
-      }
-    } catch (_) {}
-    return const [];
-  }
-
-  List<String> _analysisActions(AiLossAnalysis analysis) {
-    try {
-      final dynamic a = analysis;
-      final dynamic actions = a.actions;
-      if (actions is List) {
-        return actions.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
-      }
-    } catch (_) {}
-    return const [];
-  }
 }
 
 class _HealthBox extends StatelessWidget {
@@ -2137,12 +2037,12 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-class _Suggestion {
+class _ActionItem {
   final IconData icon;
   final String title;
   final String subtitle;
   final Color color;
-  const _Suggestion({
+  const _ActionItem({
     required this.icon,
     required this.title,
     required this.subtitle,
