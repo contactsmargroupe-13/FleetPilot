@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Firebase
+fleetpilot_app/.firebase/
+
+# Assets landing / présentation (non versionnés — trop lourds)
+*.mov
+*.mp4
+*.mp3
+/01-accroche.png
+/02-probleme.png
+/03-dashboard.png
+/04-chauffeurs.png
+/05-flotte.png
+/07-ia.png
+/08-alertes.png
+/09-multi-appareils.png
+/10-cta.png
+/fleetpilote-video.html
+/public/
