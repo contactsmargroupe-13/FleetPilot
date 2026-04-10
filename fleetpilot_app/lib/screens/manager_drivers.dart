@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
+import '../utils/shared_widgets.dart';
 import 'models/driver.dart';
 import 'models/driver_document.dart';
 
@@ -51,9 +52,12 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
           ),
           FilledButton(
             onPressed: () {
+              final deletedDriver = driver;
               setState(() => ref.read(appStateProvider).deleteDriver(driver.name));
               Navigator.pop(context);
-              _msg('Chauffeur supprimé');
+              showUndoSnackBar(context, 'Chauffeur supprimé', () {
+                setState(() => ref.read(appStateProvider).addDriver(deletedDriver));
+              });
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Supprimer'),
@@ -78,23 +82,9 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
     final expired = docs.where((d) => d.isExpired).length;
     final soon = docs.where((d) => d.isExpiringSoon).length;
 
-    if (expired > 0) return _badge('$expired expiré(s)', Colors.red);
-    if (soon > 0) return _badge('$soon à renouveler', Colors.orange);
+    if (expired > 0) return DCStatusBadge(label: '$expired expiré(s)', color: DC.error, fontSize: 11);
+    if (soon > 0) return DCStatusBadge(label: '$soon à renouveler', color: DC.warning, fontSize: 11);
     return null;
-  }
-
-  Widget _badge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -163,12 +153,15 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                     children: [
                       Row(
                         children: [
-                          Text(driver.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 17)),
+                          Flexible(
+                            child: Text(driver.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 17),
+                                overflow: TextOverflow.ellipsis),
+                          ),
                           const SizedBox(width: 8),
-                          _statusBadge(driver.status),
+                          _driverStatusBadge(driver.status),
                           if (alert != null) ...[
                             const SizedBox(width: 8),
                             alert,
@@ -186,22 +179,10 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                 if (driver.hasPermisB ||
                     driver.hasPermisC ||
                     driver.hasPermisCE)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: Colors.blue.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      'Permis ${driver.permisLabel}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue),
-                    ),
+                  DCStatusBadge(
+                    label: 'Permis ${driver.permisLabel}',
+                    color: DC.info,
+                    fontSize: 11,
                   ),
               ],
             ),
@@ -216,14 +197,14 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.06),
+                    color: DC.surface2,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.link_off, size: 14, color: Colors.grey),
-                      SizedBox(width: 6),
-                      Text('Non affecté', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Icon(Icons.link_off, size: 20, color: DC.textTertiary),
+                      const SizedBox(width: 6),
+                      Text('Non affecté', style: TextStyle(fontSize: 12, color: DC.textTertiary)),
                     ],
                   ),
                 );
@@ -238,7 +219,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.local_shipping_outlined, size: 14, color: Colors.teal),
+                    const Icon(Icons.local_shipping_outlined, size: 20, color: Colors.teal),
                     const SizedBox(width: 6),
                     Text(
                       '${assign.truckPlate}${truck != null ? ' • ${truck.model}' : ''}',
@@ -246,7 +227,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
                     ),
                     if (assign.companyName != null && assign.companyName!.isNotEmpty) ...[
                       const SizedBox(width: 10),
-                      const Icon(Icons.handshake_outlined, size: 13, color: Colors.indigo),
+                      const Icon(Icons.handshake_outlined, size: 20, color: Colors.indigo),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(assign.companyName!,
@@ -279,30 +260,11 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
 
             // Indicateur d'accès — le chauffeur peut se connecter dès qu'il a un email
             if (driver.email != null && driver.email!.isNotEmpty) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: DC.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(DC.rChip),
-                  border: Border.all(color: DC.success.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 14, color: DC.success),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Peut se connecter avec ${driver.email}',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: DC.success,
-                            fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+              DCStatusBadge(
+                label: 'Peut se connecter avec ${driver.email}',
+                color: DC.success,
+                icon: Icons.check_circle_outline,
+                fontSize: 12,
               ),
               const SizedBox(height: 10),
             ],
@@ -342,25 +304,25 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: highlight ? Colors.blue.withValues(alpha: 0.5) : DC.border,
+          color: highlight ? DC.info.withValues(alpha: 0.5) : DC.border,
         ),
-        color: highlight ? Colors.blue.withValues(alpha: 0.07) : null,
+        color: highlight ? DC.info.withValues(alpha: 0.07) : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: highlight ? Colors.blue : null),
+          Icon(icon, size: 20, color: highlight ? DC.info : null),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 11, color: highlight ? Colors.blue : null)),
+              Text(label, style: TextStyle(fontSize: 11, color: highlight ? DC.info : null)),
               const SizedBox(height: 2),
               Text(value,
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: highlight ? Colors.blue : null)),
+                      color: highlight ? DC.info : null)),
             ],
           ),
         ],
@@ -368,40 +330,29 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
     );
   }
 
-  Widget _statusBadge(DriverStatus status) {
+  Widget _driverStatusBadge(DriverStatus status) {
     final colorStr = driverStatusColor(status);
     final Color color;
     switch (colorStr) {
       case 'green':
-        color = Colors.green;
+        color = DC.success;
         break;
       case 'blue':
-        color = Colors.blue;
+        color = DC.info;
         break;
       case 'orange':
-        color = Colors.orange;
+        color = DC.warning;
         break;
       case 'red':
-        color = Colors.red;
+        color = DC.error;
         break;
       default:
-        color = Colors.grey;
+        color = DC.textTertiary;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        driverStatusLabel(status),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
-      ),
+    return DCStatusBadge(
+      label: driverStatusLabel(status),
+      color: color,
+      fontSize: 11,
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
+import '../utils/shared_widgets.dart';
 import 'models/client_pricing.dart';
 
 class ManagerClientPricingPage extends ConsumerStatefulWidget {
@@ -46,28 +47,10 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
         padding: const EdgeInsets.all(16),
         children: [
           if (clientPricings.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: const [
-                    Icon(Icons.handshake_outlined, size: 48),
-                    SizedBox(height: 12),
-                    Text(
-                      'Aucun commissionnaire',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Ajoute un premier commissionnaire pour gérer tarifs et conditions.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
+            const DCEmptyState(
+              icon: Icons.handshake_outlined,
+              title: 'Aucun commissionnaire',
+              subtitle: 'Ajoute un premier commissionnaire pour gérer tarifs et conditions.',
             )
           else
             ...clientPricings.map(_buildClientCard),
@@ -150,6 +133,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (pricing.siret != null && pricing.siret!.isNotEmpty)
                         Text(
@@ -486,11 +470,16 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
             ),
             FilledButton(
               onPressed: () {
+                final removed = pricing;
                 setState(() {
                   ref.read(appStateProvider).deleteClientPricing(pricing.companyName);
                 });
                 Navigator.pop(context);
-                _showMessage('Commissionnaire supprimé');
+                showUndoSnackBar(context, 'Commissionnaire supprimé', () {
+                  setState(() {
+                    ref.read(appStateProvider).addClientPricing(removed);
+                  });
+                });
               },
               style: FilledButton.styleFrom(backgroundColor: DC.error),
               child: const Text('Supprimer'),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -51,13 +52,7 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
   static const _keyTauxPatronal = 'urssaf_taux_patronal';
   static const _keyTauxSalarial = 'urssaf_taux_salarial';
 
-  static const List<String> _monthNames = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-  ];
-
-  String get _monthLabel =>
-      '${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+  String get _monthLabel => DC.monthLabel(_selectedMonth);
 
   @override
   void initState() {
@@ -293,12 +288,10 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
           const SizedBox(height: 8),
 
           if (activeDrivers.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('Aucun chauffeur actif.',
-                    style: TextStyle(color: Colors.grey)),
-              ),
+            const DCEmptyState(
+              icon: Icons.person_off_outlined,
+              title: 'Aucun chauffeur actif',
+              subtitle: 'Ajoutez des chauffeurs en CDI, CDD ou intérim',
             )
           else
             ...activeDrivers.map((d) => _driverCard(d)),
@@ -329,6 +322,7 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
                         leading: const Icon(Icons.person_off_outlined,
                             color: Colors.grey),
                         title: Text(d.name,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(color: Colors.grey)),
                         trailing: Container(
                           padding: const EdgeInsets.symmetric(
@@ -415,6 +409,7 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(d.name,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w700)),
                 ),

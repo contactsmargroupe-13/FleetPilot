@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/page_help.dart';
+import '../utils/shared_widgets.dart';
 import 'models/admin_document.dart';
 
 class ManagerAdminPage extends ConsumerStatefulWidget {
@@ -84,7 +85,13 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
       } catch (_) {}
     }
 
+    final removedDoc = doc;
     setState(() => ref.read(appStateProvider).deleteAdminDocument(doc.id));
+    if (mounted) {
+      showUndoSnackBar(context, 'Document supprimé', () {
+        setState(() => ref.read(appStateProvider).addAdminDocument(removedDoc));
+      });
+    }
   }
 
   // ── Export JSON ──────────────────────────────────────────────────────────
@@ -288,25 +295,10 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
           const SizedBox(height: 16),
 
           if (docs.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    Icon(Icons.folder_open_outlined,
-                        size: 48, color: Colors.grey.withValues(alpha: 0.5)),
-                    const SizedBox(height: 12),
-                    const Text('Aucun document.',
-                        style: TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Ajoutez des contrats, fiches de paie, assurances…',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
+            const DCEmptyState(
+              icon: Icons.folder_open_outlined,
+              title: 'Aucun document.',
+              subtitle: 'Ajoutez des contrats, fiches de paie, assurances…',
             )
           else
             for (final cat in _orderedCategories)
@@ -401,6 +393,7 @@ class _DocCard extends StatelessWidget {
                     doc.title,
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w700),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(

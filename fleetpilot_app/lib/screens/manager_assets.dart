@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
+import '../utils/shared_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -112,27 +113,10 @@ class ManagerAssetsPage extends ConsumerWidget {
           ],
 
           if (ownedTrucks.isEmpty && equip.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.account_balance_outlined,
-                          size: 48, color: DC.textTertiary),
-                      const SizedBox(height: 12),
-                      const Text('Aucun actif enregistré.',
-                          style: TextStyle(color: Colors.grey)),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Ajoutez un camion (achat) ou du matériel pour voir les amortissements.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            const DCEmptyState(
+              icon: Icons.account_balance_outlined,
+              title: 'Aucun actif enregistré.',
+              subtitle: 'Ajoutez un camion (achat) ou du matériel pour voir les amortissements.',
             ),
 
           const SizedBox(height: 20),
@@ -227,7 +211,8 @@ class ManagerAssetsPage extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text('${t.plate} • ${t.brand} ${t.model}'.trim(),
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      overflow: TextOverflow.ellipsis),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -289,7 +274,8 @@ class ManagerAssetsPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(e.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis),
                       Text(equipmentCategoryLabel(e.category),
                           style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     ],

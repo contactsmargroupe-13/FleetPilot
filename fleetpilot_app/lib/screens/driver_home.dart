@@ -9,6 +9,7 @@ import '../services/ocr_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'chat_screen.dart';
 import 'driver_dashboard.dart';
 import 'driver_documents.dart';
@@ -47,6 +48,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   bool _kmManuallyEdited = false;
 
   // ── Formulaire tournée ───────────────────────────────────────────────────────
+  final _formKey = GlobalKey<FormState>();
   String? _selectedTruck;
   final _tourNumberCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
@@ -583,36 +585,18 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       _kmCtrl.text = gpsTotal.toStringAsFixed(1);
     }
 
-    final km = _d(_kmCtrl.text);
-    final clients = int.tryParse(_clientsCtrl.text.trim());
-    final pickups = int.tryParse(_pickupCtrl.text.trim()) ?? 0;
-
+    // Inline form validation
     if (_selectedTruck == null) {
       _snack('Choisis un camion.');
       return;
     }
-    if (_tourNumberCtrl.text.trim().isEmpty) {
-      _snack('Numéro de tournée obligatoire.');
+    if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
-    if (km == null || km <= 0) {
-      _snack('Kilométrage invalide.');
-      return;
-    }
-    if (clients == null || clients < 0) {
-      _snack('Nombre de clients invalide.');
-      return;
-    }
-    if (_hasHandling && _handlingCtrl.text.trim().isEmpty) {
-      _snack('Nom du client manutention obligatoire.');
-      return;
-    }
-    if (_hasHandling &&
-        (int.tryParse(_handlingCountCtrl.text.trim()) == null ||
-            int.parse(_handlingCountCtrl.text.trim()) <= 0)) {
-      _snack('Nombre de manutentions invalide.');
-      return;
-    }
+
+    final km = _d(_kmCtrl.text)!;
+    final clients = int.tryParse(_clientsCtrl.text.trim())!;
+    final pickups = int.tryParse(_pickupCtrl.text.trim()) ?? 0;
 
     final now = DateTime.now();
     final start = _tourStart ?? now;
@@ -1038,7 +1022,10 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Chargement...')),
+        body: const DCShimmerList(itemCount: 4),
+      );
     }
 
     // ── Sélection profil ─────────────────────────────────────────────────────
@@ -1060,7 +1047,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bonjour $_driverName'),
+        title: Text('Bonjour $_driverName', overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: Badge(
@@ -1138,6 +1125,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               Text(
                 _driverName!,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 6),
               Builder(builder: (_) {
@@ -1424,426 +1412,464 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   Widget _buildActiveTour() {
     final trucks = ref.read(appStateProvider).trucks;
 
-    return ListView(
-      padding: const EdgeInsets.all(20),
+    return Column(
       children: [
-        // Chrono
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.shade200),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.timer_outlined, color: Colors.orange),
-              const SizedBox(width: 10),
-              Column(
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Démarré à ${_fmtTime(_tourStart!)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    'En cours : ${_elapsed()}',
-                    style: const TextStyle(color: Colors.orange, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // GPS live km
-        if (_gpsActive)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.green.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.gps_fixed, color: Colors.green.shade700, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${_gpsKm.toStringAsFixed(1)} km',
-                        style: TextStyle(
-                          color: Colors.green.shade800,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Suivi GPS en cours',
-                        style: TextStyle(
-                          color: Colors.green.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Pastille pulsante
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withValues(alpha: 0.4),
-                        blurRadius: 6,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: DC.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DC.border),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.gps_off, color: DC.textTertiary, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  'GPS inactif — saisis les km manuellement',
-                  style: TextStyle(color: DC.textSecondary, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-
-        const SizedBox(height: 20),
-
-        // Affectation (camion + commissionnaire) — lecture seule, vient du manager
-        Builder(builder: (_) {
-          final assignment = ref.read(appStateProvider).getAssignment(_driverName ?? '');
-          final truck = _selectedTruck != null
-              ? trucks.where((t) => t.plate == _selectedTruck).firstOrNull
-              : null;
-          final companyName = _companyCtrl.text.trim();
-          final pricing = companyName.isNotEmpty
-              ? ref.read(appStateProvider).getClientPricing(companyName)
-              : null;
-          final commColor = pricing?.colorValue != null
-              ? Color(pricing!.colorValue!)
-              : Colors.indigo;
-
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: commColor.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: commColor.withValues(alpha: 0.15)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Commissionnaire
-                if (companyName.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Icon(Icons.handshake_outlined, size: 16, color: commColor),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          companyName,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: commColor,
-                          ),
-                        ),
-                      ),
-                      if (pricing != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: commColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            billingModeLabel(pricing.billingMode),
-                            style: TextStyle(
-                                fontSize: 10, fontWeight: FontWeight.w600, color: commColor),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                // Camion
-                Row(
-                  children: [
-                    const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.teal),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        truck != null
-                            ? '${truck.plate} • ${truck.model}'
-                            : _selectedTruck ?? 'Aucun camion',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
+                  // Chrono
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade200),
                     ),
-                  ],
-                ),
-                // Indication + bouton panne
-                if (assignment != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.lock_outline, size: 12, color: DC.textTertiary),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Affectation définie par le manager',
-                          style: TextStyle(fontSize: 10, color: DC.textTertiary),
-                        ),
-                      ),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => _signalerPanne(trucks),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, color: Colors.orange),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
-                              SizedBox(width: 4),
-                              Text('Panne / Changer',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
+                              Text(
+                                'Démarré à ${_fmtTime(_tourStart!)}',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              Text(
+                                'En cours : ${_elapsed()}',
+                                style: const TextStyle(color: Colors.orange, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
                             ],
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ],
-              ],
-            ),
-          );
-        }),
-        const SizedBox(height: 12),
 
-        // N° tournée (sauvegardé, auto-rempli, modifiable)
-        TextField(
-          controller: _tourNumberCtrl,
-          decoration: InputDecoration(
-            labelText: 'Numéro de tournée *',
-            border: const OutlineInputBorder(),
-            helperText: _tourNumberCtrl.text.isNotEmpty
-                ? 'Enregistré — modifiable si besoin'
-                : null,
-            helperStyle: TextStyle(fontSize: 11, color: DC.textTertiary),
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-        // Km
-        TextField(
-          controller: _kmCtrl,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => _kmManuallyEdited = true,
-          decoration: InputDecoration(
-            labelText: _gpsActive
-                ? 'Km (GPS auto — modifiable)'
-                : 'Kilomètres parcourus *',
-            border: const OutlineInputBorder(),
-            suffixIcon: _gpsActive && _kmManuallyEdited
-                ? IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    tooltip: 'Remettre la valeur GPS',
-                    onPressed: () {
-                      setState(() {
-                        _kmManuallyEdited = false;
-                        _kmCtrl.text = _gpsKm.toStringAsFixed(1);
-                      });
+                  // GPS live km
+                  if (_gpsActive)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.gps_fixed, color: Colors.green.shade700, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${_gpsKm.toStringAsFixed(1)} km',
+                                  style: TextStyle(
+                                    color: Colors.green.shade800,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'Suivi GPS en cours',
+                                  style: TextStyle(
+                                    color: Colors.green.shade600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Pastille pulsante
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withValues(alpha: 0.4),
+                                  blurRadius: 6,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: DC.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: DC.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.gps_off, color: DC.textTertiary, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'GPS inactif — saisis les km manuellement',
+                              style: TextStyle(color: DC.textSecondary, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // Affectation (camion + commissionnaire) — lecture seule, vient du manager
+                  Builder(builder: (_) {
+                    final assignment = ref.read(appStateProvider).getAssignment(_driverName ?? '');
+                    final truck = _selectedTruck != null
+                        ? trucks.where((t) => t.plate == _selectedTruck).firstOrNull
+                        : null;
+                    final companyName = _companyCtrl.text.trim();
+                    final pricing = companyName.isNotEmpty
+                        ? ref.read(appStateProvider).getClientPricing(companyName)
+                        : null;
+                    final commColor = pricing?.colorValue != null
+                        ? Color(pricing!.colorValue!)
+                        : Colors.indigo;
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: commColor.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: commColor.withValues(alpha: 0.15)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Commissionnaire
+                          if (companyName.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                Icon(Icons.handshake_outlined, size: 16, color: commColor),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    companyName,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: commColor,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (pricing != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: commColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      billingModeLabel(pricing.billingMode),
+                                      style: TextStyle(
+                                          fontSize: 10, fontWeight: FontWeight.w600, color: commColor),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          // Camion
+                          Row(
+                            children: [
+                              const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.teal),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  truck != null
+                                      ? '${truck.plate} • ${truck.model}'
+                                      : _selectedTruck ?? 'Aucun camion',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          // Indication + bouton panne
+                          if (assignment != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.lock_outline, size: 12, color: DC.textTertiary),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'Affectation définie par le manager',
+                                    style: TextStyle(fontSize: 10, color: DC.textTertiary),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () => _signalerPanne(trucks),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
+                                        SizedBox(width: 4),
+                                        Text('Panne / Changer',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+
+                  // N° tournée (sauvegardé, auto-rempli, modifiable)
+                  TextFormField(
+                    controller: _tourNumberCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Numéro de tournée *',
+                      border: const OutlineInputBorder(),
+                      helperText: _tourNumberCtrl.text.isNotEmpty
+                          ? 'Enregistré — modifiable si besoin'
+                          : null,
+                      helperStyle: TextStyle(fontSize: 11, color: DC.textTertiary),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Numéro de tournée requis' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Km
+                  TextFormField(
+                    controller: _kmCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => _kmManuallyEdited = true,
+                    decoration: InputDecoration(
+                      labelText: _gpsActive
+                          ? 'Km (GPS auto — modifiable)'
+                          : 'Kilomètres parcourus *',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _gpsActive && _kmManuallyEdited
+                          ? IconButton(
+                              icon: const Icon(Icons.refresh, size: 20),
+                              tooltip: 'Remettre la valeur GPS',
+                              onPressed: () {
+                                setState(() {
+                                  _kmManuallyEdited = false;
+                                  _kmCtrl.text = _gpsKm.toStringAsFixed(1);
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    validator: (v) {
+                      final km = _d(v ?? '');
+                      if (km == null || km <= 0) return 'Kilomètres requis';
+                      return null;
                     },
-                  )
-                : null,
-          ),
-        ),
-        const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 12),
 
-        // ── Section Fiches / Colis + Ramasses ──────────────────────────
-        Builder(builder: (_) {
-          final companyName = _companyCtrl.text.trim();
-          final pricing = companyName.isNotEmpty
-              ? ref.read(appStateProvider).getClientPricing(companyName)
-              : null;
-          final isFiche = pricing?.billingMode == BillingMode.aLaFiche;
-          final commColor = pricing?.colorValue != null
-              ? Color(pricing!.colorValue!)
-              : (isFiche ? Colors.teal : Colors.indigo);
+                  // ── Section Fiches / Colis + Ramasses ──────────────────────────
+                  Builder(builder: (_) {
+                    final companyName = _companyCtrl.text.trim();
+                    final pricing = companyName.isNotEmpty
+                        ? ref.read(appStateProvider).getClientPricing(companyName)
+                        : null;
+                    final isFiche = pricing?.billingMode == BillingMode.aLaFiche;
+                    final commColor = pricing?.colorValue != null
+                        ? Color(pricing!.colorValue!)
+                        : (isFiche ? Colors.teal : Colors.indigo);
 
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: commColor.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: commColor.withValues(alpha: 0.15)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      isFiche ? Icons.description_outlined : Icons.inventory_2_outlined,
-                      size: 16,
-                      color: commColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isFiche ? 'Fiches & Ramasses' : 'Colis & Ramasses',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: commColor,
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: commColor.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: commColor.withValues(alpha: 0.15)),
                       ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                isFiche ? Icons.description_outlined : Icons.inventory_2_outlined,
+                                size: 16,
+                                color: commColor,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isFiche ? 'Fiches & Ramasses' : 'Colis & Ramasses',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: commColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _clientsCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: isFiche
+                                  ? 'Nombre de fiches *'
+                                  : 'Nombre de colis *',
+                              border: const OutlineInputBorder(),
+                              prefixIcon: Icon(isFiche
+                                  ? Icons.description_outlined
+                                  : Icons.inventory_2_outlined),
+                            ),
+                            validator: (v) {
+                              final n = int.tryParse(v?.trim() ?? '');
+                              if (n == null || n < 0) return 'Nombre de clients requis';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _pickupCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Nombre de ramasses',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.move_to_inbox_outlined),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+
+                  // Poids
+                  TextFormField(
+                    controller: _weightCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Poids chargé (kg) — optionnel',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.scale_outlined),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Manutention
+                  SwitchListTile(
+                    value: _hasHandling,
+                    title: const Text('Manutention'),
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setState(() => _hasHandling = v),
+                  ),
+                  if (_hasHandling) ...[
+                    TextFormField(
+                      controller: _handlingCountCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre de manutentions *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.numbers),
+                      ),
+                      validator: (v) {
+                        if (!_hasHandling) return null;
+                        final n = int.tryParse(v?.trim() ?? '');
+                        if (n == null || n <= 0) return 'Nombre de manutentions invalide';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _handlingCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom du client manutention *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.business),
+                      ),
+                      validator: (v) {
+                        if (!_hasHandling) return null;
+                        if (v == null || v.trim().isEmpty) return 'Nom du client manutention obligatoire';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
                   ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _clientsCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: isFiche
-                        ? 'Nombre de fiches *'
-                        : 'Nombre de colis *',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: Icon(isFiche
-                        ? Icons.description_outlined
-                        : Icons.inventory_2_outlined),
+
+                  // Tournée supplémentaire
+                  SwitchListTile(
+                    value: _extraTour,
+                    title: const Text('Tournée supplémentaire'),
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setState(() => _extraTour = v),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _pickupCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre de ramasses',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.move_to_inbox_outlined),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-        const SizedBox(height: 12),
-
-        // Poids
-        TextField(
-          controller: _weightCtrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Poids chargé (kg) — optionnel',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.scale_outlined),
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Manutention
-        SwitchListTile(
-          value: _hasHandling,
-          title: const Text('Manutention'),
-          contentPadding: EdgeInsets.zero,
-          onChanged: (v) => setState(() => _hasHandling = v),
-        ),
-        if (_hasHandling) ...[
-          TextField(
-            controller: _handlingCountCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Nombre de manutentions *',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.numbers),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _handlingCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Nom du client manutention *',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.business),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-
-        // Tournée supplémentaire
-        SwitchListTile(
-          value: _extraTour,
-          title: const Text('Tournée supplémentaire'),
-          contentPadding: EdgeInsets.zero,
-          onChanged: (v) => setState(() => _extraTour = v),
-        ),
-
-        const SizedBox(height: 20),
-
-        // Bouton terminer
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _terminer,
-            style: FilledButton.styleFrom(backgroundColor: Colors.green),
-            icon: const Icon(Icons.stop_circle_outlined, size: 24),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'Terminer la tournée',
-                style: TextStyle(fontSize: 18),
+                  // Extra bottom padding so content doesn't hide behind sticky bar
+                  const SizedBox(height: 8),
+                ],
               ),
             ),
           ),
         ),
-        const SizedBox(height: 12),
-
-        // Bouton annuler démarrage
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _annuler,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
+        // ── Sticky bottom action buttons ──────────────────────────────────
+        DCStickyBottomBar(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _annuler,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Annuler', style: TextStyle(fontSize: 14)),
+              ),
             ),
-            icon: const Icon(Icons.cancel_outlined, size: 20),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 14),
-              child: Text('Annuler le démarrage', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                onPressed: _terminer,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                icon: const Icon(Icons.stop_circle_outlined, size: 20),
+                label: const Text('Terminer la tournée', style: TextStyle(fontSize: 16)),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
@@ -1901,6 +1927,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                             d.name,
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,

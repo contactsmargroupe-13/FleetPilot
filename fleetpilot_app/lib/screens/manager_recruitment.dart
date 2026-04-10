@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
+import '../utils/shared_widgets.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -247,12 +248,10 @@ class _ManagerRecruitmentPageState extends ConsumerState<ManagerRecruitmentPage>
           // ── Liste ────────────────────────────────────────────────────
           Expanded(
             child: filtered.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Aucun candidat.\nAppuie sur + pour en ajouter.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                ? const DCEmptyState(
+                    icon: Icons.person_search_outlined,
+                    title: 'Aucun candidat',
+                    subtitle: 'Appuie sur + pour en ajouter.',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
@@ -312,6 +311,7 @@ class _CandidateCard extends StatelessWidget {
                     c.name,
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Container(

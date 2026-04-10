@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -17,11 +18,6 @@ class ManagerPlanningPage extends ConsumerStatefulWidget {
 class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
   late DateTime _selectedDate;
 
-  static const List<String> _monthNames = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -30,7 +26,7 @@ class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
   }
 
   String _fmtDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')} ${_monthNames[d.month - 1]} ${d.year}';
+      '${d.day.toString().padLeft(2, '0')} ${DC.monthNames[d.month - 1]} ${d.year}';
 
   bool _isToday(DateTime d) {
     final now = DateTime.now();
@@ -235,16 +231,9 @@ class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
 
         // ── Aucune activité
         if (dayTours.isEmpty && absentDrivers.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  'Aucune donnée pour cette date.',
-                  style: TextStyle(color: DC.textSecondary, fontSize: 15),
-                ),
-              ),
-            ),
+          const DCEmptyState(
+            icon: Icons.event_busy_outlined,
+            title: 'Aucune donnée pour cette date.',
           ),
 
         if (dayTours.isEmpty && absentDrivers.isNotEmpty)
@@ -358,7 +347,8 @@ class _ManagerPlanningPageState extends ConsumerState<ManagerPlanningPage> {
                     children: [
                       Text(tour.driverName,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15)),
+                              fontWeight: FontWeight.w700, fontSize: 15),
+                          overflow: TextOverflow.ellipsis),
                       Text(
                         '${tour.truckPlate}${truck != null ? ' • ${truck.model}' : ''}',
                         style: const TextStyle(

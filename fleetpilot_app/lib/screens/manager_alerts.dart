@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'models/manager_alert.dart';
 
 /// Filtre affiché dans les chips
@@ -105,26 +106,13 @@ class _ManagerAlertsPageState extends ConsumerState<ManagerAlertsPage> {
           // ── Liste ──
           Expanded(
             child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _filter == _AlertFilter.validated
-                              ? Icons.check_circle_outline
-                              : Icons.notifications_off_outlined,
-                          size: 48,
-                          color: DC.textTertiary,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _filter == _AlertFilter.validated
-                              ? 'Aucune alerte validee'
-                              : 'Aucune alerte en attente',
-                          style: DC.body(15, color: DC.textSecondary),
-                        ),
-                      ],
-                    ),
+                ? DCEmptyState(
+                    icon: _filter == _AlertFilter.validated
+                        ? Icons.check_circle_outline
+                        : Icons.notifications_off_outlined,
+                    title: _filter == _AlertFilter.validated
+                        ? 'Aucune alerte validee'
+                        : 'Aucune alerte en attente',
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -230,6 +218,7 @@ class _AlertTile extends StatelessWidget {
                   fontWeight:
                       !alert.read ? FontWeight.bold : FontWeight.normal,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             if (alert.validated)

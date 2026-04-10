@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'add_truck.dart';
 import 'models/tour.dart';
 
@@ -17,12 +18,7 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   int _viewMode = 0; // 0 = par camion, 1 = par commissionnaire
 
-  static const _months = [
-    'Janvier','Février','Mars','Avril','Mai','Juin',
-    'Juillet','Août','Septembre','Octobre','Novembre','Décembre',
-  ];
-
-  String _monthLabel(DateTime m) => '${_months[m.month - 1]} ${m.year}';
+  String _monthLabel(DateTime m) => DC.monthLabel(m);
   String _fmtDay(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
@@ -181,14 +177,9 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
         const SizedBox(height: 16),
 
         if (monthTours.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text('Aucune tournée en ${_monthLabel(_selectedMonth)}.',
-                    style: const TextStyle(color: Colors.grey, fontSize: 15)),
-              ),
-            ),
+          DCEmptyState(
+            icon: Icons.route_outlined,
+            title: 'Aucune tournée en ${_monthLabel(_selectedMonth)}.',
           )
 
         // ── Vue par commissionnaire
@@ -519,11 +510,13 @@ class _TruckDetailCardState extends State<_TruckDetailCard> {
                                 Text(t.driverName,
                                     style: const TextStyle(
                                         fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
+                                        fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis),
                                 Text(
                                   '#${t.tourNumber}${t.companyName != null ? ' • ${t.companyName}' : ''}',
                                   style: const TextStyle(
                                       fontSize: 11, color: Colors.grey),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
@@ -676,7 +669,8 @@ class _ClientDetailCardState extends State<_ClientDetailCard> {
                                 style: TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w800,
-                                    color: isUnknown ? Colors.grey : null)),
+                                    color: isUnknown ? Colors.grey : null),
+                                overflow: TextOverflow.ellipsis),
                             Text(
                               '${trucks.length} camion${trucks.length > 1 ? 's' : ''} • ${drivers.length} chauffeur${drivers.length > 1 ? 's' : ''}',
                               style: const TextStyle(
@@ -788,11 +782,13 @@ class _ClientDetailCardState extends State<_ClientDetailCard> {
                                 Text(t.driverName,
                                     style: const TextStyle(
                                         fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
+                                        fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis),
                                 Text(
                                   '#${t.tourNumber} • ${t.truckPlate}',
                                   style: const TextStyle(
                                       fontSize: 11, color: Colors.grey),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),

@@ -41,7 +41,36 @@ class DC {
   static const Color infoBg        = Color(0xFFEFF6FF);
   static const Color infoBorder    = Color(0xFFBFDBFE);
 
-  // ── Border radius ───────────────────────────────────────────────────────
+  // ── Dark-mode couleurs de fond ──────────────────────────────────────────
+  static const Color darkBackground   = Color(0xFF0F172A);
+  static const Color darkSurface      = Color(0xFF1E293B);
+  static const Color darkSurface2     = Color(0xFF334155);
+  static const Color darkSurface3     = Color(0xFF475569);
+
+  // ── Dark-mode bordures ────────────────────────────────────────────────
+  static const Color darkBorder       = Color(0xFF334155);
+  static const Color darkBorderLight  = Color(0xFF1E293B);
+
+  // ── Dark-mode texte ───────────────────────────────────────────────────
+  static const Color darkTextPrimary   = Color(0xFFF1F5F9);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
+  static const Color darkTextTertiary  = Color(0xFF64748B);
+  static const Color darkTextDisabled  = Color(0xFF475569);
+
+  // ── Dark-mode marque ──────────────────────────────────────────────────
+  static const Color darkPrimaryBg    = Color(0xFF1E3A5F);
+
+  // ── Dark-mode sémantique ──────────────────────────────────────────────
+  static const Color darkSuccessBg     = Color(0xFF064E3B);
+  static const Color darkSuccessBorder = Color(0xFF065F46);
+  static const Color darkWarningBg     = Color(0xFF78350F);
+  static const Color darkWarningBorder = Color(0xFF92400E);
+  static const Color darkErrorBg       = Color(0xFF7F1D1D);
+  static const Color darkErrorBorder   = Color(0xFF991B1B);
+  static const Color darkInfoBg        = Color(0xFF1E3A5F);
+  static const Color darkInfoBorder    = Color(0xFF1E40AF);
+
+  // ── Border radius ─────────────────────────────────────────────────────────
   static const double rCard   = 16;
   static const double rBadge  = 10;
   static const double rPill   = 20;
@@ -49,10 +78,37 @@ class DC {
   static const double rInput  = 12;
   static const double rButton = 14;
 
-  // ── Spacing ─────────────────────────────────────────────────────────────
+  // ── Spacing ───────────────────────────────────────────────────────────────
   static const double screenH = 16;
   static const double cardGap = 10;
   static const double chipGap = 6;
+
+  // ── Standardized spacing scale ────────────────────────────────────────────
+  static const double sp4  = 4;
+  static const double sp8  = 8;
+  static const double sp12 = 12;
+  static const double sp16 = 16;
+  static const double sp20 = 20;
+  static const double sp24 = 24;
+  static const double sp32 = 32;
+
+  // ── Icon sizes ────────────────────────────────────────────────────────────
+  static const double iconSm = 16;
+  static const double iconMd = 20;
+  static const double iconLg = 24;
+
+  // ── Month names ───────────────────────────────────────────────────────────
+  static const List<String> monthNames = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+  ];
+
+  static String monthLabel(DateTime date) => '${monthNames[date.month - 1]} ${date.year}';
+
+  // ── Number formatting helpers ─────────────────────────────────────────────
+  static String euros(double v) => '${v.toStringAsFixed(2)} €';
+  static String eurosInt(double v) => '${v.toStringAsFixed(0)} €';
+  static String km(double v) => '${v.toStringAsFixed(1)} km';
 
   // ── Card decoration ─────────────────────────────────────────────────────
   static BoxDecoration get card => BoxDecoration(
@@ -371,6 +427,243 @@ class DC {
 
       // Icon
       iconTheme: const IconThemeData(color: textSecondary, size: 20),
+    );
+  }
+
+  // ── ThemeData global (Dark Mode) ────────────────────────────────────────
+  static ThemeData get darkTheme {
+    final base = ThemeData.dark();
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: darkBackground,
+      fontFamily: 'DMSans',
+      colorScheme: const ColorScheme.dark(
+        primary: primary,
+        onPrimary: Colors.white,
+        surface: darkSurface,
+        onSurface: darkTextPrimary,
+        error: error,
+      ),
+
+      // Texte global : DM Sans
+      textTheme: GoogleFonts.dmSansTextTheme(base.textTheme).apply(
+        bodyColor: darkTextPrimary,
+        displayColor: darkTextPrimary,
+      ),
+
+      // AppBar
+      appBarTheme: AppBarTheme(
+        backgroundColor: darkSurface,
+        foregroundColor: darkTextPrimary,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 1,
+        shadowColor: darkBorder,
+        titleTextStyle: GoogleFonts.syne(
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: darkTextPrimary,
+        ),
+      ),
+
+      // Cards
+      cardTheme: CardThemeData(
+        color: darkSurface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(rCard),
+          side: const BorderSide(color: darkBorder),
+        ),
+      ),
+
+      // Inputs
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkSurface,
+        labelStyle: GoogleFonts.dmSans(
+          fontSize: 13,
+          color: darkTextSecondary,
+        ),
+        hintStyle: const TextStyle(color: darkTextTertiary),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(rInput),
+          borderSide: const BorderSide(color: darkBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(rInput),
+          borderSide: const BorderSide(color: darkBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(rInput),
+          borderSide: const BorderSide(color: primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(rInput),
+          borderSide: const BorderSide(color: error),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+
+      // FilledButton
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(rButton),
+          ),
+          textStyle: GoogleFonts.dmSans(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+          elevation: 0,
+        ),
+      ),
+
+      // OutlinedButton
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: darkTextPrimary,
+          side: const BorderSide(color: darkBorder),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(rButton),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        ),
+      ),
+
+      // TextButton
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: primaryLight),
+      ),
+
+      // NavigationBar
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: darkSurface,
+        indicatorColor: darkPrimaryBg,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        height: 68,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return GoogleFonts.dmSans(
+            fontSize: 11,
+            color: selected ? primaryLight : darkTextSecondary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          return IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? primaryLight
+                : darkTextSecondary,
+            size: 22,
+          );
+        }),
+      ),
+
+      // Dialog
+      dialogTheme: DialogThemeData(
+        backgroundColor: darkSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(rCard),
+        ),
+        elevation: 8,
+      ),
+
+      // BottomSheet
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: darkSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+      ),
+
+      // SnackBar
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: darkTextPrimary,
+        contentTextStyle: GoogleFonts.dmSans(color: darkBackground, fontSize: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(rBadge),
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+
+      // Chip
+      chipTheme: ChipThemeData(
+        backgroundColor: darkSurface2,
+        selectedColor: darkPrimaryBg,
+        labelStyle: GoogleFonts.dmSans(color: darkTextPrimary, fontSize: 12),
+        side: const BorderSide(color: darkBorder),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(rChip),
+        ),
+      ),
+
+      // Switch
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? Colors.white : Colors.white),
+        trackColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? primary : const Color(0xFF475569)),
+      ),
+
+      // Divider
+      dividerTheme: const DividerThemeData(color: darkBorder, space: 1),
+
+      // FloatingActionButton
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+      ),
+
+      // Drawer
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: darkSurface,
+        surfaceTintColor: Colors.transparent,
+      ),
+
+      // SegmentedButton
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? darkPrimaryBg
+                  : Colors.transparent),
+          foregroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? primaryLight
+                  : darkTextSecondary),
+          side: WidgetStateProperty.all(const BorderSide(color: darkBorder)),
+        ),
+      ),
+
+      // PopupMenu
+      popupMenuTheme: PopupMenuThemeData(
+        color: darkSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(rCard),
+          side: const BorderSide(color: darkBorder),
+        ),
+      ),
+
+      // ListTile
+      listTileTheme: const ListTileThemeData(
+        textColor: darkTextPrimary,
+        iconColor: darkTextSecondary,
+      ),
+
+      // Icon
+      iconTheme: const IconThemeData(color: darkTextSecondary, size: 20),
     );
   }
 }

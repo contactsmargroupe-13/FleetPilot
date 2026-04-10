@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'models/expense.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'add_expense.dart';
 
 class ManagerExpensesPage extends ConsumerStatefulWidget {
@@ -17,13 +19,7 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
   String? _truckFilter;
   ExpenseType? _typeFilter;
 
-  static const List<String> _monthNames = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-  ];
-
-  String get _monthLabel =>
-      '${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+  String get _monthLabel => DC.monthLabel(_selectedMonth);
 
   Future<void> _addExpense() async {
     final exp = await Navigator.push<Expense>(
@@ -67,11 +63,12 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
           ),
           FilledButton(
             onPressed: () {
+              final removed = e;
               setState(() => ref.read(appStateProvider).deleteExpense(e.id));
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dépense supprimée')),
-              );
+              showUndoSnackBar(context, 'Dépense supprimée', () {
+                setState(() => ref.read(appStateProvider).addExpense(removed));
+              });
             },
             child: const Text('Supprimer'),
           ),
@@ -230,7 +227,10 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
         // Liste
         Expanded(
           child: filtered.isEmpty
-              ? const Center(child: Text('Aucune dépense pour cette période.'))
+              ? const DCEmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Aucune dépense pour cette période.',
+                )
               : ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: filtered.length,
@@ -244,11 +244,14 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
                         leading:
                             Icon(_typeIcon(e.type)),
                         title: Text(
-                            '${expenseTypeLabel(e.type)} — ${e.amount.toStringAsFixed(2)} €'),
+                            '${expenseTypeLabel(e.type)} — ${e.amount.toStringAsFixed(2)} €',
+                            overflow: TextOverflow.ellipsis),
                         subtitle: Text(
                           '${e.truckPlate}'
                           '${e.liters != null ? ' • ${e.liters!.toStringAsFixed(1)} L' : ''}'
                           '${e.note != null ? ' • ${e.note}' : ''}',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,

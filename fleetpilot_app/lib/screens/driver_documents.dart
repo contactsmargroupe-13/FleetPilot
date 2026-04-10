@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../providers/app_state.dart';
@@ -98,18 +99,17 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
         ],
 
         if (_filter != 'tous' && filteredNotifs.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                _filter == 'amendes'
-                    ? 'Aucune amende.'
-                    : _filter == 'fiches'
-                        ? 'Aucune fiche de paie.'
-                        : 'Aucun contrat.',
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ),
+          DCEmptyState(
+            icon: _filter == 'amendes'
+                ? Icons.warning_amber
+                : _filter == 'fiches'
+                    ? Icons.receipt_long_outlined
+                    : Icons.description_outlined,
+            title: _filter == 'amendes'
+                ? 'Aucune amende'
+                : _filter == 'fiches'
+                    ? 'Aucune fiche de paie'
+                    : 'Aucun contrat',
           ),
 
         // ── Documents administratifs (permis, FIMO, etc.) ────────────────
@@ -122,14 +122,10 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
 
           // Documents regroupés par catégorie
           if (docs.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'Aucun document enregistré.\nDemande à ton manager d\'ajouter tes documents.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
+            const DCEmptyState(
+              icon: Icons.folder_open_outlined,
+              title: 'Aucun document enregistré',
+              subtitle: 'Demande à ton manager d\'ajouter tes documents.',
             )
           else
             for (final cat in grouped.keys) ...[
@@ -283,6 +279,7 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
                   documentTypeLabel(doc.type),
                   style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 15),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 if (doc.documentNumber != null)
                   Text('N° ${doc.documentNumber}',
@@ -349,6 +346,7 @@ class _DriverDocumentsPageState extends ConsumerState<DriverDocumentsPage> {
             fontWeight: n.read ? FontWeight.w500 : FontWeight.w700,
             fontSize: 14,
           ),
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

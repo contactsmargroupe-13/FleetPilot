@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/company_settings.dart';
 import '../services/firestore_service.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'manager_client_pricing.dart';
 import 'models/user_access.dart';
 
@@ -92,18 +93,10 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
   Widget _buildAccessList() {
     final accesses = ref.watch(appStateProvider).userAccesses;
     if (accesses.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: 16, color: DC.textSecondary),
-              const SizedBox(width: 8),
-              const Text('Aucun accès configuré',
-                  style: TextStyle(fontSize: 13, color: Colors.grey)),
-            ],
-          ),
-        ),
+      return const DCEmptyState(
+        icon: Icons.people_outline,
+        title: 'Aucun accès configuré',
+        subtitle: 'Invitez des membres pour leur donner accès',
       );
     }
 
@@ -127,6 +120,7 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
               ),
             ),
             title: Text(access.name,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Text(accessRoleLabel(access.role),
                 style: const TextStyle(fontSize: 12)),
@@ -394,6 +388,7 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text('Email : $email',
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, color: Colors.grey)),
             const SizedBox(height: 12),
             Container(
@@ -706,8 +701,10 @@ class _ManagerSettingsPageState extends ConsumerState<ManagerSettingsPage> {
     if (confirm == true) {
       ref.read(appStateProvider).deleteUserAccess(access.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Accès "${access.name}" supprimé')),
+        showUndoSnackBar(
+          context,
+          'Accès "${access.name}" supprimé',
+          () => ref.read(appStateProvider).addUserAccess(access),
         );
       }
     }

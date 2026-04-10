@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
+import '../utils/shared_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -57,9 +58,10 @@ class ManagerMessagesPage extends ConsumerWidget {
         ],
       ),
       body: conversations.isEmpty
-          ? const Center(
-              child: Text('Aucun chauffeur.',
-                  style: TextStyle(color: Colors.grey)),
+          ? const DCEmptyState(
+              icon: Icons.chat_bubble_outline,
+              title: 'Aucun chauffeur.',
+              subtitle: 'Ajoutez des chauffeurs pour commencer à échanger.',
             )
           : ListView.separated(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -129,6 +131,7 @@ class _ConversationTile extends StatelessWidget {
         style: TextStyle(
           fontWeight: hasUnread ? FontWeight.bold : FontWeight.w500,
         ),
+        overflow: TextOverflow.ellipsis,
       ),
       subtitle: lastMsg != null
           ? Text(

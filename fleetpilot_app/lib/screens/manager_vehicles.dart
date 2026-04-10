@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'add_truck.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
@@ -42,32 +43,16 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
     }
   }
 
-  Future<void> _deleteTruck(Truck truck) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer le camion'),
-        content: Text('Supprimer ${truck.plate} — ${truck.model} ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
+  void _deleteTruck(Truck truck) {
+    setState(() => ref.read(appStateProvider).deleteTruck(truck.plate));
+    if (!mounted) return;
+    showUndoSnackBar(
+      context,
+      'Camion supprimé : ${truck.plate}',
+      () {
+        setState(() => ref.read(appStateProvider).addTruck(truck));
+      },
     );
-    if (confirm == true) {
-      setState(() => ref.read(appStateProvider).deleteTruck(truck.plate));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Camion supprimé : ${truck.plate}')),
-      );
-    }
   }
 
   void _showTruckDetail(Truck truck) {
@@ -114,6 +99,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                           '${truck.plate}',
                           style: const TextStyle(
                               fontSize: 18, fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Container(
@@ -142,6 +128,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                           .trim()
                           + (truck.year != null ? ' • ${truck.year}' : ''),
                       style: const TextStyle(color: DC.textSecondary),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   const SizedBox(height: 16),
 
@@ -309,8 +296,11 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
 
         Expanded(
           child: trucks.isEmpty
-              ? const Center(
-                  child: Text('Aucun camion. Clique sur Ajouter.'))
+              ? const DCEmptyState(
+                  icon: Icons.local_shipping_outlined,
+                  title: 'Aucun camion',
+                  subtitle: 'Appuyez sur + pour ajouter un véhicule',
+                )
               : ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: trucks.length,
@@ -366,6 +356,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                         t.plate,
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w700),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (t.brand.isNotEmpty || t.model.isNotEmpty)
                         Text(
@@ -373,6 +364,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                               (t.year != null ? ' • ${t.year}' : ''),
                           style: const TextStyle(
                               fontSize: 13, color: DC.textSecondary),
+                          overflow: TextOverflow.ellipsis,
                         ),
                     ],
                   ),
@@ -433,7 +425,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.person_off_outlined, size: 15, color: DC.textSecondary),
+                      Icon(Icons.person_off_outlined, size: 20, color: DC.textSecondary),
                       SizedBox(width: 6),
                       Text('Non affecté',
                           style: TextStyle(fontSize: 12, color: DC.textSecondary)),
@@ -449,14 +441,14 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.person_outline, size: 15, color: Colors.indigo),
+                    const Icon(Icons.person_outline, size: 20, color: Colors.indigo),
                     const SizedBox(width: 6),
                     Text(assign.driverName,
                         style: const TextStyle(
                             fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo)),
                     if (assign.companyName != null && assign.companyName!.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      const Icon(Icons.handshake_outlined, size: 13, color: Colors.teal),
+                      const Icon(Icons.handshake_outlined, size: 20, color: Colors.teal),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(assign.companyName!,
@@ -516,7 +508,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.build_outlined, size: 16, color: DC.textSecondary),
+                      const Icon(Icons.build_outlined, size: 20, color: DC.textSecondary),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -539,7 +531,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(equip.isEmpty ? Icons.add : Icons.edit_outlined,
-                                  size: 14, color: Colors.blue),
+                                  size: 20, color: Colors.blue),
                               const SizedBox(width: 4),
                               Text(equip.isEmpty ? 'Affecter' : 'Gérer',
                                   style: const TextStyle(
@@ -568,12 +560,12 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(_equipIcon(e.category), size: 12, color: Colors.blue),
+                              Icon(_equipIcon(e.category), size: 20, color: Colors.blue),
                               const SizedBox(width: 4),
                               Text(e.name,
                                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue)),
                               const SizedBox(width: 4),
-                              const Icon(Icons.close, size: 12, color: Colors.red),
+                              const Icon(Icons.close, size: 20, color: Colors.red),
                             ],
                           ),
                         ),
@@ -624,7 +616,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16),
+          Icon(icon, size: 20),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,7 +645,7 @@ class _ManagerVehiclesPageState extends ConsumerState<ManagerVehiclesPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15),
+          Icon(icon, size: 20),
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
@@ -936,7 +928,7 @@ class _InsuranceBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 20, color: color),
           const SizedBox(width: 6),
           Text(
             text,
@@ -1014,7 +1006,7 @@ class _CtBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 20, color: color),
           const SizedBox(width: 6),
           Text(
             text,
@@ -1064,7 +1056,7 @@ class _KmThresholdBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 20, color: color),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -1103,7 +1095,7 @@ class _AlertBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 18),
+          Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

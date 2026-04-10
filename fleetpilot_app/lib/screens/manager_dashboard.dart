@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import '../utils/page_help.dart';
 import '../providers/app_state.dart';
 import '../services/manager_ai_service.dart';
@@ -690,6 +691,20 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
 
     final unreadMessages = appState.unreadManagerMessages;
 
+    if (allTrucks.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: DC.screenH, vertical: 20),
+        children: [
+          _monthPill(),
+          const DCEmptyState(
+            icon: Icons.local_shipping_outlined,
+            title: 'Aucun camion enregistré',
+            subtitle: 'Ajoute ton premier camion pour voir le dashboard.',
+          ),
+        ],
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: DC.screenH, vertical: 20),
       children: [
@@ -1073,10 +1088,12 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(t.plate,
-                            style: DC.mono(12, weight: FontWeight.w700)),
+                            style: DC.mono(12, weight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis),
                         if (t.model.isNotEmpty)
                           Text(t.model,
-                              style: DC.body(11, color: DC.textTertiary)),
+                              style: DC.body(11, color: DC.textTertiary),
+                              overflow: TextOverflow.ellipsis),
                         if (missing > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
@@ -1147,7 +1164,8 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(e.key,
-                        style: DC.body(13, weight: FontWeight.w600)),
+                        style: DC.body(13, weight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis),
                   ),
                   Text('$tours tours',
                       style: DC.body(11, color: DC.textTertiary)),
@@ -1271,10 +1289,12 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
                         children: [
                           Text(a.title,
                               style: DC.body(13,
-                                  weight: FontWeight.w600, color: a.color)),
+                                  weight: FontWeight.w600, color: a.color),
+                              overflow: TextOverflow.ellipsis),
                           Text(a.subtitle,
                               style:
-                                  DC.body(11, color: DC.textSecondary)),
+                                  DC.body(11, color: DC.textSecondary),
+                              overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),
@@ -1365,7 +1385,7 @@ class _ManagerDashboardPageState extends ConsumerState<ManagerDashboardPage> {
             ),
           ),
           Text(
-            '${['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][_selectedMonth.month - 1]} ${_selectedMonth.year}',
+            DC.monthLabel(_selectedMonth),
             style: DC.mono(12),
           ),
           GestureDetector(
@@ -1844,6 +1864,7 @@ class _ProfitTruckCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 10),
               Row(

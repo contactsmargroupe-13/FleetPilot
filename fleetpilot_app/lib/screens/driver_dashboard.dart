@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/design_constants.dart';
+import '../utils/shared_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
@@ -26,13 +27,7 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
     _selectedMonth = DateTime(now.year, now.month, 1);
   }
 
-  static const List<String> _monthNames = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-  ];
-
-  String get _monthLabel =>
-      '${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+  String get _monthLabel => DC.monthLabel(_selectedMonth);
 
   @override
   Widget build(BuildContext context) {
@@ -234,12 +229,9 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
         // ── Détail tournées du mois ─────────────────────────────────────
         _sectionTitle('Détail des tournées'),
         if (monthTours.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('Aucune tournée ce mois.',
-                  style: TextStyle(color: Colors.grey)),
-            ),
+          const DCEmptyState(
+            icon: Icons.route_outlined,
+            title: 'Aucune tournée ce mois',
           )
         else
           ...monthTours.map((t) => _tourCard(t)),

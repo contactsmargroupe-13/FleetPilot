@@ -499,17 +499,6 @@ class _AddTruckPageState extends State<AddTruckPage> {
           ? null
           : _i(_amortCtrl.text);
 
-      if ((purchase != null && amort == null) ||
-          (purchase == null && amort != null)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                "Achat: renseigne Prix d'achat + Durée amortissement."),
-          ),
-        );
-        return;
-      }
-
       Navigator.pop(
         context,
         Truck(
@@ -537,14 +526,6 @@ class _AddTruckPageState extends State<AddTruckPage> {
       );
     } else {
       final rent = _d(_rentCtrl.text);
-      if (rent == null || rent <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location: renseigne un loyer mensuel valide.'),
-          ),
-        );
-        return;
-      }
       final rentCompany = _rentCompanyCtrl.text.trim().isEmpty
           ? null
           : _rentCompanyCtrl.text.trim();
@@ -756,7 +737,12 @@ class _AddTruckPageState extends State<AddTruckPage> {
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
+                  if (v == null || v.trim().isEmpty) {
+                    if (_amortCtrl.text.trim().isNotEmpty) {
+                      return 'Renseigne aussi le prix d\'achat';
+                    }
+                    return null;
+                  }
                   final val = _d(v);
                   if (val == null || val < 0) return 'Prix invalide';
                   return null;
@@ -771,7 +757,12 @@ class _AddTruckPageState extends State<AddTruckPage> {
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
+                  if (v == null || v.trim().isEmpty) {
+                    if (_purchaseCtrl.text.trim().isNotEmpty) {
+                      return 'Renseigne aussi la durée d\'amortissement';
+                    }
+                    return null;
+                  }
                   final val = int.tryParse(v.trim());
                   if (val == null || val <= 0) return 'Durée invalide';
                   return null;
