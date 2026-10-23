@@ -1,0 +1,1629 @@
+<title>Le Dépôt FleetPilote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   TOKENS — jour (béton) par défaut
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --paper:        #F7F5F1;
+  --surface:      #FFFFFF;
+  --surface-2:    #EFECE6;
+  --surface-3:    #E3DFD7;
+  --rule:         #DCD7CD;
+  --rule-soft:    #E9E5DE;
+
+  --ink:          #1B1E22;
+  --steel:        #5D6671;
+  --steel-2:      #8A929B;
+
+  --paint:        #D9A50F;   /* peinture routière — accent */
+  --paint-bright: #F0BF26;
+  --paint-wash:   #FBF3D8;
+  --chevron:      #C2420F;   /* haute-visibilité — critique */
+  --chevron-wash: #FBEBE4;
+  --moss:         #2E6B59;   /* roulant / ok */
+  --moss-wash:    #E4EFE9;
+  --sky:          #3A6586;   /* info */
+  --sky-wash:     #E6EDF3;
+
+  /* scène — plein jour */
+  --tarmac:       #B7B2A8;
+  --tarmac-2:     #ABA69C;
+  --tarmac-edge:  #9C978C;
+  --line:         #F2E9C8;
+  --bld-top:      #EDE8DF;
+  --bld-right:    #CFC8BC;
+  --bld-left:     #AEA69A;
+  --sky-bg:       #D8D3C9;
+  --shadow-iso:   rgba(27,30,34,.17);
+
+  --shadow-card:  0 1px 2px rgba(27,30,34,.05), 0 8px 24px -12px rgba(27,30,34,.14);
+  --shadow-phone: 0 2px 4px rgba(27,30,34,.08), 0 40px 80px -32px rgba(27,30,34,.42);
+
+  --d: #E3DFD7; /* divider alias */
+}
+
+/* nuit — système, sauf choix explicite « clair » */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:        #14171A;
+    --surface:      #1C2024;
+    --surface-2:    #23282D;
+    --surface-3:    #2C3238;
+    --rule:         #2E343A;
+    --rule-soft:    #23282D;
+
+    --ink:          #ECE8E1;
+    --steel:        #9AA2AB;
+    --steel-2:      #6E767F;
+
+    --paint:        #F0BF26;
+    --paint-bright: #FFD24A;
+    --paint-wash:   #352C12;
+    --chevron:      #E8673A;
+    --chevron-wash: #38190F;
+    --moss:         #5BB394;
+    --moss-wash:    #10261F;
+    --sky:          #7FAFD3;
+    --sky-wash:     #12222E;
+
+    --tarmac:       #2B3034;
+    --tarmac-2:     #24292D;
+    --tarmac-edge:  #1C2024;
+    --line:         #6B5C2A;
+    --bld-top:      #363C42;
+    --bld-right:    #262B30;
+    --bld-left:     #1B1F23;
+    --sky-bg:       #0E1113;
+    --shadow-iso:   rgba(0,0,0,.45);
+
+    --shadow-card:  0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    --shadow-phone: 0 2px 4px rgba(0,0,0,.5), 0 40px 80px -32px rgba(0,0,0,.8);
+  }
+}
+
+/* nuit — choix explicite */
+:root[data-theme="dark"]{
+  --paper:#14171A; --surface:#1C2024; --surface-2:#23282D; --surface-3:#2C3238;
+  --rule:#2E343A; --rule-soft:#23282D;
+  --ink:#ECE8E1; --steel:#9AA2AB; --steel-2:#6E767F;
+  --paint:#F0BF26; --paint-bright:#FFD24A; --paint-wash:#352C12;
+  --chevron:#E8673A; --chevron-wash:#38190F;
+  --moss:#5BB394; --moss-wash:#10261F;
+  --sky:#7FAFD3; --sky-wash:#12222E;
+  --tarmac:#2B3034; --tarmac-2:#24292D; --tarmac-edge:#1C2024; --line:#6B5C2A;
+  --bld-top:#363C42; --bld-right:#262B30; --bld-left:#1B1F23;
+  --sky-bg:#0E1113; --shadow-iso:rgba(0,0,0,.45);
+  --shadow-card:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  --shadow-phone:0 2px 4px rgba(0,0,0,.5), 0 40px 80px -32px rgba(0,0,0,.8);
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Instrument Sans','Helvetica Neue',Arial,sans-serif;
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+
+h1,h2,h3,h4{
+  font-family:'Bricolage Grotesque','Helvetica Neue',Arial,sans-serif;
+  font-weight:700;
+  line-height:1.05;
+  letter-spacing:-.018em;
+  text-wrap:balance;
+  margin:0;
+}
+p{margin:0;}
+
+.mono{ font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.eyebrow{
+  font-family:'JetBrains Mono',ui-monospace,monospace;
+  font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.13em;
+  color:var(--steel-2);
+}
+
+a{ color:inherit; }
+:focus-visible{ outline:2px solid var(--paint); outline-offset:3px; border-radius:3px; }
+
+.wrap{ max-width:1180px; margin:0 auto; padding:0 28px; }
+
+/* ── Masthead ───────────────────────────────────────────────── */
+.masthead{ padding:72px 0 44px; border-bottom:1px solid var(--rule); }
+.masthead h1{ font-size:clamp(38px,6.2vw,76px); max-width:17ch; margin:14px 0 0; }
+.masthead h1 em{ font-style:normal; color:var(--paint); }
+.lede{
+  max-width:62ch; margin-top:22px; font-size:19px; color:var(--steel);
+}
+.lede strong{ color:var(--ink); font-weight:600; }
+
+.counts{
+  display:flex; flex-wrap:wrap; gap:0; margin-top:38px;
+  border:1px solid var(--rule); border-radius:4px; overflow:hidden;
+  background:var(--surface);
+}
+.count{ flex:1 1 0; min-width:150px; padding:18px 20px; border-left:1px solid var(--rule); }
+.count:first-child{ border-left:0; }
+.count b{
+  display:block; font-family:'Bricolage Grotesque',sans-serif; font-weight:800;
+  font-size:34px; line-height:1; letter-spacing:-.03em;
+}
+.count b s{ text-decoration:line-through; color:var(--steel-2); font-weight:500; }
+.count span{ display:block; margin-top:7px; font-size:13px; color:var(--steel); line-height:1.4; }
+
+/* ── Scène principale : device collant + argumentaire ───────── */
+.stage{
+  display:grid; grid-template-columns:412px minmax(0,1fr); gap:56px;
+  align-items:start; padding:56px 0 80px;
+}
+.device-col{ position:sticky; top:28px; }
+
+/* ── Téléphone ──────────────────────────────────────────────── */
+.phone{
+  width:392px; height:788px;
+  background:var(--surface-3);
+  border:1px solid var(--rule);
+  border-radius:40px; padding:9px;
+  box-shadow:var(--shadow-phone);
+}
+.screen{
+  position:relative; height:100%; overflow:hidden;
+  border-radius:32px; background:var(--surface);
+  display:flex; flex-direction:column;
+}
+
+.statusbar{
+  flex:0 0 auto; display:flex; justify-content:space-between; align-items:center;
+  padding:9px 20px 3px; font-size:11px; color:var(--steel-2);
+  font-family:'JetBrains Mono',monospace; letter-spacing:.02em;
+}
+.appbar{
+  flex:0 0 auto; display:flex; align-items:center; gap:10px;
+  padding:6px 14px 10px; border-bottom:1px solid var(--rule-soft);
+}
+.logo{
+  font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:17px;
+  letter-spacing:-.02em; margin-right:auto;
+}
+.logo i{ font-style:normal; color:var(--paint); }
+.iconbtn{
+  position:relative; width:32px; height:32px; flex:0 0 auto;
+  display:grid; place-items:center; border:0; border-radius:9px;
+  background:transparent; color:var(--steel); cursor:pointer;
+}
+.iconbtn:hover{ background:var(--surface-2); color:var(--ink); }
+.iconbtn svg{ width:19px; height:19px; }
+.dot{
+  position:absolute; top:4px; right:4px; min-width:15px; height:15px; padding:0 3px;
+  border-radius:8px; background:var(--chevron); color:#fff;
+  font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:600;
+  display:grid; place-items:center; border:2px solid var(--surface);
+}
+.avatar{
+  width:30px; height:30px; border-radius:50%; flex:0 0 auto; border:0; cursor:pointer;
+  background:var(--sky-wash); color:var(--sky);
+  font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600;
+}
+
+.views{ position:relative; flex:1 1 auto; overflow:hidden; }
+.view{
+  position:absolute; inset:0; overflow-y:auto; overscroll-behavior:contain;
+  padding:14px 14px 124px; display:none;
+}
+.view[data-active="1"]{ display:block; }
+.view::-webkit-scrollbar{ width:0; }
+
+.tabbar{
+  position:absolute; left:0; right:0; bottom:0; z-index:4;
+  display:grid; grid-template-columns:repeat(5,1fr);
+  background:color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter:blur(14px);
+  border-top:1px solid var(--rule);
+  padding:6px 4px 10px;
+}
+.tab{
+  border:0; background:transparent; cursor:pointer; padding:5px 0 3px;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  color:var(--steel-2); font-family:inherit; font-size:10.5px; font-weight:500;
+}
+.tab svg{ width:21px; height:21px; }
+.tab[aria-selected="true"]{ color:var(--ink); font-weight:600; }
+.tab[aria-selected="true"] .tab-ico{ background:var(--paint-wash); color:var(--paint); }
+.tab-ico{
+  width:40px; height:26px; border-radius:9px; display:grid; place-items:center;
+  transition:background .16s ease;
+}
+
+.fab{
+  position:absolute; right:14px; bottom:74px; z-index:5;
+  height:44px; padding:0 15px 0 13px; border:0; border-radius:14px; cursor:pointer;
+  display:flex; align-items:center; gap:7px;
+  background:var(--ink); color:var(--paper);
+  font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:14px;
+  letter-spacing:-.01em;
+  box-shadow:0 6px 18px -6px var(--shadow-iso);
+}
+.fab svg{ width:17px; height:17px; }
+.fab:hover{ background:var(--paint); color:#1B1E22; }
+
+/* ── Blocs d'écran ──────────────────────────────────────────── */
+.screen-title{
+  display:flex; align-items:baseline; gap:8px; margin:2px 2px 12px;
+}
+.screen-title h3{ font-size:23px; }
+.screen-title .when{ margin-left:auto; font-size:11.5px; color:var(--steel-2); }
+
+.subtabs{
+  display:flex; gap:5px; overflow-x:auto; margin:0 -14px 13px; padding:0 14px 3px;
+  scrollbar-width:none;
+}
+.subtabs::-webkit-scrollbar{ height:0; }
+.subtab{
+  flex:0 0 auto; border:1px solid var(--rule); background:var(--surface);
+  color:var(--steel); border-radius:20px; padding:5px 12px; cursor:pointer;
+  font-family:inherit; font-size:12.5px; font-weight:500; white-space:nowrap;
+}
+.subtab[aria-pressed="true"]{
+  background:var(--ink); border-color:var(--ink); color:var(--paper); font-weight:600;
+}
+
+.kpis{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.kpi{
+  border:1px solid var(--rule); border-radius:14px; padding:12px 13px; background:var(--surface);
+}
+.kpi.wide{ grid-column:1/-1; }
+.kpi .k-lab{ font-size:11px; color:var(--steel-2); text-transform:uppercase; letter-spacing:.07em; font-weight:600; }
+.kpi .k-val{
+  font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:27px;
+  letter-spacing:-.025em; line-height:1.1; margin-top:5px;
+}
+.kpi .k-sub{ font-size:11.5px; color:var(--steel); margin-top:2px; }
+.k-up{ color:var(--moss); } .k-down{ color:var(--chevron); }
+
+.spark{ display:block; width:100%; height:34px; margin-top:7px; }
+
+.todo{ margin-top:16px; border:1px solid var(--rule); border-radius:14px; overflow:hidden; background:var(--surface); }
+.todo-h{
+  padding:10px 13px; border-bottom:1px solid var(--rule-soft);
+  display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--steel);
+  text-transform:uppercase; letter-spacing:.07em;
+}
+.row{
+  display:flex; align-items:center; gap:11px; padding:11px 13px;
+  border-top:1px solid var(--rule-soft); cursor:pointer;
+}
+.row:first-of-type{ border-top:0; }
+.row:hover{ background:var(--surface-2); }
+.row-stripe{ width:3px; align-self:stretch; border-radius:2px; margin:-11px 0 -11px -13px; }
+.row-main{ min-width:0; flex:1 1 auto; }
+.row-t{ font-size:14px; font-weight:600; letter-spacing:-.005em; }
+.row-s{ font-size:12px; color:var(--steel); margin-top:1px; }
+.row-end{ font-size:12px; color:var(--steel-2); flex:0 0 auto; text-align:right; }
+.chev{ width:15px; height:15px; color:var(--steel-2); flex:0 0 auto; }
+
+.pill{
+  display:inline-flex; align-items:center; gap:5px; flex:0 0 auto;
+  padding:2px 8px; border-radius:7px; font-size:11px; font-weight:600;
+  border:1px solid transparent; white-space:nowrap;
+}
+.p-ok{ background:var(--moss-wash); color:var(--moss); border-color:color-mix(in srgb,var(--moss) 26%,transparent); }
+.p-warn{ background:var(--paint-wash); color:var(--paint); border-color:color-mix(in srgb,var(--paint) 32%,transparent); }
+.p-crit{ background:var(--chevron-wash); color:var(--chevron); border-color:color-mix(in srgb,var(--chevron) 28%,transparent); }
+.p-info{ background:var(--sky-wash); color:var(--sky); border-color:color-mix(in srgb,var(--sky) 26%,transparent); }
+.p-mute{ background:var(--surface-2); color:var(--steel-2); border-color:var(--rule); }
+.pill .bul{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+/* ── Scène isométrique ──────────────────────────────────────── */
+.depot-head{
+  display:flex; align-items:center; gap:8px; margin:2px 2px 10px;
+}
+.depot-head h3{ font-size:23px; }
+.depot-head .when{ margin-left:auto; font-size:11.5px; color:var(--steel-2); }
+
+.yard{
+  position:relative; border-radius:16px; overflow:hidden;
+  background:
+    radial-gradient(118% 76% at 50% 4%, color-mix(in srgb,var(--sky-bg) 72%,transparent), var(--sky-bg)),
+    var(--sky-bg);
+  border:1px solid var(--rule);
+}
+.yard svg{ display:block; width:100%; height:auto; }
+
+.obj{ cursor:pointer; }
+.obj:focus{ outline:none; }
+.f-top{ fill:var(--bld-top); }
+.f-right{ fill:var(--bld-right); }
+.f-left{ fill:var(--bld-left); }
+.obj .edge{ fill:none; stroke:var(--tarmac-edge); stroke-width:.6; opacity:.55; }
+
+.tile{ fill:var(--tarmac); stroke:var(--tarmac-2); stroke-width:.5; }
+.tile.alt{ fill:var(--tarmac-2); }
+.bay-line{ fill:none; stroke:var(--line); stroke-width:1.7; opacity:.72; stroke-linejoin:round; }
+.bay-line.free{ stroke-dasharray:5 4; opacity:.5; }
+.lane{ fill:none; stroke:var(--line); stroke-width:1.2; stroke-dasharray:7 9; opacity:.3; }
+.iso-shadow{ fill:var(--shadow-iso); }
+
+.ghost .f-top,.ghost .f-right,.ghost .f-left{ fill:none; }
+.ghost .outline{
+  fill:none; stroke:var(--sky); stroke-width:1.3; stroke-dasharray:4 3; opacity:.85;
+}
+
+.bld-label{
+  font-family:'JetBrains Mono',monospace; font-size:7.4px; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase;
+  fill:var(--ink); paint-order:stroke;
+  stroke:var(--tarmac); stroke-width:2.8; stroke-linejoin:round;
+}
+.pin-text{
+  font-family:'JetBrains Mono',monospace; font-size:6.6px; font-weight:600;
+  letter-spacing:.02em;
+}
+.plate-tag{
+  font-family:'JetBrains Mono',monospace; font-size:7px; font-weight:600;
+  fill:var(--ink); paint-order:stroke; stroke:var(--tarmac); stroke-width:2.6;
+}
+
+.badge-ring{ stroke:var(--sky-bg); stroke-width:1.5; }
+.b-ok{ fill:var(--moss); } .b-warn{ fill:var(--paint); }
+.b-crit{ fill:var(--chevron); } .b-info{ fill:var(--sky); }
+.badge-glyph{
+  font-family:'JetBrains Mono',monospace; font-size:7.5px; font-weight:600;
+  fill:var(--sky-bg); text-anchor:middle;
+}
+
+.obj .halo{ fill:none; stroke:var(--paint-bright); stroke-width:0; stroke-linejoin:round; }
+.obj:hover .halo,.obj:focus-visible .halo{ stroke-width:2.2; }
+.obj[data-sel="1"] .halo{ stroke-width:2.6; }
+.obj:hover .f-top{ fill:color-mix(in srgb,var(--bld-top) 84%, var(--paint-bright)); }
+
+.legend{
+  display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-top:11px;
+}
+.leg{
+  display:flex; align-items:center; gap:8px; padding:8px 10px;
+  border:1px solid var(--rule); border-radius:11px; background:var(--surface);
+  cursor:pointer; text-align:left; font-family:inherit;
+}
+.leg:hover{ background:var(--surface-2); }
+.leg .sw{ width:9px; height:9px; border-radius:3px; flex:0 0 auto; }
+.leg .n{
+  font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:17px;
+  line-height:1; margin-left:auto;
+}
+.leg .l{ font-size:11.5px; color:var(--steel); line-height:1.25; }
+
+.hint{
+  margin-top:10px; font-size:11.5px; color:var(--steel-2); text-align:center;
+}
+
+/* ── Bottom sheet (dans le téléphone) ───────────────────────── */
+.scrim{
+  position:absolute; inset:0; z-index:6; background:rgba(14,17,19,.42);
+  opacity:0; pointer-events:none; transition:opacity .2s ease;
+}
+.scrim[data-open="1"]{ opacity:1; pointer-events:auto; }
+.sheet{
+  position:absolute; left:0; right:0; bottom:0; z-index:7;
+  background:var(--surface); border-top:1px solid var(--rule);
+  border-radius:22px 22px 0 0; padding:9px 16px 20px;
+  transform:translateY(102%); transition:transform .24s cubic-bezier(.3,.8,.35,1);
+  max-height:78%; overflow-y:auto;
+  box-shadow:0 -10px 34px -18px var(--shadow-iso);
+}
+.sheet[data-open="1"]{ transform:translateY(0); }
+.grab{ width:36px; height:4px; border-radius:3px; background:var(--surface-3); margin:0 auto 12px; }
+.sheet h4{ font-family:'Bricolage Grotesque',sans-serif; font-size:20px; font-weight:700; }
+.sheet .sub{ font-size:12.5px; color:var(--steel); margin-top:3px; }
+.facts{ margin:14px 0 0; border-top:1px solid var(--rule-soft); }
+.fact{
+  display:flex; gap:12px; padding:8px 0; border-bottom:1px solid var(--rule-soft); font-size:13px;
+}
+.fact dt{ color:var(--steel-2); flex:0 0 130px; font-size:12.5px; }
+.fact dd{ margin:0; font-weight:500; }
+.acts{ display:flex; gap:8px; margin-top:15px; flex-wrap:wrap; }
+.act{
+  flex:1 1 auto; border:1px solid var(--rule); background:var(--surface); color:var(--ink);
+  border-radius:11px; padding:10px 12px; font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer;
+}
+.act:hover{ background:var(--surface-2); }
+.act.primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.act.primary:hover{ background:var(--paint); color:#1B1E22; border-color:var(--paint); }
+
+/* ── Argumentaire ───────────────────────────────────────────── */
+.argument{ padding-top:4px; }
+.chapter{ padding:0 0 52px; }
+.chapter + .chapter{ border-top:1px solid var(--rule); padding-top:44px; }
+.chapter h2{ font-size:clamp(26px,3vw,36px); margin:12px 0 0; max-width:22ch; }
+.chapter > p{ max-width:60ch; margin-top:14px; color:var(--steel); }
+.chapter > p strong{ color:var(--ink); font-weight:600; }
+
+.drawer-proof{
+  margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;
+}
+.proof-card{
+  border:1px solid var(--rule); border-radius:4px; background:var(--surface); overflow:hidden;
+}
+.proof-card h5{
+  margin:0; padding:9px 13px; font-family:'JetBrains Mono',monospace;
+  font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.11em;
+  color:var(--steel-2); border-bottom:1px solid var(--rule-soft); background:var(--surface-2);
+}
+.menu-dump{ padding:9px 13px 13px; font-size:12.5px; color:var(--steel); }
+.menu-dump .grp{
+  font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.11em;
+  color:var(--steel-2); margin:9px 0 3px; text-transform:uppercase;
+}
+.menu-dump .grp:first-child{ margin-top:0; }
+.menu-dump ul{ margin:0; padding:0; list-style:none; }
+.menu-dump li{ padding:1.5px 0; }
+.menu-dump li::before{ content:'·'; color:var(--steel-2); margin-right:7px; }
+
+.dest{
+  display:block; width:100%; text-align:left; cursor:pointer; font-family:inherit;
+  border:1px solid var(--rule); border-left:3px solid var(--rule); border-radius:4px;
+  background:var(--surface); padding:15px 17px; margin-top:10px;
+  transition:border-color .14s ease, background .14s ease;
+}
+.dest:hover{ background:var(--surface-2); }
+.dest[data-on="1"]{ border-left-color:var(--paint); background:var(--paint-wash); }
+.dest-h{ display:flex; align-items:baseline; gap:10px; }
+.dest-h b{
+  font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:19px;
+  letter-spacing:-.015em;
+}
+.dest-h .cnt{
+  margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--steel-2);
+}
+.dest p{ margin:5px 0 0; font-size:13.5px; color:var(--steel); }
+.absorbs{ display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+.absorbs code{
+  font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--steel);
+  background:var(--surface-2); border:1px solid var(--rule); border-radius:4px; padding:2px 6px;
+}
+.dest[data-on="1"] .absorbs code{ background:var(--surface); }
+
+.points{ margin-top:22px; display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:4px; overflow:hidden; }
+.point{ background:var(--surface); padding:16px 18px; }
+.point b{ display:block; font-family:'Bricolage Grotesque',sans-serif; font-size:16px; font-weight:700; }
+.point span{ display:block; margin-top:4px; font-size:13.5px; color:var(--steel); max-width:56ch; }
+
+.steps{ margin-top:20px; counter-reset:s; display:grid; gap:11px; }
+.step{
+  display:grid; grid-template-columns:30px 1fr; gap:14px; align-items:start;
+  border-top:1px solid var(--rule-soft); padding-top:13px;
+}
+.step::before{
+  counter-increment:s; content:counter(s,decimal-leading-zero);
+  font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; color:var(--paint);
+  padding-top:2px;
+}
+.step b{ font-size:15px; font-weight:600; }
+.step span{ display:block; font-size:13.5px; color:var(--steel); margin-top:2px; max-width:56ch; }
+
+.pagefoot{
+  border-top:1px solid var(--rule); padding:26px 0 54px;
+  display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+  font-size:13px; color:var(--steel-2);
+}
+.themer{
+  margin-left:auto; border:1px solid var(--rule); background:var(--surface); color:var(--steel);
+  border-radius:20px; padding:6px 13px; cursor:pointer; font-family:inherit; font-size:12.5px;
+}
+.themer:hover{ color:var(--ink); }
+
+@media (max-width:980px){
+  .stage{ grid-template-columns:1fr; gap:40px; }
+  .device-col{ position:static; display:flex; justify-content:center; }
+  .drawer-proof{ grid-template-columns:1fr; }
+}
+@media (max-width:440px){
+  .wrap{ padding:0 18px; }
+  .phone{ width:100%; max-width:392px; height:740px; }
+}
+@media (prefers-reduced-motion:reduce){
+  *{ animation:none !important; transition:none !important; }
+}
+</style>
+
+<style>
+.ico{ fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.sprite{ position:absolute; width:0; height:0; overflow:hidden; }
+</style>
+
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-depot" viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5V20H3z"/><path d="M8 20v-6h8v6"/><path d="M3 14h5M16 14h5"/></symbol>
+  <symbol id="i-day" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/><path d="M7.5 15h4"/></symbol>
+  <symbol id="i-money" viewBox="0 0 24 24"><path d="M15.5 8.2A5 5 0 0 0 7.6 10m7.9 5.8A5 5 0 0 1 7.6 14"/><path d="M5.5 10.8h7M5.5 13.2h7"/><circle cx="12" cy="12" r="8.6"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9.5" cy="8.5" r="3.2"/><path d="M3.8 19.2a5.7 5.7 0 0 1 11.4 0"/><path d="M16 6.3a3.2 3.2 0 0 1 0 6.3M17.3 18.6a5.3 5.3 0 0 1 3-4.1"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 12.2c0 3.9-3.8 7-8.5 7a9.8 9.8 0 0 1-2.6-.35L4.5 20.5l1.3-3.3a6.6 6.6 0 0 1-2.3-5c0-3.9 3.8-7 8.5-7s8.5 3.1 8.5 7z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.2 10.4a5.8 5.8 0 0 1 11.6 0c0 3.4.9 5 1.7 5.9H4.5c.8-.9 1.7-2.5 1.7-5.9z"/><path d="M10 19.4a2.2 2.2 0 0 0 4 0"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 3.5l1.7 4.4 4.4 1.7-4.4 1.7L12 15.7l-1.7-4.4L5.9 9.6l4.4-1.7z"/><path d="M18 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+</svg>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Proposition de refonte · 23 octobre 2026</p>
+    <h1>Votre dépôt,<br>pas votre <em>menu</em>.</h1>
+    <p class="lede">
+      Aujourd'hui le manager a <strong>deux systèmes de navigation concurrents</strong> — un tiroir
+      de 17 entrées sur 5 sections, par-dessus une barre de 3 onglets — pour atteindre 19 pages.
+      Rien n'est cassé : c'est simplement illisible. Cette maquette propose
+      <strong>cinq destinations</strong>, et un sixième écran qui montre la flotte au lieu de la lister.
+    </p>
+
+    <div class="counts">
+      <div class="count">
+        <b><s>19</s> 5</b>
+        <span>destinations pour le manager, sous-onglets compris</span>
+      </div>
+      <div class="count">
+        <b><s>17</s> 0</b>
+        <span>entrées de tiroir latéral — le tiroir disparaît</span>
+      </div>
+      <div class="count">
+        <b>0</b>
+        <span>fonctionnalité supprimée : tout est regroupé, rien n'est retiré</span>
+      </div>
+      <div class="count">
+        <b>1</b>
+        <span>écran où l'état des 6 camions se lit sans rien ouvrir</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap stage">
+
+  <!-- ══════════════ MAQUETTE ══════════════ -->
+  <div class="device-col">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:41</span><span>5G · 84 %</span></div>
+
+        <div class="appbar">
+          <div class="logo">Fleet<i>Pilote</i></div>
+          <button class="iconbtn" data-sheet="messages" aria-label="Messages">
+            <svg class="ico"><use href="#i-chat"></use></svg><span class="dot">2</span>
+          </button>
+          <button class="iconbtn" data-sheet="alertes" aria-label="Alertes">
+            <svg class="ico"><use href="#i-bell"></use></svg><span class="dot">3</span>
+          </button>
+          <button class="avatar" data-sheet="reglages" aria-label="Réglages">MS</button>
+        </div>
+
+        <div class="views">
+
+          <!-- ── ACCUEIL ───────────────────────────── -->
+          <section class="view" data-view="accueil" data-active="1">
+            <div class="screen-title"><h3>Accueil</h3><span class="when">Oct. 2026 · en cours</span></div>
+
+            <div class="kpis">
+              <div class="kpi wide">
+                <div class="k-lab">Chiffre d'affaires du mois</div>
+                <div class="k-val">48 320 <span style="font-size:19px">€</span></div>
+                <div class="k-sub"><span class="k-up">▲ 12 %</span> vs septembre · 147 tournées</div>
+                <svg class="spark" viewBox="0 0 280 34" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M0 26 L0 26 28 24 56 27 84 19 112 22 140 15 168 17 196 11 224 13 252 7 280 5 280 34 0 34Z"
+                        fill="var(--paint-wash)"/>
+                  <path d="M0 26 28 24 56 27 84 19 112 22 140 15 168 17 196 11 224 13 252 7 280 5"
+                        fill="none" stroke="var(--paint)" stroke-width="1.8" stroke-linejoin="round"/>
+                  <circle cx="280" cy="5" r="3" fill="var(--paint)"/>
+                </svg>
+              </div>
+              <div class="kpi">
+                <div class="k-lab">Marge nette</div>
+                <div class="k-val">9 640 €</div>
+                <div class="k-sub"><span class="k-up">19,9 %</span> du CA</div>
+              </div>
+              <div class="kpi">
+                <div class="k-lab">Non facturé</div>
+                <div class="k-val">3 180 €</div>
+                <div class="k-sub"><span class="k-down">4 tournées</span> en attente</div>
+              </div>
+            </div>
+
+            <div class="todo">
+              <div class="todo-h">À traiter aujourd'hui <span class="pill p-crit" style="margin-left:auto">4</span></div>
+
+              <div class="row" data-sheet="truck-IJ-345-KL">
+                <span class="row-stripe" style="background:var(--chevron)"></span>
+                <div class="row-main">
+                  <div class="row-t">IJ-345-KL immobilisé</div>
+                  <div class="row-s">Embrayage · 2<sup>e</sup> jour · Volvo FL 19 T</div>
+                </div>
+                <span class="pill p-crit"><span class="bul"></span>Atelier</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+
+              <div class="row" data-sheet="truck-EF-789-GH">
+                <span class="row-stripe" style="background:var(--paint)"></span>
+                <div class="row-main">
+                  <div class="row-t">Contrôle technique dans 12 jours</div>
+                  <div class="row-s">EF-789-GH · échéance 04/11/2026</div>
+                </div>
+                <span class="pill p-warn">CT</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+
+              <div class="row" data-sheet="depenses">
+                <span class="row-stripe" style="background:var(--sky)"></span>
+                <div class="row-main">
+                  <div class="row-t">3 notes de frais à valider</div>
+                  <div class="row-s">Carburant et péages · 412,80 €</div>
+                </div>
+                <span class="pill p-info">Argent</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+
+              <div class="row" data-sheet="facturation">
+                <span class="row-stripe" style="background:var(--sky)"></span>
+                <div class="row-main">
+                  <div class="row-t">Facture Transalpe à émettre</div>
+                  <div class="row-s">4 tournées · secteur Nord · 3 180 €</div>
+                </div>
+                <span class="pill p-info">Argent</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── DÉPÔT ─────────────────────────────── -->
+          <section class="view" data-view="depot">
+            <div class="depot-head">
+              <h3>Le dépôt</h3>
+              <span class="when">Jeu. 23 oct. · 09:41</span>
+            </div>
+            <div class="yard" id="yard"></div>
+            <div class="legend" id="legend"></div>
+            <p class="hint">Touchez un camion, un chauffeur ou un bâtiment.</p>
+
+            <div class="todo" style="margin-top:14px">
+              <div class="todo-h">Mouvements du jour</div>
+              <div class="row" data-sheet="tour-2418">
+                <span class="row-stripe" style="background:var(--sky)"></span>
+                <div class="row-main"><div class="row-t">Départ 06:10 · <span class="mono">AB-123-CD</span></div>
+                  <div class="row-s">Karim B. · retour estimé 16:40</div></div>
+                <span class="pill p-info">Sorti</span>
+              </div>
+              <div class="row" data-sheet="tour-2419">
+                <span class="row-stripe" style="background:var(--sky)"></span>
+                <div class="row-main"><div class="row-t">Départ 06:25 · <span class="mono">GH-012-IJ</span></div>
+                  <div class="row-s">Sofiane A. · retour estimé 15:10</div></div>
+                <span class="pill p-info">Sorti</span>
+              </div>
+              <div class="row" data-sheet="truck-IJ-345-KL">
+                <span class="row-stripe" style="background:var(--chevron)"></span>
+                <div class="row-main"><div class="row-t">Entré à l’atelier le 21/10</div>
+                  <div class="row-s">Garage Mercier · pièce attendue jeudi</div></div>
+                <span class="pill p-crit">Bloqué</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── JOURNÉE ───────────────────────────── -->
+          <section class="view" data-view="journee">
+            <div class="screen-title"><h3>Journée</h3><span class="when">Jeu. 23 oct.</span></div>
+            <div class="subtabs" role="group" aria-label="Vues de la journée">
+              <button class="subtab" aria-pressed="true">Aujourd'hui</button>
+              <button class="subtab" aria-pressed="false">Semaine</button>
+              <button class="subtab" aria-pressed="false">Affectations</button>
+              <button class="subtab" aria-pressed="false">Tournées passées</button>
+            </div>
+
+            <div class="kpis" style="margin-bottom:14px">
+              <div class="kpi"><div class="k-lab">En tournée</div><div class="k-val">2 / 5</div><div class="k-sub">280 km parcourus</div></div>
+              <div class="kpi"><div class="k-lab">À affecter</div><div class="k-val">1</div><div class="k-sub">Luc M. sans camion</div></div>
+            </div>
+
+            <div class="todo">
+              <div class="todo-h">Tournées du jour</div>
+              <div class="row" data-sheet="tour-2418">
+                <span class="row-stripe" style="background:var(--moss)"></span>
+                <div class="row-main">
+                  <div class="row-t">T-2418 · Secteur Nord</div>
+                  <div class="row-s">Karim B. · <span class="mono">AB-123-CD</span> · 18 clients</div>
+                </div>
+                <div class="row-end"><span class="pill p-ok"><span class="bul"></span>En route</span><br><span class="mono" style="font-size:11px">184 km</span></div>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="tour-2419">
+                <span class="row-stripe" style="background:var(--moss)"></span>
+                <div class="row-main">
+                  <div class="row-t">T-2419 · Secteur Est</div>
+                  <div class="row-s">Sofiane A. · <span class="mono">GH-012-IJ</span> · 11 clients</div>
+                </div>
+                <div class="row-end"><span class="pill p-ok"><span class="bul"></span>En route</span><br><span class="mono" style="font-size:11px">96 km</span></div>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="affectation">
+                <span class="row-stripe" style="background:var(--paint)"></span>
+                <div class="row-main">
+                  <div class="row-t">T-2420 · Secteur Sud</div>
+                  <div class="row-s">Aucun chauffeur · <span class="mono">CD-456-EF</span> disponible</div>
+                </div>
+                <span class="pill p-warn">À affecter</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="tour-2415">
+                <span class="row-stripe" style="background:var(--surface-3)"></span>
+                <div class="row-main">
+                  <div class="row-t">T-2415 · Secteur Nord</div>
+                  <div class="row-s">Karim B. · clôturée hier à 17:20</div>
+                </div>
+                <span class="pill p-mute">Facturable</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── ARGENT ────────────────────────────── -->
+          <section class="view" data-view="argent">
+            <div class="screen-title"><h3>Argent</h3><span class="when">Oct. 2026</span></div>
+            <div class="subtabs" role="group" aria-label="Rubriques financières">
+              <button class="subtab" aria-pressed="true">Dépenses</button>
+              <button class="subtab" aria-pressed="false">Facturation</button>
+              <button class="subtab" aria-pressed="false">URSSAF &amp; charges</button>
+              <button class="subtab" aria-pressed="false">Actifs</button>
+              <button class="subtab" aria-pressed="false">Tarifs clients</button>
+            </div>
+
+            <div class="kpis" style="margin-bottom:14px">
+              <div class="kpi"><div class="k-lab">Dépensé ce mois</div><div class="k-val">38 680 €</div><div class="k-sub">dont 11 240 € carburant</div></div>
+              <div class="kpi"><div class="k-lab">À valider</div><div class="k-val">3</div><div class="k-sub">412,80 €</div></div>
+            </div>
+
+            <div class="todo">
+              <div class="todo-h">Dernières dépenses</div>
+              <div class="row" data-sheet="depense-1">
+                <span class="row-stripe" style="background:var(--paint)"></span>
+                <div class="row-main"><div class="row-t">Carburant · TotalEnergies</div>
+                  <div class="row-s">Karim B. · <span class="mono">AB-123-CD</span> · 22/10</div></div>
+                <div class="row-end mono" style="font-size:14px;color:var(--ink);font-weight:600">184,20 €</div>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="depense-2">
+                <span class="row-stripe" style="background:var(--paint)"></span>
+                <div class="row-main"><div class="row-t">Péage · APRR</div>
+                  <div class="row-s">Sofiane A. · <span class="mono">GH-012-IJ</span> · 22/10</div></div>
+                <div class="row-end mono" style="font-size:14px;color:var(--ink);font-weight:600">47,60 €</div>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="depense-3">
+                <span class="row-stripe" style="background:var(--chevron)"></span>
+                <div class="row-main"><div class="row-t">Réparation · embrayage</div>
+                  <div class="row-s">Garage Mercier · <span class="mono">IJ-345-KL</span> · 21/10</div></div>
+                <div class="row-end mono" style="font-size:14px;color:var(--ink);font-weight:600">1 840 €</div>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="depense-4">
+                <span class="row-stripe" style="background:var(--sky)"></span>
+                <div class="row-main"><div class="row-t">Assurance flotte · AXA</div>
+                  <div class="row-s">Mensuel · 5 véhicules · 01/10</div></div>
+                <div class="row-end mono" style="font-size:14px;color:var(--ink);font-weight:600">1 265 €</div>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── ÉQUIPE ────────────────────────────── -->
+          <section class="view" data-view="equipe">
+            <div class="screen-title"><h3>Équipe</h3><span class="when">4 actifs</span></div>
+            <div class="subtabs" role="group" aria-label="Rubriques équipe">
+              <button class="subtab" aria-pressed="true">Chauffeurs</button>
+              <button class="subtab" aria-pressed="false">Recrutement</button>
+              <button class="subtab" aria-pressed="false">Administratif</button>
+            </div>
+
+            <div class="todo">
+              <div class="todo-h">Chauffeurs</div>
+              <div class="row" data-sheet="driver-karim">
+                <span class="row-stripe" style="background:var(--moss)"></span>
+                <div class="row-main"><div class="row-t">Karim Benali</div>
+                  <div class="row-s">CDI · <span class="mono">AB-123-CD</span> · en tournée</div></div>
+                <span class="pill p-ok">CDI</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="driver-sofiane">
+                <span class="row-stripe" style="background:var(--moss)"></span>
+                <div class="row-main"><div class="row-t">Sofiane Amrani</div>
+                  <div class="row-s">CDI · <span class="mono">GH-012-IJ</span> · en tournée</div></div>
+                <span class="pill p-ok">CDI</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="driver-luc">
+                <span class="row-stripe" style="background:var(--chevron)"></span>
+                <div class="row-main"><div class="row-t">Luc Mercier</div>
+                  <div class="row-s">CDD · visite médicale expirée depuis 6 j</div></div>
+                <span class="pill p-crit">Document</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+              <div class="row" data-sheet="driver-nadia">
+                <span class="row-stripe" style="background:var(--paint)"></span>
+                <div class="row-main"><div class="row-t">Nadia Fourcade</div>
+                  <div class="row-s">Intérim · fin de mission le 31/10</div></div>
+                <span class="pill p-warn">Intérim</span>
+                <svg class="ico chev"><use href="#i-chev"></use></svg>
+              </div>
+            </div>
+          </section>
+
+        </div><!-- /views -->
+
+        <button class="fab" data-sheet="ia">
+          <svg class="ico"><use href="#i-ai"></use></svg>IA
+        </button>
+
+        <nav class="tabbar" role="tablist" aria-label="Destinations">
+          <button class="tab" role="tab" data-tab="accueil" aria-selected="true">
+            <span class="tab-ico"><svg class="ico"><use href="#i-home"></use></svg></span>Accueil</button>
+          <button class="tab" role="tab" data-tab="depot" aria-selected="false">
+            <span class="tab-ico"><svg class="ico"><use href="#i-depot"></use></svg></span>Dépôt</button>
+          <button class="tab" role="tab" data-tab="journee" aria-selected="false">
+            <span class="tab-ico"><svg class="ico"><use href="#i-day"></use></svg></span>Journée</button>
+          <button class="tab" role="tab" data-tab="argent" aria-selected="false">
+            <span class="tab-ico"><svg class="ico"><use href="#i-money"></use></svg></span>Argent</button>
+          <button class="tab" role="tab" data-tab="equipe" aria-selected="false">
+            <span class="tab-ico"><svg class="ico"><use href="#i-team"></use></svg></span>Équipe</button>
+        </nav>
+
+        <div class="scrim" id="scrim"></div>
+        <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Détail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ ARGUMENTAIRE ══════════════ -->
+  <div class="argument">
+
+    <section class="chapter">
+      <p class="eyebrow">Le constat</p>
+      <h2>Le problème n'est pas le manque de fonctions. C'est qu'il y en a 19 au même niveau.</h2>
+      <p>
+        Le manager arrive sur un tableau de bord de <strong>2 248 lignes</strong>, et pour aller
+        ailleurs il a le choix entre une barre de 3 onglets en bas et un tiroir latéral de 17 entrées.
+        Les deux coexistent sans hiérarchie : <em>Camions</em> et <em>URSSAF &amp; charges</em> sont
+        présentés avec exactement le même poids visuel, alors que l'un se consulte chaque matin
+        et l'autre une fois par trimestre.
+      </p>
+
+      <div class="drawer-proof">
+        <div class="proof-card">
+          <h5>Aujourd'hui — le tiroir</h5>
+          <div class="menu-dump">
+            <div class="grp">Flotte</div>
+            <ul><li>Flotte</li><li>Chauffeurs</li><li>Camions</li><li>Matériel</li><li>Commissionnaires</li></ul>
+            <div class="grp">Finances</div>
+            <ul><li>Actifs</li><li>Dépenses</li><li>Facturation</li><li>URSSAF &amp; charges</li></ul>
+            <div class="grp">Gestion</div>
+            <ul><li>Administratif</li><li>Recrutement</li><li>Messages</li></ul>
+            <div class="grp">Intelligence</div>
+            <ul><li>Assistant IA</li><li>Scan intelligent</li><li>Rapport IA</li></ul>
+            <div class="grp">—</div>
+            <ul><li>Paramètres</li></ul>
+            <div class="grp">+ barre du bas</div>
+            <ul><li>Tableau de bord</li><li>Planning</li><li>Tournées</li></ul>
+          </div>
+        </div>
+        <div class="proof-card">
+          <h5>Demain — cinq destinations</h5>
+          <div class="menu-dump">
+            <div class="grp">Barre du bas, rien d'autre</div>
+            <ul>
+              <li>Accueil</li><li>Dépôt</li><li>Journée</li><li>Argent</li><li>Équipe</li>
+            </ul>
+            <div class="grp">Bouton flottant</div>
+            <ul><li>IA — assistant, scan, rapport</li></ul>
+            <div class="grp">En-tête</div>
+            <ul><li>Messages, alertes, réglages</li></ul>
+            <div class="grp" style="color:var(--paint)">Supprimé</div>
+            <ul><li>Le tiroir latéral</li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="eyebrow">La règle</p>
+      <h2>Une destination par question que vous vous posez.</h2>
+      <p>
+        Les 19 pages existent toujours — elles deviennent des sous-onglets. Ce qui change, c'est
+        qu'on ne choisit plus parmi 19 noms de modules, mais parmi 5 intentions.
+        <strong>Touchez une carte pour voir l'écran correspondant dans la maquette.</strong>
+      </p>
+
+      <button class="dest" data-goto="accueil" data-on="1">
+        <div class="dest-h"><b>Accueil</b><span class="cnt">1 page</span></div>
+        <p>Ce qui a bougé depuis hier et ce qu'il faut traiter aujourd'hui. Quatre chiffres, une liste d'actions — pas vingt-six cartes.</p>
+        <div class="absorbs"><code>dashboard</code></div>
+      </button>
+
+      <button class="dest" data-goto="depot">
+        <div class="dest-h"><b>Dépôt</b><span class="cnt">2 pages</span></div>
+        <p>L'état physique du parc, vu d'en haut. Remplace le fait de lire une liste de plaques pour comprendre qui roule et qui est immobilisé.</p>
+        <div class="absorbs"><code>camions</code><code>materiel</code></div>
+      </button>
+
+      <button class="dest" data-goto="journee">
+        <div class="dest-h"><b>Journée</b><span class="cnt">3 pages</span></div>
+        <p>Qui conduit quoi, aujourd'hui et cette semaine. Les trois pages d'affectation, planning et tournées racontaient la même journée depuis trois angles.</p>
+        <div class="absorbs"><code>planning</code><code>tournees</code><code>flotte</code></div>
+      </button>
+
+      <button class="dest" data-goto="argent">
+        <div class="dest-h"><b>Argent</b><span class="cnt">5 pages</span></div>
+        <p>Tout ce qui entre et tout ce qui sort. Le plus gros regroupement, et le plus évident : ces cinq pages partagent les mêmes chiffres.</p>
+        <div class="absorbs"><code>depenses</code><code>facturation</code><code>urssaf</code><code>actifs</code><code>commissionnaires</code></div>
+      </button>
+
+      <button class="dest" data-goto="equipe">
+        <div class="dest-h"><b>Équipe</b><span class="cnt">3 pages</span></div>
+        <p>Les personnes et leurs papiers. Un chauffeur, son contrat, ses documents et son recrutement sont un seul sujet.</p>
+        <div class="absorbs"><code>chauffeurs</code><code>recrutement</code><code>administratif</code></div>
+      </button>
+
+      <div class="points" style="margin-top:22px">
+        <div class="point">
+          <b>Les 3 pages IA passent en bouton flottant</b>
+          <span>Assistant, scan de document et rapport ne sont pas une destination : ce sont des outils qu'on invoque depuis n'importe quel écran, avec le contexte de l'écran en cours.</span>
+        </div>
+        <div class="point">
+          <b>Messages, alertes et réglages restent dans l'en-tête</b>
+          <span>Déjà le cas aujourd'hui, et c'est juste : ce sont des notifications, pas des lieux de travail.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="eyebrow">L'écran qui change tout</p>
+      <h2>Le dépôt : on regarde la flotte au lieu de la lire.</h2>
+      <p>
+        C'est une vue isométrique de votre cour, à la manière d'un plan de jeu de gestion. Chaque
+        emplacement est une place de parking réelle, chaque camion y est dessiné dans son état,
+        et les bâtiments remplacent les entrées du tiroir : le bureau ouvre la facturation,
+        l'atelier ouvre le matériel et les réparations, la pompe ouvre les dépenses carburant.
+      </p>
+
+      <div class="points">
+        <div class="point">
+          <b>L'état se lit sans ouvrir une fiche</b>
+          <span>Un camion en tournée est un contour pointillé : la place est vide, le véhicule est dehors. Immobilisé, il est rouge et garé devant l'atelier. Contrôle technique à échéance, il porte un repère jaune. Vous comptez votre flotte d'un coup d'œil.</span>
+        </div>
+        <div class="point">
+          <b>Naviguer par lieu plutôt que par nom de module</b>
+          <span>« Où je clique pour les charges patronales ? » devient « je vais au bureau ». Un chef d'entreprise de transport connaît son dépôt par cœur ; il n'a pas à apprendre votre arborescence.</span>
+        </div>
+        <div class="point">
+          <b>Les places vides sont une information</b>
+          <span>Six emplacements pour cinq camions : la place libre en pointillés dit votre capacité d'embauche. Un tableau ne le dit jamais.</span>
+        </div>
+        <div class="point">
+          <b>Jour et nuit</b>
+          <span>La cour est en béton clair le jour et sous éclairage sodium la nuit — la maquette suit le thème de l'appareil. Basculez le thème en bas de page pour voir les deux.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter">
+      <p class="eyebrow">Ce qui ne bouge pas</p>
+      <h2>Aucune suppression, aucune migration de données.</h2>
+      <p>
+        Les 19 écrans existants restent des écrans : <code class="mono">ManagerExpensesPage</code>,
+        <code class="mono">ManagerBillingPage</code>, <code class="mono">ManagerUrssafPage</code> et les
+        autres deviennent les sous-onglets d'<em>Argent</em> au lieu d'être des destinations du tiroir.
+        Le modèle de données, Firestore, les règles de sécurité et les rôles ne changent pas d'une ligne.
+        Le comptable garde exactement son périmètre : <em>Accueil</em>, <em>Argent</em>, <em>Journée</em>.
+      </p>
+    </section>
+
+    <section class="chapter">
+      <p class="eyebrow">La suite</p>
+      <h2>Trois étapes pour amener ça dans l'app.</h2>
+      <div class="steps">
+        <div class="step">
+          <div><b>Refondre la coquille</b>
+            <span>Remplacer le <code class="mono">Drawer</code> et la barre de 3 onglets par une <code class="mono">NavigationBar</code> de 5 destinations, chacune contenant un <code class="mono">TabBar</code> de sous-onglets. Les pages existantes sont réutilisées telles quelles. C'est la part qui apporte le plus de lisibilité pour le moins de code.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div><b>Dégraisser l'accueil</b>
+            <span>Ramener <code class="mono">manager_dashboard.dart</code> de 2 248 lignes à quatre indicateurs et une liste « à traiter », en déplaçant le reste dans la destination concernée.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div><b>Dessiner le dépôt</b>
+            <span>Un <code class="mono">CustomPainter</code> isométrique alimenté par les <code class="mono">Truck</code>, <code class="mono">Driver</code> et <code class="mono">Tour</code> déjà en base : la projection, le tri par profondeur et le test de clic sont les mêmes qu'ici. Aucune dépendance nouvelle, aucun asset graphique.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="wrap pagefoot">
+  <span>FleetPilote · maquette de navigation · données d'exemple</span>
+  <button class="themer" id="themer">Basculer jour / nuit</button>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ── Projection dimétrique (caméra plus haute que l'iso 2:1) ─ */
+  const TW = 38, TH = 24;
+  const iso = (x, y) => [(x - y) * (TW / 2), (x + y) * (TH / 2)];
+  const pt  = (p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+  const quad = (x, y, w, d, lift = 0) =>
+    [iso(x, y), iso(x + w, y), iso(x + w, y + d), iso(x, y + d)]
+      .map(p => pt([p[0], p[1] - lift])).join(' ');
+
+  /** Volume : face haute + les deux faces visibles (+x à droite, +y à gauche). */
+  function box(x, y, w, d, h, base = 0, fill = '') {
+    const A = iso(x, y), B = iso(x + w, y), C = iso(x + w, y + d), D = iso(x, y + d);
+    const up = (p, n) => [p[0], p[1] - n];
+    const top   = [A, B, C, D].map(p => pt(up(p, base + h))).join(' ');
+    const right = [up(B, base + h), up(C, base + h), up(C, base), up(B, base)].map(pt).join(' ');
+    const left  = [up(D, base + h), up(C, base + h), up(C, base), up(D, base)].map(pt).join(' ');
+    const st = fill ? ` style="fill:${fill}"` : '';
+    return `<polygon class="f-left"  points="${left}"${st}/>`
+         + `<polygon class="f-right" points="${right}"${st}/>`
+         + `<polygon class="f-top"   points="${top}"${st}/>`;
+  }
+  const topQuad = (x, y, w, d, h, base = 0) => quad(x, y, w, d, base + h);
+
+  /** Panneau plaqué sur la face gauche (+y) : porte, fenêtre, calandre. */
+  const panelY = (y, x0, x1, h0, h1, fill, op = 1) => {
+    const q = (xx, hh) => { const i = iso(xx, y); return pt([i[0], i[1] - hh]); };
+    return `<polygon points="${q(x0, h1)} ${q(x1, h1)} ${q(x1, h0)} ${q(x0, h0)}"
+              fill="${fill}" opacity="${op}"/>`;
+  };
+  /** Panneau plaqué sur la face droite (+x) : pare-brise, enseigne. */
+  const panelX = (x, y0, y1, h0, h1, fill, op = 1) => {
+    const q = (yy, hh) => { const i = iso(x, yy); return pt([i[0], i[1] - hh]); };
+    return `<polygon points="${q(y0, h1)} ${q(y1, h1)} ${q(y1, h0)} ${q(y0, h0)}"
+              fill="${fill}" opacity="${op}"/>`;
+  };
+
+  /** Épingle flottante : la seule étiquette qu'aucun volume ne peut recouvrir. */
+  const pin = (cx, cy, text, fill, darkInk, dashed = false) => {
+    const w = text.length * 4.05 + 12, h = 13.5;
+    return `<g transform="translate(${cx.toFixed(1)},${cy.toFixed(1)})" pointer-events="none">
+        <rect x="${(-w / 2).toFixed(1)}" y="${-h}" width="${w.toFixed(1)}" height="${h}" rx="4"
+              fill="${fill}" stroke="var(--sky-bg)" stroke-width="1.1"
+              ${dashed ? 'fill-opacity=".18" stroke="' + fill + '" stroke-dasharray="3 2.2"' : ''}/>
+        <path d="M-3.2,.4 L3.2,.4 L0,4.4 Z" fill="${fill}" ${dashed ? 'fill-opacity=".5"' : ''}/>
+        <text class="pin-text" y="${(-h / 2 + 2.6).toFixed(1)}" text-anchor="middle"
+              fill="${dashed ? fill : (darkInk ? '#17191C' : '#FFFFFF')}">${text}</text>
+      </g>`;
+  };
+
+  /* ── Teintes des véhicules, lisibles de jour comme de nuit ── */
+  const PAINTJOB = {
+    ok:    { t:'#44997F', r:'#2F6E5B', l:'#215040' },
+    warn:  { t:'#EDC751', r:'#CBA11C', l:'#9A7A0F' },
+    crit:  { t:'#E26A3C', r:'#BF4612', l:'#8F2F0A' },
+    plain: { t:'#BCC1C7', r:'#8E959C', l:'#6B7278' },
+  };
+  const CHASSIS = '#32373D', GLASS = '#1D2227';
+
+  /* ── Plan de la cour (grille 9 × 8) ─────────────────────── */
+  const BAYS = [
+    { x:2.9, y:0.5 }, { x:2.9, y:2.3 }, { x:2.9, y:4.1 },
+    { x:5.5, y:0.5 }, { x:5.5, y:2.3 }, { x:5.5, y:4.1 },
+  ];
+
+  const TRUCKS = [
+    { id:'AB-123-CD', bay:0, state:'tournee', tone:'plain', driver:'Karim Benali',
+      model:'Renault Master', kind:'VL 12 m³', tour:'T-2418 · Secteur Nord', km:'184 km', ct:'12/2026' },
+    { id:'CD-456-EF', bay:1, state:'dispo', tone:'ok', driver:null,
+      model:'Iveco Daily', kind:'VL 20 m³', ct:'04/2027' },
+    { id:'EF-789-GH', bay:2, state:'ct', tone:'warn', driver:'Luc Mercier',
+      model:'Renault D', kind:'7,5 T', ct:'04/11/2026 — dans 12 j' },
+    { id:'GH-012-IJ', bay:3, state:'tournee', tone:'plain', driver:'Sofiane Amrani',
+      model:'Mercedes Sprinter', kind:'VL 16 m³', tour:'T-2419 · Secteur Est', km:'96 km', ct:'09/2027' },
+    { id:'IJ-345-KL', bay:5, state:'panne', tone:'crit', driver:null, apron:{ x:3.0, y:6.2 },
+      model:'Volvo FL', kind:'19 T', ct:'06/2027', issue:'Embrayage — immobilisé depuis 2 j' },
+  ];
+
+  const BUILDINGS = [
+    { id:'bureau',  label:'Bureau',   x:0.10, y:0.10, w:2.20, d:2.20, h:38,
+      roof:'var(--sky)',     door:true,  windows:3 },
+    { id:'atelier', label:'Atelier',  x:0.20, y:5.40, w:2.30, d:2.30, h:30,
+      roof:'var(--chevron)', door:'wide', windows:2 },
+    { id:'pompe',   label:'Pompe',    x:7.95, y:0.30, w:0.85, d:1.00, h:18,
+      roof:'var(--paint)',   canopy:true },
+  ];
+
+  const PEOPLE = [
+    { id:'driver-luc',   label:'Luc M.',   x:7.20, y:6.20, tone:'crit' },
+    { id:'driver-nadia', label:'Nadia F.', x:8.30, y:6.80, tone:'warn' },
+  ];
+
+  const BADGE = {
+    dispo:   { g:'✓', c:'var(--moss)',    ink:false },
+    ct:      { g:'!', c:'var(--paint)',   ink:true  },
+    panne:   { g:'✕', c:'var(--chevron)', ink:false },
+    tournee: { g:'→', c:'var(--sky)',     ink:false },
+  };
+
+  /* ── Construction de la scène ────────────────────────────── */
+  function buildYard() {
+    const layers = [];
+    const push = (x, y, w, d, svg) => layers.push({ depth: (x + w / 2) + (y + d / 2), svg });
+    const pins = [];
+    let floor = '';
+
+    for (let i = 0; i < 9; i++)
+      for (let j = 0; j < 8; j++)
+        floor += `<polygon class="tile${(i + j) % 2 ? ' alt' : ''}" points="${quad(i, j, 1, 1)}"/>`;
+
+    floor += `<polygon points="${quad(0, 0, 9, 8)}" fill="none"
+                stroke="var(--tarmac-edge)" stroke-width="1.6" opacity=".75"/>`;
+
+    for (const ax of [2.75, 5.35]) {
+      floor += `<path class="lane" d="M${pt(iso(ax, 0.2))} L${pt(iso(ax, 5.3))}"/>`;
+    }
+
+    // marquage au sol
+    BAYS.forEach((b, i) => {
+      const t = TRUCKS.find(v => v.bay === i);
+      const vacant = !t || !!t.apron;
+      const away   = t && t.apron;
+      floor += `<polygon class="bay-line${vacant ? ' free' : ''}" points="${quad(b.x, b.y, 2.0, 1.1)}"
+                  ${away ? 'style="stroke:var(--chevron);opacity:.8"' : ''}/>`;
+    });
+
+    /* ── bâtiments ── */
+    for (const b of BUILDINGS) {
+      const c  = iso(b.x + b.w / 2, b.y + b.d / 2);
+      const yF = b.y + b.d, xF = b.x + b.w;
+      let detail = '';
+
+      if (b.board) {
+        // panneau d'affichage : un simple caisson avec une face claire
+        detail = panelX(xF, b.y + .05, yF - .05, 5, b.h - 2, 'var(--bld-top)', .9)
+               + panelX(xF, b.y + .18, yF - .18, 8, b.h - 5, b.roof, .85);
+      } else {
+        // acrotère de toit, couleur propre au bâtiment
+        detail = box(b.x + .06, b.y + .06, b.w - .12, b.d - .12, 3.5, b.h, b.roof)
+               + box(b.x + .26, b.y + .26, b.w - .52, b.d - .52, 1.4, b.h + 3.4, 'var(--bld-right)');
+        if (b.door === 'wide') {
+          detail += panelY(yF, b.x + .45, xF - .45, 0, b.h * .62, GLASS, .85);
+          detail += panelY(yF, b.x + .45, xF - .45, b.h * .60, b.h * .64, b.roof, .9);
+        } else if (b.door) {
+          detail += panelY(yF, b.x + .85, b.x + 1.35, 0, 14, GLASS, .8);
+        }
+        for (let k = 0; k < (b.windows || 0); k++) {
+          const w0 = b.y + .35 + k * ((b.d - .7) / Math.max(b.windows, 1));
+          detail += panelX(xF, w0, w0 + .42, b.h * .45, b.h * .74, GLASS, .55);
+        }
+        if (b.canopy) {
+          detail += box(b.x - .32, b.y - .28, b.w + .64, b.d + .56, 2.5, b.h + 9, b.roof);
+          detail += box(b.x + .36, b.y + .42, .14, .16, 9, b.h, CHASSIS);
+        }
+      }
+
+      const svg = `<g class="obj" data-sheet="bld-${b.id}" tabindex="0" role="button"
+                      aria-label="${b.label}">
+          <ellipse class="iso-shadow" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}"
+                   rx="${(b.w * TW / 2 * .8).toFixed(1)}" ry="${(b.d * TH / 2 * .8).toFixed(1)}"/>
+          ${box(b.x, b.y, b.w, b.d, b.h)}
+          ${detail}
+          <polygon class="halo" points="${topQuad(b.x, b.y, b.w, b.d, b.h)}"/>
+          <polygon points="${quad(b.x, b.y, b.w, b.d)}" fill="transparent" pointer-events="all"/>
+          <text class="bld-label" x="${c[0].toFixed(1)}"
+                y="${(c[1] - b.h - (b.canopy ? 16 : 9)).toFixed(1)}"
+                text-anchor="middle">${b.label}</text>
+        </g>`;
+      push(b.x, b.y, b.w, b.d, svg);
+    }
+
+    /* ── emplacement libre, cliquable ── */
+    BAYS.forEach((b, i) => {
+      if (TRUCKS.some(v => v.bay === i)) return;
+      push(b.x, b.y, 2.0, 1.1,
+        `<g class="obj" data-sheet="bay-free" tabindex="0" role="button" aria-label="Emplacement libre">
+           <polygon class="halo" points="${quad(b.x, b.y, 2.0, 1.1)}"/>
+           <polygon points="${quad(b.x, b.y, 2.0, 1.1)}" fill="transparent" pointer-events="all"/>
+         </g>`);
+      const c = iso(b.x + 1.0, b.y + 0.55);
+      pins.push(pin(c[0], c[1] - 4, 'LIBRE', 'var(--steel)', false, true));
+    });
+
+
+    /* ── camions ── */
+    for (const t of TRUCKS) {
+      const p = t.apron || BAYS[t.bay];
+      const ghost = t.state === 'tournee';
+      const bd = BADGE[t.state];
+      const cTop = iso(p.x + 1.0, p.y + 0.55);
+      let body;
+
+      if (ghost) {
+        body = `<polygon class="outline" points="${quad(p.x + .1, p.y + .12, 1.8, .86)}"/>
+                <polygon class="outline" points="${topQuad(p.x + .1, p.y + .12, 1.8, .86, 17)}"/>`;
+        for (const cx of [p.x + .1, p.x + 1.9]) {
+          const g = iso(cx, p.y + .98);
+          body += `<path class="outline" d="M${pt(g)} L${pt([g[0], g[1] - 17])}"/>`;
+        }
+      } else {
+        const C = PAINTJOB[t.tone];
+        body = box(p.x + .28, p.y + .92, .34, .14, 3.2, 0, CHASSIS)   // roues gauche
+             + box(p.x + 1.42, p.y + .92, .34, .14, 3.2, 0, CHASSIS)
+             + box(p.x + .05, p.y + .12, 1.90, .86, 3.5, 0, CHASSIS)  // châssis
+             + box(p.x + .08, p.y + .08, 1.24, .94, 17, 3.5)          // caisse
+             + box(p.x + 1.42, p.y + .13, .48, .84, 10, 3.5)          // cabine
+             + panelX(p.x + 1.90, p.y + .22, p.y + .88, 9, 13, GLASS, .9)   // pare-brise
+             + panelY(p.y + .97, p.x + 1.46, p.x + 1.86, 9, 13, GLASS, .55) // vitre latérale
+             + panelY(p.y + 1.02, p.x + .10, p.x + 1.30, 4.4, 5.6, C.t, .45); // liseré de caisse
+      }
+
+      const livery = ghost ? '' :
+        `--bld-top:${PAINTJOB[t.tone].t};--bld-right:${PAINTJOB[t.tone].r};--bld-left:${PAINTJOB[t.tone].l}`;
+
+      const svg = `<g class="obj${ghost ? ' ghost' : ''}" style="${livery}"
+                      data-sheet="truck-${t.id}" data-state="${t.state}"
+                      tabindex="0" role="button" aria-label="Camion ${t.id}">
+          <ellipse class="iso-shadow" cx="${cTop[0].toFixed(1)}" cy="${(cTop[1] + 2).toFixed(1)}"
+                   rx="${(TW * .76).toFixed(1)}" ry="${(TH * .46).toFixed(1)}"
+                   opacity="${ghost ? .22 : 1}"/>
+          ${body}
+          <polygon class="halo" points="${topQuad(p.x, p.y, 2.0, 1.1, ghost ? 17 : 21)}"/>
+          <polygon points="${quad(p.x, p.y, 2.0, 1.1)}" fill="transparent" pointer-events="all"/>
+        </g>`;
+      push(p.x, p.y, 2.0, 1.1, svg);
+      pins.push({ y: cTop[1], svg: pin(cTop[0], cTop[1] - (ghost ? 26 : 32),
+                                       `${bd.g} ${t.id}`, bd.c, bd.ink) });
+    }
+
+    /* ── chauffeurs présents ── */
+    for (const h of PEOPLE) {
+      const c = iso(h.x, h.y);
+      const C = PAINTJOB[h.tone];
+      const X = c[0], Y = c[1];
+      const svg = `<g class="obj" data-sheet="${h.id}" tabindex="0" role="button"
+                      aria-label="${h.label}">
+          <ellipse class="iso-shadow" cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" rx="7.5" ry="3.4"/>
+          <path d="M${(X-3.4).toFixed(1)},${(Y-1).toFixed(1)} L${(X-2.6).toFixed(1)},${(Y-11).toFixed(1)}
+                   L${(X+2.6).toFixed(1)},${(Y-11).toFixed(1)} L${(X+3.4).toFixed(1)},${(Y-1).toFixed(1)}Z"
+                fill="${CHASSIS}"/>
+          <rect x="${(X-3.9).toFixed(1)}" y="${(Y-19).toFixed(1)}" width="7.8" height="9"
+                rx="2.6" fill="${C.r}"/>
+          <rect x="${(X-3.9).toFixed(1)}" y="${(Y-13.4).toFixed(1)}" width="7.8" height="1.9"
+                fill="${C.t}" opacity=".85"/>
+          <circle cx="${X.toFixed(1)}" cy="${(Y-21.6).toFixed(1)}" r="3.3" fill="#8A929B"/>
+          <polygon class="halo"
+                   points="${pt([X-9,Y-26])} ${pt([X+9,Y-26])} ${pt([X+9,Y+3])} ${pt([X-9,Y+3])}"/>
+          <rect x="${(X-10).toFixed(1)}" y="${(Y-27).toFixed(1)}" width="20" height="31"
+                fill="transparent" pointer-events="all"/>
+        </g>`;
+      push(h.x - .32, h.y - .32, .64, .64, svg);
+      pins.push(pin(X, Y - 34, h.label, PAINTJOB[h.tone].r, h.tone === 'warn'));
+    }
+
+    layers.sort((a, b) => a.depth - b.depth);
+
+    document.getElementById('yard').innerHTML =
+      `<svg viewBox="-164 -58 345 286" role="img"
+            aria-label="Vue de la cour : six emplacements, cinq camions dont deux en tournée et un immobilisé à l’atelier, deux chauffeurs présents, le bureau, l’atelier et la pompe.">
+         <g>${floor}</g>
+         ${layers.map(l => l.svg).join('')}
+         <g class="pins">${pins.map(p => (typeof p === 'string' ? p : p.svg)).join('')}</g>
+       </svg>`;
+  }
+
+  /* ── Légende : résumé avant détail ───────────────────────── */
+  const LEGEND = [
+    { k:'dispo',   c:'var(--moss)',    n:1, l:'Au dépôt, prêt à partir' },
+    { k:'tournee', c:'var(--sky)',     n:2, l:'En tournée — place vide' },
+    { k:'ct',      c:'var(--paint)',   n:1, l:'Contrôle technique < 30 j' },
+    { k:'panne',   c:'var(--chevron)', n:1, l:'Immobilisé à l’atelier' },
+  ];
+
+  function buildLegend() {
+    document.getElementById('legend').innerHTML = LEGEND.map(g =>
+      `<button class="leg" data-filter="${g.k}">
+         <span class="sw" style="background:${g.c}"></span>
+         <span class="l">${g.l}</span>
+         <span class="n" style="color:${g.c}">${g.n}</span>
+       </button>`).join('');
+  }
+
+  /* ── Fiches (bottom sheet) ───────────────────────────────── */
+  const truckSheet = (t) => {
+    const label = { dispo:'Au dépôt, prêt', ct:'Contrôle technique à échéance',
+                    panne:'Immobilisé', tournee:'En tournée' }[t.state];
+    const tone  = { dispo:'p-ok', ct:'p-warn', panne:'p-crit', tournee:'p-info' }[t.state];
+    const facts = [
+      ['Véhicule', `${t.model} · ${t.kind}`],
+      ['Chauffeur', t.driver || '— non affecté'],
+      ['Contrôle technique', t.ct],
+    ];
+    if (t.tour)  facts.splice(2, 0, ['Tournée', `${t.tour} · ${t.km}`]);
+    if (t.issue) facts.splice(2, 0, ['Immobilisation', t.issue]);
+    return {
+      title: t.id, mono: true, pill: [tone, label],
+      sub: t.state === 'tournee' ? 'Emplacement libre jusqu’au retour'
+         : t.state === 'panne'   ? 'Garé devant l’atelier, hors emplacement'
+         : `Emplacement ${t.bay + 1} sur 6`,
+      facts,
+      acts: [
+        { l:'Ouvrir la fiche camion', primary:true },
+        { l:'Ses dépenses', goto:'argent' },
+      ],
+    };
+  };
+
+  const SHEETS = {
+    'bay-free': {
+      title:'Emplacement 5', sub:'Libre',
+      facts:[['Statut','Aucun véhicule affecté'],
+             ['Gabarit admis','Jusqu’à 19 T'],
+             ['Dernier occupant','Vendu en août 2026']],
+      acts:[{ l:'Ajouter un camion', primary:true, goto:'depot' }],
+    },
+    'bld-bureau': {
+      title:'Bureau', sub:'Tout ce qui entre et tout ce qui sort',
+      facts:[['Non facturé','3 180 € · 4 tournées'],
+             ['Dépenses à valider','3 · 412,80 €'],
+             ['Prochaine échéance','URSSAF T4 — 15/01/2027']],
+      acts:[{ l:'Facturation', primary:true, goto:'argent' },
+            { l:'Administratif', goto:'equipe' }],
+    },
+    'bld-atelier': {
+      title:'Atelier', sub:'Réparations, entretien et matériel',
+      facts:[['Immobilisé','IJ-345-KL — embrayage'],
+             ['Entretien à prévoir','CD-456-EF à 142 000 km'],
+             ['Matériel','18 références · 24 600 € de valeur résiduelle']],
+      acts:[{ l:'Voir le matériel', primary:true, goto:'depot' },
+            { l:'Coût des réparations', goto:'argent' }],
+    },
+    'bld-pompe': {
+      title:'Pompe', sub:'Carburant du mois',
+      facts:[['Dépensé','11 240 €'],
+             ['Consommation moyenne','28,4 L / 100 km'],
+             ['Plus gros poste','AB-123-CD — 3 180 €']],
+      acts:[{ l:'Dépenses carburant', primary:true, goto:'argent' }],
+    },
+    'bld-panneau': {
+      title:'Planning', sub:'Jeudi 23 octobre',
+      facts:[['En tournée','2 camions · 280 km'],
+             ['À affecter','T-2420 — secteur Sud'],
+             ['Chauffeur disponible','Nadia F. jusqu’au 31/10']],
+      acts:[{ l:'Ouvrir la journée', primary:true, goto:'journee' }],
+    },
+    'driver-luc': {
+      title:'Luc Mercier', sub:'CDD · au dépôt', pill:['p-crit','Document expiré'],
+      facts:[['Visite médicale','Expirée depuis 6 jours'],
+             ['Permis','C · valide jusqu’au 03/2029'],
+             ['Dernière tournée','T-2410 · 18/10'],
+             ['Fin de contrat','31/12/2026']],
+      acts:[{ l:'Relancer le document', primary:true },
+            { l:'Sa fiche', goto:'equipe' }],
+    },
+    'driver-nadia': {
+      title:'Nadia Fourcade', sub:'Intérim · au dépôt', pill:['p-warn','Fin de mission 31/10'],
+      facts:[['Agence','Interim Transport Lyon'],
+             ['Coût journalier','214 €'],
+             ['Affectation du jour','Aucune'],
+             ['Permis','C + FIMO · valides']],
+      acts:[{ l:'L’affecter à T-2420', primary:true, goto:'journee' },
+            { l:'Sa fiche', goto:'equipe' }],
+    },
+    'driver-karim': {
+      title:'Karim Benali', sub:'CDI · en tournée', pill:['p-ok','En route'],
+      facts:[['Tournée','T-2418 · Secteur Nord'],
+             ['Camion','AB-123-CD'],
+             ['Avancement','12 clients sur 18 · 184 km'],
+             ['Salaire fixe','2 340 € + primes']],
+      acts:[{ l:'Suivre la tournée', primary:true, goto:'journee' },
+            { l:'Sa fiche', goto:'equipe' }],
+    },
+    'driver-sofiane': {
+      title:'Sofiane Amrani', sub:'CDI · en tournée', pill:['p-ok','En route'],
+      facts:[['Tournée','T-2419 · Secteur Est'],
+             ['Camion','GH-012-IJ'],
+             ['Avancement','7 clients sur 11 · 96 km'],
+             ['Salaire fixe','2 280 € + primes']],
+      acts:[{ l:'Suivre la tournée', primary:true, goto:'journee' }],
+    },
+    'ia': {
+      title:'Assistant IA', sub:'Trois outils, depuis n’importe quel écran',
+      facts:[['Assistant','Poser une question sur la flotte, les coûts, un chauffeur'],
+             ['Scan intelligent','Photographier une facture : montant, fournisseur et camion extraits'],
+             ['Rapport','Synthèse mensuelle rédigée à partir des tournées et dépenses']],
+      acts:[{ l:'Poser une question', primary:true }, { l:'Scanner un document' }],
+    },
+    'messages': {
+      title:'Messages', sub:'2 non lus',
+      facts:[['Karim B. · 09:12','« Bouchon A6, je serai en retard sur Mâcon »'],
+             ['Luc M. · hier 18:40','« J’ai pris rendez-vous pour la visite médicale »']],
+      acts:[{ l:'Ouvrir la messagerie', primary:true }],
+    },
+    'alertes': {
+      title:'Alertes', sub:'3 en attente',
+      facts:[['Critique','IJ-345-KL immobilisé — 2 j'],
+             ['Critique','Visite médicale de Luc M. expirée'],
+             ['À surveiller','CT de EF-789-GH dans 12 j']],
+      acts:[{ l:'Tout traiter', primary:true, goto:'accueil' }],
+    },
+    'reglages': {
+      title:'Réglages', sub:'Maxime S. · manager',
+      facts:[['Société','SMAR Groupe · 5 véhicules'],
+             ['Accès','1 manager · 4 chauffeurs · 1 comptable'],
+             ['Thème','Suit l’appareil']],
+      acts:[{ l:'Gérer les accès', primary:true, goto:'equipe' }],
+    },
+    'tour-2418': {
+      title:'T-2418', mono:true, sub:'Secteur Nord · en cours', pill:['p-ok','En route'],
+      facts:[['Chauffeur','Karim Benali'],['Camion','AB-123-CD'],
+             ['Clients','12 livrés sur 18'],['Kilomètres','184 km · départ 06:10'],
+             ['Commissionnaire','Transalpe · 265 € la tournée']],
+      acts:[{ l:'Suivre en direct', primary:true }, { l:'Tarif appliqué', goto:'argent' }],
+    },
+    'tour-2419': {
+      title:'T-2419', mono:true, sub:'Secteur Est · en cours', pill:['p-ok','En route'],
+      facts:[['Chauffeur','Sofiane Amrani'],['Camion','GH-012-IJ'],
+             ['Clients','7 livrés sur 11'],['Kilomètres','96 km · départ 06:25']],
+      acts:[{ l:'Suivre en direct', primary:true }],
+    },
+    'tour-2415': {
+      title:'T-2415', mono:true, sub:'Clôturée hier à 17:20', pill:['p-mute','Facturable'],
+      facts:[['Chauffeur','Karim Benali'],['Clients','19 livrés'],
+             ['Kilomètres','212 km dont 18 km hors forfait'],
+             ['À facturer','265 € + 18 km supplémentaires']],
+      acts:[{ l:'Ajouter à la facture', primary:true, goto:'argent' }],
+    },
+    'affectation': {
+      title:'T-2420', mono:true, sub:'Secteur Sud · sans chauffeur', pill:['p-warn','À affecter'],
+      facts:[['Camion proposé','CD-456-EF — au dépôt'],
+             ['Chauffeur disponible','Nadia F. — intérim'],
+             ['Départ souhaité','Demain 06:00'],
+             ['Clients','14 points']],
+      acts:[{ l:'Affecter Nadia F.', primary:true }, { l:'Voir le planning', goto:'journee' }],
+    },
+    'depenses': {
+      title:'Dépenses à valider', sub:'3 · 412,80 €',
+      facts:[['Carburant · TotalEnergies','184,20 € — Karim B.'],
+             ['Péage · APRR','47,60 € — Sofiane A.'],
+             ['Pièces · Garage Mercier','181,00 € — IJ-345-KL']],
+      acts:[{ l:'Tout valider', primary:true, goto:'argent' }],
+    },
+    'facturation': {
+      title:'Facture Transalpe', sub:'4 tournées non facturées',
+      facts:[['Période','01/10 → 22/10'],['Tournées','T-2401, T-2406, T-2411, T-2415'],
+             ['Forfaits','4 × 265 €'],['Kilomètres hors forfait','42 km × 0,45 €'],
+             ['Total HT','1 078,90 €']],
+      acts:[{ l:'Émettre le PDF', primary:true, goto:'argent' }],
+    },
+  };
+
+  for (let i = 1; i <= 4; i++) {
+    SHEETS['depense-' + i] = {
+      title:'Dépense', sub:'Pièce justificative scannée',
+      facts:[['Statut', i === 4 ? 'Prélèvement automatique' : 'En attente de validation'],
+             ['Rattachement','Camion et tournée détectés automatiquement'],
+             ['Justificatif','Photo · lue par le scan intelligent']],
+      acts:[{ l:'Valider', primary:true }, { l:'Voir le justificatif' }],
+    };
+  }
+
+  /* ── Mécanique ───────────────────────────────────────────── */
+  const sheetEl = document.getElementById('sheet');
+  const scrimEl = document.getElementById('scrim');
+  let lastFocus = null;
+
+  function resolveSheet(id) {
+    if (id.startsWith('truck-')) {
+      const t = TRUCKS.find(v => v.id === id.slice(6));
+      if (t) return truckSheet(t);
+    }
+    return SHEETS[id] || {
+      title:'Détail', sub:'Écran existant de l’application',
+      facts:[['Note','Cet écran est conservé tel quel dans la refonte.']],
+      acts:[{ l:'Fermer', primary:true }],
+    };
+  }
+
+  function openSheet(id) {
+    const s = resolveSheet(id);
+    lastFocus = document.activeElement;
+    sheetEl.innerHTML = `
+      <div class="grab"></div>
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+        <h4${s.mono ? ' class="mono"' : ''}>${s.title}</h4>
+        ${s.pill ? `<span class="pill ${s.pill[0]}">${s.pill[1]}</span>` : ''}
+      </div>
+      ${s.sub ? `<p class="sub">${s.sub}</p>` : ''}
+      <dl class="facts">${s.facts.map(f =>
+        `<div class="fact"><dt>${f[0]}</dt><dd>${f[1]}</dd></div>`).join('')}</dl>
+      <div class="acts">${s.acts.map((a, i) =>
+        `<button class="act${a.primary ? ' primary' : ''}" data-act="${i}">${a.l}</button>`).join('')}</div>`;
+
+    sheetEl.querySelectorAll('.act').forEach(btn => {
+      const a = s.acts[+btn.dataset.act];
+      btn.addEventListener('click', () => { closeSheet(); if (a.goto) go(a.goto); });
+    });
+
+    sheetEl.dataset.open = '1';
+    scrimEl.dataset.open = '1';
+    const first = sheetEl.querySelector('.act');
+    if (first) first.focus();
+  }
+
+  function closeSheet() {
+    delete sheetEl.dataset.open;
+    delete scrimEl.dataset.open;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  const tabs  = [...document.querySelectorAll('.tab')];
+  const views = [...document.querySelectorAll('.view')];
+  const dests = [...document.querySelectorAll('.dest')];
+
+  function go(name) {
+    tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    views.forEach(v => {
+      if (v.dataset.view === name) { v.dataset.active = '1'; v.scrollTop = 0; }
+      else delete v.dataset.active;
+    });
+    dests.forEach(d => {
+      if (d.dataset.goto === name) d.dataset.on = '1'; else delete d.dataset.on;
+    });
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => go(t.dataset.tab)));
+  dests.forEach(d => d.addEventListener('click', () => go(d.dataset.goto)));
+  scrimEl.addEventListener('click', closeSheet);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+  document.addEventListener('click', e => {
+    const trigger = e.target.closest('[data-sheet]');
+    if (trigger) { openSheet(trigger.dataset.sheet); return; }
+    const leg = e.target.closest('.leg');
+    if (leg) {
+      const k = leg.dataset.filter;
+      document.querySelectorAll('#yard .obj[data-state]').forEach(o => {
+        if (o.dataset.state === k) o.dataset.sel = '1'; else delete o.dataset.sel;
+      });
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const g = e.target.closest && e.target.closest('#yard .obj');
+    if (g) { e.preventDefault(); openSheet(g.dataset.sheet); }
+  });
+
+  document.querySelectorAll('.subtabs').forEach(grp => {
+    grp.addEventListener('click', e => {
+      const b = e.target.closest('.subtab');
+      if (!b) return;
+      grp.querySelectorAll('.subtab').forEach(s =>
+        s.setAttribute('aria-pressed', String(s === b)));
+    });
+  });
+
+  /* ── Bascule jour / nuit ─────────────────────────────────── */
+  document.getElementById('themer').addEventListener('click', () => {
+    const dark = getComputedStyle(document.body)
+      .backgroundColor.match(/\d+/g).slice(0, 3)
+      .reduce((a, v) => a + +v, 0) / 3 < 110;
+    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  });
+
+  buildYard();
+  buildLegend();
+})();
+</script>

@@ -46,7 +46,10 @@ const _licenses = ['B', 'C', 'CE', 'C1', 'D'];
 // ── Page principale ───────────────────────────────────────────────────────────
 
 class ManagerRecruitmentPage extends ConsumerStatefulWidget {
-  const ManagerRecruitmentPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerRecruitmentPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerRecruitmentPage> createState() => _ManagerRecruitmentPageState();
@@ -159,7 +162,7 @@ class _ManagerRecruitmentPageState extends ConsumerState<ManagerRecruitmentPage>
     final filtered = _filtered;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('Recrutement'),
         actions: [
           helpButton(context, 'Recrutement',
@@ -168,7 +171,7 @@ class _ManagerRecruitmentPageState extends ConsumerState<ManagerRecruitmentPage>
             '• Faites avancer le statut : candidature → entretien → embauché\n'
             '• Convertissez un candidat en chauffeur en un clic'),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openDialog(),
         child: const Icon(Icons.person_add_outlined),

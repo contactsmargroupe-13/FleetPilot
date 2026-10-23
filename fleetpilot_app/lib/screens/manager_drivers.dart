@@ -9,7 +9,10 @@ import 'models/driver.dart';
 import 'models/driver_document.dart';
 
 class ManagerDriversPage extends ConsumerStatefulWidget {
-  const ManagerDriversPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerDriversPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerDriversPage> createState() => _ManagerDriversPageState();
@@ -96,7 +99,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
           a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('Chauffeurs'),
         actions: [
           helpButton(context, 'Chauffeurs',
@@ -105,7 +108,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
             '• Suivez les documents : permis, FIMO, FCO, carte conducteur\n'
             '• Alertes automatiques avant expiration'),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openDriverPage(null),
         icon: const Icon(Icons.add),

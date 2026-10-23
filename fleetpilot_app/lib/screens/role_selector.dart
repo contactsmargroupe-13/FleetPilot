@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import 'driver_home.dart';
-import 'manager_dashboard.dart';
+import 'manager_shell.dart';
 import 'onboarding_page.dart';
 import 'models/candidate.dart';
 import 'models/user_access.dart';

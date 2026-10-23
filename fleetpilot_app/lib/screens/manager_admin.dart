@@ -13,7 +13,10 @@ import '../utils/shared_widgets.dart';
 import 'models/admin_document.dart';
 
 class ManagerAdminPage extends ConsumerStatefulWidget {
-  const ManagerAdminPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerAdminPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerAdminPage> createState() => _ManagerAdminPageState();
@@ -226,7 +229,7 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('Administratif'),
         actions: [
           helpButton(context, 'Administratif',
@@ -235,7 +238,7 @@ class _ManagerAdminPageState extends ConsumerState<ManagerAdminPage> {
             '• Factures prestataires, contrats de location\n'
             '• Filtrez par catégorie pour retrouver rapidement'),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openAddDialog(),
         icon: const Icon(Icons.add),

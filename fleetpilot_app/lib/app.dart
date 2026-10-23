@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'providers/app_state.dart';
 import 'screens/driver_home.dart';
 import 'screens/login_page.dart';
-import 'screens/manager_dashboard.dart';
+import 'screens/manager_shell.dart';
 import 'screens/onboarding_page.dart';
 import 'screens/role_selector.dart';
 import 'screens/models/user_access.dart';

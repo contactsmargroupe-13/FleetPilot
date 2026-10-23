@@ -9,7 +9,10 @@ import 'add_truck.dart';
 import 'models/equipment.dart';
 
 class ManagerAssetsPage extends ConsumerWidget {
-  const ManagerAssetsPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerAssetsPage({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,7 +44,7 @@ class ManagerAssetsPage extends ConsumerWidget {
     final totalAmorti = totalAchat - totalValeur;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: embedded ? null : (AppBar(
         title: const Text('Actifs'),
         actions: [
           helpButton(context, 'Actifs',
@@ -50,7 +53,7 @@ class ManagerAssetsPage extends ConsumerWidget {
             '• Suivi de l\'amortissement mensuel\n'
             '• Coût mensuel par véhicule (achat ou location)'),
         ],
-      ),
+      )),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

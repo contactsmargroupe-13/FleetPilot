@@ -10,7 +10,10 @@ import 'models/daily_assignment.dart';
 import 'models/driver.dart';
 
 class ManagerAssignmentsPage extends ConsumerStatefulWidget {
-  const ManagerAssignmentsPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerAssignmentsPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerAssignmentsPage> createState() =>
@@ -68,7 +71,7 @@ class _ManagerAssignmentsPageState
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('Flotte'),
         actions: [
           helpButton(context, 'Flotte',
@@ -78,7 +81,7 @@ class _ManagerAssignmentsPageState
             '• Appuyez sur un chauffeur pour modifier son affectation\n'
             '• Les tarifs du commissionnaire sont affichés sur chaque carte'),
         ],
-      ),
+      )),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -8,7 +8,10 @@ import '../utils/shared_widgets.dart';
 import 'models/client_pricing.dart';
 
 class ManagerClientPricingPage extends ConsumerStatefulWidget {
-  const ManagerClientPricingPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerClientPricingPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerClientPricingPage> createState() =>
@@ -27,7 +30,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
     );
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('Commissionnaires'),
         actions: [
           helpButton(context, 'Commissionnaires',
@@ -37,7 +40,7 @@ class _ManagerClientPricingPageState extends ConsumerState<ManagerClientPricingP
             '• Ajoutez les options : gasoil, manutention, km sup.\n'
             '• Attribuez une couleur pour identifier rapidement'),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddForm,
         icon: const Icon(Icons.add),

@@ -35,7 +35,10 @@ class UrssafRates {
 }
 
 class ManagerUrssafPage extends ConsumerStatefulWidget {
-  const ManagerUrssafPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerUrssafPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerUrssafPage> createState() => _ManagerUrssafPageState();
@@ -99,7 +102,7 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
     final annuelCharges = totalCharges * 12;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('URSSAF & Charges'),
         actions: [
           IconButton(
@@ -108,7 +111,7 @@ class _ManagerUrssafPageState extends ConsumerState<ManagerUrssafPage> {
             onPressed: _showRatesDialog,
           ),
         ],
-      ),
+      )),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

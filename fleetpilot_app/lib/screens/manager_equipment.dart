@@ -7,7 +7,10 @@ import '../providers/app_state.dart';
 import 'models/equipment.dart';
 
 class ManagerEquipmentPage extends ConsumerStatefulWidget {
-  const ManagerEquipmentPage({super.key});
+  /// Intégrée comme sous-onglet : la coquille fournit déjà la barre
+  /// de titre, on supprime alors celle de la page.
+  final bool embedded;
+  const ManagerEquipmentPage({super.key, this.embedded = false});
 
   @override
   ConsumerState<ManagerEquipmentPage> createState() =>
@@ -21,7 +24,7 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : (AppBar(
         title: const Text('Matériel'),
         actions: [
           helpButton(context, 'Matériel',
@@ -30,7 +33,7 @@ class _ManagerEquipmentPageState extends ConsumerState<ManagerEquipmentPage> {
             '• Suivez l\'amortissement et la valeur résiduelle\n'
             '• Affectez le matériel à un camion depuis la page Camions'),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(null),
         icon: const Icon(Icons.add),
