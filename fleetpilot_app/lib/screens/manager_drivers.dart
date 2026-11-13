@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import 'widgets/assignment_dialog.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
 import '../utils/shared_widgets.dart';
@@ -191,54 +192,58 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
             ),
             const SizedBox(height: 8),
 
-            // Affectation rapide
+            // Affectation : touchez pour la modifier.
             Builder(builder: (_) {
-              final state = ref.read(appStateProvider);
+              final state = ref.watch(appStateProvider);
               final assign = state.getAssignment(driver.name);
-              if (assign == null) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: DC.surface2,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.link_off, size: 20, color: DC.textTertiary),
-                      const SizedBox(width: 6),
-                      Text('Non affecté', style: TextStyle(fontSize: 12, color: DC.textTertiary)),
-                    ],
-                  ),
-                );
-              }
-              final truck = state.trucks.where((t) => t.plate == assign.truckPlate).firstOrNull;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.teal.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.local_shipping_outlined, size: 20, color: Colors.teal),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${assign.truckPlate}${truck != null ? ' • ${truck.model}' : ''}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal),
-                    ),
-                    if (assign.companyName != null && assign.companyName!.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      const Icon(Icons.handshake_outlined, size: 20, color: Colors.indigo),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(assign.companyName!,
-                            style: const TextStyle(fontSize: 12, color: Colors.indigo),
-                            overflow: TextOverflow.ellipsis),
+              final truck = assign == null
+                  ? null
+                  : state.trucks
+                      .where((t) => t.plate == assign.truckPlate)
+                      .firstOrNull;
+              final color = assign == null ? DC.warning : Colors.teal;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Material(
+                  color: color.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => showAssignmentDialog(context, ref, driver.name),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 9),
+                      child: Row(
+                        children: [
+                          Icon(
+                              assign == null
+                                  ? Icons.link_off
+                                  : Icons.local_shipping_outlined,
+                              size: 20,
+                              color: color),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              assign == null
+                                  ? 'Pas de camion attitré — affecter'
+                                  : [
+                                      '${assign.truckPlate}${truck != null ? ' • ${truck.model}' : ''}',
+                                      if (assign.companyName != null &&
+                                          assign.companyName!.isNotEmpty)
+                                        assign.companyName!,
+                                    ].join('  ·  '),
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: color),
+                            ),
+                          ),
+                          Icon(Icons.edit_outlined, size: 16, color: color),
+                        ],
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               );
             }),
@@ -248,7 +253,7 @@ class _ManagerDriversPageState extends ConsumerState<ManagerDriversPage> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                _box('Salaire fixe',
+                _box('Salaire brut',
                     '${driver.fixedSalary.toStringAsFixed(0)} €',
                     Icons.payments_outlined),
                 _box('Bonus',
@@ -483,7 +488,8 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
         fixedSalary: _parseDouble(_salaryCtrl.text),
         bonus: _parseDouble(_bonusCtrl.text),
         phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        // Minuscules : les règles Firestore comparent à l'email du compte.
+        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim().toLowerCase(),
         socialSecurityNumber: _ssCtrl.text.trim().isEmpty ? null : _ssCtrl.text.trim(),
         address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
         nationality: _nationalityCtrl.text.trim().isEmpty ? null : _nationalityCtrl.text.trim(),
@@ -500,6 +506,7 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
         hasPermisEB: _permisEB,
         status: _status,
         pinHash: widget.driver?.pinHash,
+        pinLoginEmail: widget.driver?.pinLoginEmail,
       ),
     );
   }
@@ -755,7 +762,8 @@ class _DriverFormPageState extends ConsumerState<_DriverFormPage> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: 'Salaire fixe (€)',
+                labelText: 'Salaire brut mensuel (€)',
+                helperText: 'Les charges patronales sont ajoutées dans le résultat',
                 prefixIcon: Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(),
               ),

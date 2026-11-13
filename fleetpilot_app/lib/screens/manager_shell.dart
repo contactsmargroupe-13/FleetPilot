@@ -5,29 +5,21 @@ import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import '../utils/page_help.dart';
 import '../utils/theme_ctx.dart';
-import 'depot/depot_page.dart';
 import 'manager_admin.dart';
-import 'manager_ai_chat.dart';
-import 'manager_ai_report.dart';
 import 'manager_alerts.dart';
-import 'manager_assets.dart';
-import 'manager_assignments.dart';
-import 'manager_billing.dart';
 import 'manager_client_pricing.dart';
-import 'manager_dashboard.dart';
 import 'manager_drivers.dart';
-import 'manager_equipment.dart';
 import 'manager_expenses.dart';
-import 'manager_home.dart';
 import 'manager_messages.dart';
 import 'manager_planning.dart';
-import 'manager_recruitment.dart';
+import 'manager_qr_codes.dart';
+import 'manager_result.dart';
 import 'manager_settings.dart';
+import 'manager_tabs.dart';
+import 'depot/depot_page.dart' show ShellNav;
 import 'manager_tours.dart';
 import 'manager_urssaf.dart';
-import 'manager_vehicles.dart';
 import 'models/user_access.dart';
-import 'smart_scan_page.dart';
 
 /// Un sous-onglet d'une destination. `page` est la clé de `rolePages` :
 /// c'est elle qui décide si le rôle courant y a droit.
@@ -47,10 +39,11 @@ class _Dest {
 }
 
 /// ─────────────────────────────────────────────────────────────────────────
-/// La coquille manager : cinq destinations, chacune avec ses sous-onglets.
+/// La coquille manager : trois destinations, chacune avec ses sous-onglets.
 ///
-/// Remplace le tiroir latéral de dix-sept entrées doublé d'une barre de trois
-/// onglets. Aucune page n'a disparu : elles sont devenues des sous-onglets.
+/// Rentabilité — ce que rapporte le transport : résultat, tournées, dépenses,
+///   factures. Gestion — le quotidien : aujourd'hui, chauffeurs, camions.
+/// Paramètres — ce qu'on règle une fois : commissionnaires, QR, documents.
 /// ─────────────────────────────────────────────────────────────────────────
 class ManagerShell extends ConsumerStatefulWidget {
   final AccessRole role;
@@ -111,100 +104,89 @@ class _ManagerShellState extends ConsumerState<ManagerShell>
   }
 
   // ── Catalogue complet, avant filtrage par rôle ────────────────────────
+  //
+  // Les index de sous-onglets sont ceux de ce catalogue : `_go` les
+  // reprojette sur ce que le rôle voit. Toute navigation inter-pages
+  // (dépôt, résultat) s'y réfère — les déplacer, c'est les mettre à jour.
   List<_Dest> _catalogue() => [
-        _Dest('accueil', 'Accueil', Icons.home_outlined, [
-          _Sub('Résumé', 'dashboard',
-              (nav) => ManagerHomePage(onNavigate: nav, canReach: _reaches)),
-          _Sub('Analyse', 'dashboard', (_) => const ManagerDashboardPage()),
-        ]),
-        _Dest('depot', 'Dépôt', Icons.warehouse_outlined, [
-          _Sub('La cour', 'camions', (nav) => DepotPage(onNavigate: nav),
-              help: ('La cour',
-                  'Votre dépôt vu d\'en haut : chaque emplacement est une place réelle.\n\n'
-                  '• Un camion en tournée est en pointillés — la place est vide\n'
-                  '• Un immobilisé est rouge et garé devant l\'atelier\n'
-                  '• Une échéance proche porte une épingle jaune\n'
-                  '• Touchez un bâtiment pour ouvrir la rubrique correspondante')),
-          _Sub('Camions', 'camions', (_) => const ManagerVehiclesPage(),
-              help: ('Camions',
-                  'Gérez votre parc de véhicules.\n\n'
-                  '• Ajoutez vos camions avec immatriculation et modèle\n'
-                  '• Suivez assurance et contrôle technique\n'
-                  '• Affectez du matériel (transpalette, etc.)\n'
-                  '• Consultez les tournées par camion')),
-          _Sub('Matériel', 'materiel',
-              (_) => const ManagerEquipmentPage(embedded: true),
-              help: ('Matériel',
-                  'Gérez le matériel et son amortissement.\n\n'
-                  '• Ajoutez transpalettes, outils, informatique...\n'
-                  '• Suivez l\'amortissement et la valeur résiduelle\n'
-                  '• Affectez le matériel à un camion depuis l\'onglet Camions')),
-        ]),
-        _Dest('journee', 'Journée', Icons.today_outlined, [
-          _Sub('Planning', 'planning', (_) => const ManagerPlanningPage()),
+        _Dest('rentabilite', 'Rentabilité', Icons.trending_up, [
+          _Sub('Résultat', 'dashboard',
+              (nav) => ManagerResultPage(
+                  onNavigate: nav,
+                  canReach: _reaches,
+                  canEditCompany: _can('parametres')),
+              help: ('Résultat',
+                  'Ce que le transport a rapporté, ce qu\'il a coûté, ce qu\'il reste.\n\n'
+                  '• Tout est en HT, salaires comptés chargés\n'
+                  '• Coûts fixes au prorata des jours écoulés\n'
+                  '• « Ce qu\'il faut retenir » : les points qui coûtent le plus\n'
+                  '• Export comptable en bas de page')),
           _Sub('Tournées', 'tournees', (_) => const ManagerTours()),
-          _Sub('Affectations', 'flotte',
-              (_) => const ManagerAssignmentsPage(embedded: true),
-              help: ('Affectations',
-                  'Organisez votre flotte par commissionnaire.\n\n'
-                  '• Chaque commissionnaire regroupe ses chauffeurs et camions\n'
-                  '• Appuyez sur + pour ajouter un chauffeur\n'
-                  '• Appuyez sur un chauffeur pour modifier son affectation\n'
-                  '• Les tarifs du commissionnaire sont affichés sur chaque carte')),
-        ]),
-        _Dest('argent', 'Argent', Icons.euro_outlined, [
           _Sub('Dépenses', 'depenses', (_) => const ManagerExpensesPage(),
               help: ('Dépenses',
-                  'Suivez toutes les dépenses de votre flotte.\n\n'
-                  '• Carburant, péages, réparations, amendes\n'
-                  '• Scan OCR pour saisir une facture en photo\n'
-                  '• Filtrez par camion, type ou période')),
-          _Sub('Facturation', 'facturation', (_) => const ManagerBillingPage(),
-              help: ('Facturation',
-                  'Générez vos factures automatiquement.\n\n'
-                  '• Basé sur les tournées saisies par les chauffeurs\n'
-                  '• Calcul automatique selon le tarif commissionnaire\n'
-                  '• Export PDF pour envoi')),
-          _Sub('URSSAF', 'urssaf',
-              (_) => const ManagerUrssafPage(embedded: true)),
-          _Sub('Actifs', 'actifs',
-              (_) => const ManagerAssetsPage(embedded: true),
-              help: ('Actifs',
-                  'Vue d\'ensemble de vos actifs et amortissements.\n\n'
-                  '• Valeur totale de vos camions et matériel\n'
-                  '• Suivi de l\'amortissement mensuel\n'
-                  '• Coût mensuel par véhicule (achat ou location)')),
-          _Sub('Commissionnaires', 'commissionnaires',
-              (_) => const ManagerClientPricingPage(embedded: true),
-              help: ('Commissionnaires',
-                  'Configurez vos commissionnaires et leurs tarifs.\n\n'
-                  '• À la fiche : forfait journalier et/ou tarif par fiche\n'
-                  '• Au point : forfait journalier et/ou tarif par colis\n'
-                  '• Ajoutez les options : gasoil, manutention, km sup.\n'
-                  '• Attribuez une couleur pour identifier rapidement')),
+                  'Toutes les dépenses de la flotte, TVA comprise.\n\n'
+                  '• Saisissez le montant TTC du ticket : le HT est calculé\n'
+                  '• Amende : indiquez le chauffeur à désigner\n'
+                  '• Un « Entretien » remet à zéro le compteur de vidange')),
+          _Sub('Factures', 'facturation', (_) => const InvoicesTab(),
+              help: ('Factures',
+                  'Le geste de fin de mois, en deux temps.\n\n'
+                  '• À facturer : factures calculées d\'après vos tarifs, export PDF\n'
+                  '• Relevés reçus : ce que le commissionnaire a vraiment payé\n'
+                  '• Au point : saisissez les points du relevé\n'
+                  '• L\'écart et les pénalités apparaissent dans le résultat')),
         ]),
-        _Dest('equipe', 'Équipe', Icons.groups_outlined, [
+        _Dest('gestion', 'Gestion', Icons.local_shipping_outlined, [
+          _Sub('Aujourd’hui', 'planning',
+              (nav) => ManagerPlanningPage(onNavigate: nav, canReach: _reaches),
+              help: ('Aujourd’hui',
+                  'Qui roule, qui est absent, ce qui est à traiter.\n\n'
+                  '• Un camion sans chauffeur ce jour-là est signalé\n'
+                  '• Déclarez congés et arrêts, choisissez un remplaçant\n'
+                  '• Changez de jour pour préparer la semaine')),
           _Sub('Chauffeurs', 'chauffeurs',
               (_) => const ManagerDriversPage(embedded: true),
               help: ('Chauffeurs',
-                  'Gérez vos chauffeurs et leurs documents.\n\n'
-                  '• Ajoutez un chauffeur avec son statut (CDI, CDD, Intérim)\n'
-                  '• Suivez les documents : permis, FIMO, FCO, carte conducteur\n'
-                  '• Alertes automatiques avant expiration')),
-          _Sub('Recrutement', 'recrutement',
-              (_) => const ManagerRecruitmentPage(embedded: true),
-              help: ('Recrutement',
-                  'Suivez vos candidatures et embauches.\n\n'
-                  '• Les candidats postulent depuis la page d\'accueil\n'
-                  '• Faites avancer le statut : candidature → entretien → embauché\n'
-                  '• Convertissez un candidat en chauffeur en un clic')),
-          _Sub('Administratif', 'administratif',
+                  'Vos chauffeurs, leur camion et leurs documents.\n\n'
+                  '• Touchez la ligne camion pour changer l\'affectation\n'
+                  '• Salaire brut : les charges sont ajoutées dans le résultat\n'
+                  '• Alertes automatiques avant expiration des documents')),
+          _Sub('Camions', 'camions', (nav) => TrucksTab(onNavigate: nav),
+              help: ('Camions',
+                  'Votre parc, en liste ou en plan.\n\n'
+                  '• Liste : assurance, contrôle technique, entretien au km\n'
+                  '• Plan : la cour vue d\'en haut, qui est parti, qui est à l\'atelier\n'
+                  '• Matériel : transpalettes, diables, amortissement')),
+        ]),
+        _Dest('reglages', 'Paramètres', Icons.tune, [
+          _Sub('Commissionnaires', 'commissionnaires',
+              (_) => const ManagerClientPricingPage(embedded: true),
+              help: ('Commissionnaires',
+                  'Vos donneurs d\'ordre et leurs tarifs.\n\n'
+                  '• À la fiche : forfait par jour\n'
+                  '• Au point : tarif par point livré\n'
+                  '• Options : gasoil, manutention, km sup.')),
+          _Sub('QR codes', 'parametres', (_) => const ManagerQrCodesPage(),
+              help: ('QR codes',
+                  'Le démarrage de journée des chauffeurs.\n\n'
+                  '• Imprimez un QR code par camion et collez-le en cabine\n'
+                  '• Donnez un code PIN à chaque chauffeur\n'
+                  '• Le chauffeur scanne, choisit son nom, tape son PIN\n'
+                  '• Puis il saisit ses km ou lance le GPS')),
+          _Sub('Documents', 'administratif',
               (_) => const ManagerAdminPage(embedded: true),
-              help: ('Administratif',
+              help: ('Documents',
                   'Stockez et classez vos documents administratifs.\n\n'
                   '• Contrats chauffeurs, fiches de paie, assurances\n'
-                  '• Factures prestataires, contrats de location\n'
-                  '• Filtrez par catégorie pour retrouver rapidement')),
+                  '• Factures prestataires, contrats de location')),
+          _Sub('URSSAF', 'urssaf',
+              (_) => const ManagerUrssafPage(embedded: true)),
+          _Sub('Entreprise', 'parametres', (_) => const ManagerSettingsPage(),
+              help: ('Entreprise',
+                  'Votre entreprise et ses accès.\n\n'
+                  '• Nom, SIRET, adresse\n'
+                  '• Accès comptable\n'
+                  '• Clé API pour la lecture des tickets carburant')),
         ]),
       ];
 
@@ -237,63 +219,6 @@ class _ManagerShellState extends ConsumerState<ManagerShell>
           ? _can('messages')
           : _dests.any((d) => d.id == destination);
 
-  void _openAi() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.cSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.cSurface3,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(height: 14),
-            _aiTile(Icons.auto_awesome, 'Assistant',
-                'Posez une question sur votre flotte',
-                () => const ManagerAiChatPage()),
-            _aiTile(Icons.document_scanner_outlined, 'Scan intelligent',
-                'Photographiez une facture, les champs se remplissent',
-                () => const SmartScanPage()),
-            _aiTile(Icons.analytics_outlined, 'Rapport',
-                'Synthèse du mois rédigée à partir de vos données',
-                () => const ManagerAiReportPage()),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _aiTile(IconData icon, String title, String sub, Widget Function() page) {
-    return ListTile(
-      leading: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: context.cPrimaryBg,
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: Icon(icon, size: 20, color: DC.primary),
-      ),
-      title: Text(title, style: context.tBody(15, w: FontWeight.w600)),
-      subtitle: Text(sub, style: context.tBody(12.5, color: context.cInk2)),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(context, MaterialPageRoute(builder: (_) => page()));
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appStateProvider);
@@ -306,14 +231,8 @@ class _ManagerShellState extends ConsumerState<ManagerShell>
 
     return Scaffold(
       appBar: AppBar(
-        title: DC.logo(size: 20),
+        title: DC.logo(size: 20, light: context.isDark),
         actions: [
-          if (_can('ia_chat'))
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              tooltip: 'Assistant IA',
-              onPressed: _openAi,
-            ),
           if (_can('messages'))
             IconButton(
               icon: Badge(
@@ -339,28 +258,6 @@ class _ManagerShellState extends ConsumerState<ManagerShell>
             onSelected: (v) {
               if (v == 'aide' && help != null) {
                 showPageHelp(context, help.$1, help.$2);
-              } else if (v == 'reglages') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                      appBar: AppBar(
-                        title: const Text('Paramètres'),
-                        actions: [
-                          Builder(
-                            builder: (ctx) => helpButton(ctx, 'Paramètres',
-                                'Configurez votre entreprise et vos accès.\n\n'
-                                '• Infos entreprise : nom, SIRET, adresse\n'
-                                '• Code PIN manager pour protéger l\'accès\n'
-                                '• Créez des accès limités (ex: comptable)\n'
-                                '• Clé API pour l\'assistant IA'),
-                          ),
-                        ],
-                      ),
-                      body: const ManagerSettingsPage(),
-                    ),
-                  ),
-                );
               } else if (v == 'sortie') {
                 Navigator.of(context).popUntil((r) => r.isFirst);
               }
@@ -374,16 +271,6 @@ class _ManagerShellState extends ConsumerState<ManagerShell>
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.help_outline_rounded, size: 20),
                     title: Text('À quoi sert « ${help.$1} » ?'),
-                  ),
-                ),
-              if (_can('parametres'))
-                const PopupMenuItem(
-                  value: 'reglages',
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.settings_outlined, size: 20),
-                    title: Text('Paramètres'),
                   ),
                 ),
               const PopupMenuItem(

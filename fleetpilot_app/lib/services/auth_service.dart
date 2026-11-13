@@ -11,12 +11,18 @@ class AppUser {
   final AccessRole role;
   final String companyId;
 
+  /// Fiche chauffeur rattachée (id du document `drivers`). Les règles
+  /// Firestore s'en servent pour vérifier qu'un compte chauffeur correspond
+  /// bien à une fiche de cette entreprise.
+  final String? driverName;
+
   const AppUser({
     required this.uid,
     required this.email,
     required this.name,
     required this.role,
     required this.companyId,
+    this.driverName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +31,7 @@ class AppUser {
     'name': name,
     'role': role.name,
     'companyId': companyId,
+    if (driverName != null) 'driverName': driverName,
   };
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -36,6 +43,7 @@ class AppUser {
       orElse: () => AccessRole.chauffeur,
     ),
     companyId: json['companyId'] as String,
+    driverName: json['driverName'] as String?,
   );
 }
 
@@ -148,6 +156,7 @@ class AuthService {
           name: driver.fullName,
           role: AccessRole.chauffeur,
           companyId: companyId,
+          driverName: driverDoc.id,
         );
         await _firestore.collection('users').doc(uid).set(appUser.toJson());
         return appUser;

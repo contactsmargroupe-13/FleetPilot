@@ -1,6 +1,7 @@
 // Point d'entrée de prévisualisation — ne fait pas partie de l'application.
 // Permet de voir la coquille et la cour avec un jeu d'essai, sans Firebase :
 //   flutter run -d chrome -t lib/demo/depot_preview.dart
+// Ajouter `?vue=chauffeur` à l'URL pour l'écran du chauffeur.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,9 +16,12 @@ import '../screens/models/client_pricing.dart';
 import '../screens/models/driver.dart';
 import '../screens/models/equipment.dart';
 import '../screens/models/expense.dart';
+import '../screens/models/odometer_reading.dart';
 import '../screens/models/tour.dart';
 import '../screens/models/user_access.dart';
+import '../screens/driver_home.dart';
 import '../services/database_service.dart';
+import '../services/driver_session.dart';
 import '../utils/design_constants.dart';
 
 DateTime get _today => DateTime.now();
@@ -72,6 +76,8 @@ void _seed(AppState s) {
     ClientPricing(companyName: 'Transalpe', dailyRate: 265, extraKmEnabled: true,
         extraKmPrice: 0.45),
     ClientPricing(companyName: 'Rhône Express', dailyRate: 290),
+    ClientPricing(companyName: 'Colis Sud', billingMode: BillingMode.auPoint,
+        pricePerPoint: 1.9),
   ];
 
   s.tours = [
@@ -89,7 +95,22 @@ void _seed(AppState s) {
           truckPlate: i.isEven ? 'AB-123-CD' : 'GH-012-IJ',
           companyName: i.isEven ? 'Transalpe' : 'Rhône Express',
           sector: 'Secteur Nord', kmTotal: 150 + i * 4.0,
-          clientsCount: 12 + i % 6, hasHandling: false, status: 'terminée'),
+          clientsCount: 12 + i % 6, hasHandling: false, status: 'terminée',
+          kmSource: i % 4 == 0 ? 'saisie' : 'compteur'),
+    for (var i = 1; i <= 8; i++)
+      Tour(id: 'c$i', tourNumber: 'C-$i', date: _d(i),
+          driverName: 'Luc Mercier', truckPlate: 'EF-789-GH',
+          companyName: 'Colis Sud', kmTotal: 120 + i * 3.0,
+          clientsCount: 0, hasHandling: false, status: 'terminée'),
+  ];
+
+  // Karim a commencé au compteur il y a 15 jours sans terminer ; le relevé
+  // suivant du camion permet de reconstituer sa journée.
+  s.odometer = [
+    OdometerReading(id: 'o1', truckPlate: 'AB-123-CD', date: _d(15),
+        km: 84210, driverName: 'Karim Benali'),
+    OdometerReading(id: 'o2', truckPlate: 'AB-123-CD', date: _d(14),
+        km: 84391, driverName: 'Karim Benali'),
   ];
 
   s.expenses = [
@@ -118,9 +139,13 @@ void main() async {
   GoogleFonts.config.allowRuntimeFetching = true;
   if (kIsWeb) databaseFactory = databaseFactoryFfiWeb;
 
+  await DriverSession.init();
   final db = await DatabaseService.init();
   final appState = AppState(db);
   _seed(appState);
+  if (Uri.base.queryParameters['vue'] == 'chauffeur') {
+    await DriverSession.setDriverName('Karim Benali');
+  }
 
   runApp(ProviderScope(
     overrides: [
@@ -142,12 +167,15 @@ class _PreviewApp extends StatelessWidget {
       theme: DC.theme,
       darkTheme: DC.darkTheme,
       themeMode: ThemeMode.system,
-      // ?role=comptable pour vérifier le filtrage par rôle
-      home: ManagerShell(
-        role: Uri.base.queryParameters['role'] == 'comptable'
-            ? AccessRole.comptable
-            : AccessRole.manager,
-      ),
+      // ?role=comptable pour vérifier le filtrage par rôle,
+      // ?vue=chauffeur pour l'écran du chauffeur.
+      home: Uri.base.queryParameters['vue'] == 'chauffeur'
+          ? const DriverHomePage()
+          : ManagerShell(
+              role: Uri.base.queryParameters['role'] == 'comptable'
+                  ? AccessRole.comptable
+                  : AccessRole.manager,
+            ),
     );
   }
 }

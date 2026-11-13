@@ -11,6 +11,7 @@ import 'firebase_options.dart';
 import 'app.dart';
 import 'providers/app_state.dart';
 import 'services/database_service.dart';
+import 'services/driver_session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,8 @@ void main() async {
   if (kIsWeb) {
     databaseFactory = databaseFactoryFfiWeb;
   }
+
+  await DriverSession.init();
 
   final db = await DatabaseService.init();
   final appState = AppState(db);

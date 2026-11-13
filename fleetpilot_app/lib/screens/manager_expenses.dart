@@ -180,7 +180,7 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
                       items: [
                         const DropdownMenuItem<ExpenseType>(
                             value: null, child: Text('Tous')),
-                        ...ExpenseType.values.map((t) =>
+                        ...expenseTypesOrdered.map((t) =>
                             DropdownMenuItem<ExpenseType>(
                                 value: t,
                                 child: Text(expenseTypeLabel(t)))),
@@ -310,6 +310,14 @@ class _ManagerExpensesPageState extends ConsumerState<ManagerExpensesPage> {
         return Icons.inventory_2_outlined;
       case ExpenseType.other:
         return Icons.receipt_long_outlined;
+      case ExpenseType.toll:
+        return Icons.toll_outlined;
+      case ExpenseType.fine:
+        return Icons.gavel_outlined;
+      case ExpenseType.maintenance:
+        return Icons.oil_barrel_outlined;
+      case ExpenseType.claim:
+        return Icons.car_crash_outlined;
     }
   }
 }

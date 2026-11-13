@@ -20,7 +20,7 @@ String accessRoleDescription(AccessRole role) {
     case AccessRole.manager:
       return 'Accès complet à toutes les fonctionnalités';
     case AccessRole.comptable:
-      return 'Dépenses, facturation, URSSAF, actifs';
+      return 'Résultat, relevés, dépenses, facturation, URSSAF';
     case AccessRole.chauffeur:
       return 'Tournées, GPS, messagerie';
   }
@@ -30,12 +30,11 @@ String accessRoleDescription(AccessRole role) {
 const Map<AccessRole, Set<String>> rolePages = {
   AccessRole.manager: {
     'dashboard', 'flotte', 'chauffeurs', 'camions', 'materiel',
-    'commissionnaires', 'actifs', 'depenses', 'facturation', 'urssaf',
-    'administratif', 'recrutement', 'messages', 'ia_chat', 'scan', 'rapport_ia',
-    'parametres', 'planning', 'tournees',
+    'commissionnaires', 'depenses', 'facturation', 'urssaf',
+    'administratif', 'messages', 'parametres', 'planning', 'tournees',
   },
   AccessRole.comptable: {
-    'dashboard', 'depenses', 'facturation', 'urssaf', 'actifs',
+    'dashboard', 'depenses', 'facturation', 'urssaf',
     'commissionnaires', 'tournees',
   },
 };

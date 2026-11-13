@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,7 +36,8 @@ class GpsTrackingService {
   // ── Settings cross-platform (optimisés batterie) ───────────────────────────
 
   LocationSettings _buildSettings() {
-    if (Platform.isAndroid) {
+    // `Platform` n'existe pas sur le web : y toucher lève une exception.
+    if (!kIsWeb && Platform.isAndroid) {
       return AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10, // 10m — bon compromis livraison urbaine / batterie
@@ -46,7 +48,7 @@ class GpsTrackingService {
           enableWakeLock: false, // pas de wakelock = économie batterie
         ),
       );
-    } else if (Platform.isIOS) {
+    } else if (!kIsWeb && Platform.isIOS) {
       return AppleSettings(
         accuracy: LocationAccuracy.high,
         activityType: ActivityType.automotiveNavigation,

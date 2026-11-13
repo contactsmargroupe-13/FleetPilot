@@ -137,6 +137,10 @@ class Truck {
   // Seuil km mensuel pour alerte
   final double? monthlyKmThreshold;
 
+  /// Entretien tous les N km (vidange, révision). Le compteur repart du
+  /// dernier entretien de l'historique.
+  final int? serviceIntervalKm;
+
   // Chauffeur assigné
   final String? assignedDriverName;
 
@@ -165,6 +169,7 @@ class Truck {
     this.repairs = const [],
     this.maintenances = const [],
     this.monthlyKmThreshold,
+    this.serviceIntervalKm,
     this.assignedDriverName,
     this.truckStatus = TruckStatus.fonctionnel,
   });
@@ -229,6 +234,7 @@ class Truck {
     List<ServiceEntry>? repairs,
     List<ServiceEntry>? maintenances,
     double? monthlyKmThreshold,
+    int? serviceIntervalKm,
     Object? assignedDriverName = _sentinel,
     TruckStatus? truckStatus,
   }) =>
@@ -254,6 +260,7 @@ class Truck {
         repairs: repairs ?? this.repairs,
         maintenances: maintenances ?? this.maintenances,
         monthlyKmThreshold: monthlyKmThreshold ?? this.monthlyKmThreshold,
+        serviceIntervalKm: serviceIntervalKm ?? this.serviceIntervalKm,
         assignedDriverName: assignedDriverName == _sentinel
             ? this.assignedDriverName
             : assignedDriverName as String?,
@@ -284,6 +291,7 @@ static const Object _sentinel = Object();
         'repairs': repairs.map((e) => e.toJson()).toList(),
         'maintenances': maintenances.map((e) => e.toJson()).toList(),
         'monthlyKmThreshold': monthlyKmThreshold,
+        'serviceIntervalKm': serviceIntervalKm,
         'assignedDriverName': assignedDriverName,
         'truckStatus': truckStatus.name,
       };
@@ -337,6 +345,7 @@ static const Object _sentinel = Object();
         monthlyKmThreshold: json['monthlyKmThreshold'] != null
             ? (json['monthlyKmThreshold'] as num).toDouble()
             : null,
+        serviceIntervalKm: (json['serviceIntervalKm'] as num?)?.toInt(),
         assignedDriverName: json['assignedDriverName'] as String?,
         truckStatus: json['truckStatus'] != null
             ? TruckStatus.values.firstWhere(
@@ -374,6 +383,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
   late final TextEditingController _insurerCtrl;
   late final TextEditingController _insuranceMonthlyCtrl;
   late final TextEditingController _monthlyKmThresholdCtrl;
+  late final TextEditingController _serviceIntervalCtrl;
 
   late OwnershipType _ownershipType;
   late VehicleType _vehicleType;
@@ -417,6 +427,8 @@ class _AddTruckPageState extends State<AddTruckPage> {
           ? t!.insuranceMonthly!.toStringAsFixed(0)
           : '',
     );
+    _serviceIntervalCtrl = TextEditingController(
+        text: t?.serviceIntervalKm?.toString() ?? '');
     _monthlyKmThresholdCtrl = TextEditingController(
       text: t?.monthlyKmThreshold != null
           ? t!.monthlyKmThreshold!.toStringAsFixed(0)
@@ -448,6 +460,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
     _insurerCtrl.dispose();
     _insuranceMonthlyCtrl.dispose();
     _monthlyKmThresholdCtrl.dispose();
+    _serviceIntervalCtrl.dispose();
     super.dispose();
   }
 
@@ -490,6 +503,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
     final monthlyKmThreshold = _monthlyKmThresholdCtrl.text.trim().isEmpty
         ? null
         : _d(_monthlyKmThresholdCtrl.text);
+    final serviceInterval = _i(_serviceIntervalCtrl.text);
 
     if (_ownershipType == OwnershipType.achat) {
       final purchase = _purchaseCtrl.text.trim().isEmpty
@@ -521,6 +535,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
           repairs: _repairs,
           maintenances: _maintenances,
           monthlyKmThreshold: monthlyKmThreshold,
+          serviceIntervalKm: serviceInterval,
           truckStatus: _truckStatus,
         ),
       );
@@ -552,6 +567,7 @@ class _AddTruckPageState extends State<AddTruckPage> {
           repairs: _repairs,
           maintenances: _maintenances,
           monthlyKmThreshold: monthlyKmThreshold,
+          serviceIntervalKm: serviceInterval,
           truckStatus: _truckStatus,
         ),
       );
@@ -896,6 +912,19 @@ class _AddTruckPageState extends State<AddTruckPage> {
 
             // ── Historique entretiens ────────────────────────────────────
             _sectionTitle('Historique entretiens'),
+            TextFormField(
+              controller: _serviceIntervalCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Entretien tous les… (km)',
+                hintText: 'ex. 30000',
+                helperText: 'Alerte quand le prochain entretien approche, '
+                    'compté depuis le dernier entretien ci-dessous',
+                border: OutlineInputBorder(),
+                suffixText: 'km',
+              ),
+            ),
+            const SizedBox(height: 12),
             _ServiceList(
               entries: _maintenances,
               onAdd: () => _addServiceEntry(false),

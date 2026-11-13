@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../services/auth_service.dart';
 import '../services/driver_session.dart';
 import '../services/gps_tracking_service.dart';
 import '../services/ocr_service.dart';
@@ -10,15 +12,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../utils/design_constants.dart';
 import '../utils/shared_widgets.dart';
+import '../utils/theme_ctx.dart';
 import 'chat_screen.dart';
 import 'driver_dashboard.dart';
 import 'driver_documents.dart';
 import 'add_truck.dart';
-import 'models/client_pricing.dart';
 import 'models/driver.dart';
 import 'models/driver_day_entry.dart';
 import 'models/expense.dart';
 import 'models/manager_alert.dart';
+import 'models/odometer_reading.dart';
 import 'models/tour.dart';
 
 class DriverHomePage extends ConsumerStatefulWidget {
@@ -45,21 +48,18 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   final _gps = GpsTrackingService();
   double _gpsKm = 0.0;
   bool _gpsActive = false;
-  bool _kmManuallyEdited = false;
+  bool _gpsStarting = false;
 
-  // ── Formulaire tournée ───────────────────────────────────────────────────────
-  final _formKey = GlobalKey<FormState>();
+  // ── Journée en cours ────────────────────────────────────────────────────────
+  String? _dayMode; // 'gps' | 'compteur'
+  int? _startKm;
+
+  // ── Journée ─────────────────────────────────────────────────────────────────
+  // Le chauffeur ne saisit que ses km. Le reste vient de son affectation ou
+  // de sa dernière journée, et reste corrigeable dans « Détails ».
   String? _selectedTruck;
   final _tourNumberCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
-  final _kmCtrl = TextEditingController();
-  final _clientsCtrl = TextEditingController();
-  final _weightCtrl = TextEditingController();
-  final _pickupCtrl = TextEditingController();
-  final _handlingCtrl = TextEditingController();
-  final _handlingCountCtrl = TextEditingController();
-  bool _hasHandling = false;
-  bool _extraTour = false;
 
   // ── Init ─────────────────────────────────────────────────────────────────────
 
@@ -72,47 +72,51 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   Future<void> _init() async {
     await DriverSession.init();
 
-    // Auto-link : si pas de session, chercher le chauffeur par email Firebase
-    String? name = DriverSession.driverName;
+    // Connecté avec un compte chauffeur : c'est ce compte qui dit qui l'on
+    // est, pas le nom mémorisé — le téléphone a pu servir à un collègue.
+    String? name = widget.firebaseEmail == null
+        ? DriverSession.driverName
+        : null;
+    final drivers = ref.read(appStateProvider).drivers;
     if (name == null && widget.firebaseEmail != null) {
-      final drivers = ref.read(appStateProvider).drivers;
+      final email = widget.firebaseEmail!.toLowerCase();
       final match = drivers.cast<Driver?>().firstWhere(
-        (d) => d!.email?.toLowerCase() == widget.firebaseEmail!.toLowerCase(),
+        (d) => d!.accessEmail?.toLowerCase() == email,
         orElse: () => null,
       );
-      if (match != null) {
-        name = match.name;
-        await DriverSession.setDriverName(name);
-      }
+      name = match?.name;
     }
     // Fallback : chercher par nom Firebase
     if (name == null && widget.firebaseName != null) {
-      final drivers = ref.read(appStateProvider).drivers;
       final match = drivers.cast<Driver?>().firstWhere(
-        (d) => d!.name.toLowerCase() == widget.firebaseName!.toLowerCase(),
+        (d) =>
+            d!.name.toLowerCase() == widget.firebaseName!.toLowerCase() ||
+            d.fullName.toLowerCase() == widget.firebaseName!.toLowerCase(),
         orElse: () => null,
       );
-      if (match != null) {
-        name = match.name;
-        await DriverSession.setDriverName(name);
-      }
+      name = match?.name;
     }
+    if (name != null) await DriverSession.setDriverName(name);
 
     setState(() {
       _driverName = name;
       _tourStart = DriverSession.tourStartTime;
+      _dayMode = DriverSession.dayMode ?? (_tourStart != null ? 'gps' : null);
+      _startKm = DriverSession.startKm;
       _loading = false;
     });
     if (_tourStart != null) {
       _startTimer();
-      // Reprendre le GPS si l'app a été tuée pendant une tournée
-      _gps.onKmUpdate = _onGpsKmUpdate;
-      final resumed = await _gps.resumeIfNeeded();
-      if (resumed && mounted) {
-        setState(() {
-          _gpsActive = true;
-          _gpsKm = _gps.currentKm;
-        });
+      if (_dayMode == 'gps') {
+        // Reprendre le GPS si l'app a été tuée pendant une tournée
+        _gps.onKmUpdate = _onGpsKmUpdate;
+        final resumed = await _gps.resumeIfNeeded();
+        if (resumed && mounted) {
+          setState(() {
+            _gpsActive = true;
+            _gpsKm = _gps.currentKm;
+          });
+        }
       }
     }
     if (ref.read(appStateProvider).trucks.isNotEmpty) {
@@ -124,27 +128,59 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       final assignment = ref.read(appStateProvider).getAssignment(_driverName!);
       if (assignment != null) {
         _selectedTruck = assignment.truckPlate;
-        if (assignment.companyName != null && assignment.companyName!.isNotEmpty) {
+        if (assignment.companyName != null &&
+            assignment.companyName!.isNotEmpty) {
           _companyCtrl.text = assignment.companyName!;
         }
       }
     }
 
+    // Le QR scanné ce matin l'emporte sur l'affectation habituelle.
+    final pending = DriverSession.pendingTruck;
+    if (pending != null &&
+        ref.read(appStateProvider).trucks.any((t) => t.plate == pending)) {
+      _selectedTruck = pending;
+    }
+    await DriverSession.setPendingTruck(null);
+
+    if (_tourNumberCtrl.text.isEmpty && _driverName != null) {
+      final assigned = ref
+          .read(appStateProvider)
+          .drivers
+          .where((d) => d.name == _driverName)
+          .firstOrNull
+          ?.assignedTourNumber;
+      if (assigned != null) _tourNumberCtrl.text = assigned;
+    }
+
     // Sinon, pré-remplir avec les dernières valeurs
     final lastTour = DriverSession.lastTourNumber;
     final lastCompany = DriverSession.lastCompany;
-    if (lastTour != null && lastTour.isNotEmpty) {
+    if (_tourNumberCtrl.text.isEmpty &&
+        lastTour != null &&
+        lastTour.isNotEmpty) {
       _tourNumberCtrl.text = lastTour;
     }
-    if (_companyCtrl.text.isEmpty && lastCompany != null && lastCompany.isNotEmpty) {
+    if (_companyCtrl.text.isEmpty &&
+        lastCompany != null &&
+        lastCompany.isNotEmpty) {
       _companyCtrl.text = lastCompany;
     }
+    if (mounted) setState(() {});
+    await _closeForgottenDay();
   }
 
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      final start = _tourStart;
+      final now = DateTime.now();
+      if (start != null && start.day != now.day && _dayMode == 'gps') {
+        _closeForgottenDay();
+        return;
+      }
+      setState(() {});
     });
   }
 
@@ -153,12 +189,6 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     _timer?.cancel();
     _tourNumberCtrl.dispose();
     _companyCtrl.dispose();
-    _kmCtrl.dispose();
-    _clientsCtrl.dispose();
-    _pickupCtrl.dispose();
-    _weightCtrl.dispose();
-    _handlingCtrl.dispose();
-    _handlingCountCtrl.dispose();
     super.dispose();
   }
 
@@ -178,17 +208,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     return '$h:$m';
   }
 
-  double? _d(String s) => double.tryParse(s.replaceAll(',', '.').trim());
-
   void _onGpsKmUpdate(double km) {
     if (!mounted) return;
-    setState(() {
-      _gpsKm = km;
-      // Pré-remplir le champ km si pas édité manuellement
-      if (!_kmManuallyEdited) {
-        _kmCtrl.text = km.toStringAsFixed(1);
-      }
-    });
+    setState(() => _gpsKm = km);
   }
 
   // ── Dépense carburant chauffeur ─────────────────────────────────────────────
@@ -212,8 +234,10 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Ajouter une dépense carburant',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              child: Text(
+                'Ajouter une dépense carburant',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt_outlined),
@@ -244,7 +268,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     if (choice == 'manual') {
       _manualFuelEntry();
     } else {
-      _scanFuelTicket(choice == 'camera' ? ImageSource.camera : ImageSource.gallery);
+      _scanFuelTicket(
+        choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+      );
     }
   }
 
@@ -274,7 +300,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Scan échoué'),
-          content: Text(result.error ?? 'Impossible de lire le montant sur le ticket.'),
+          content: Text(
+            result.error ?? 'Impossible de lire le montant sur le ticket.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -304,15 +332,21 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
             if (result.liters != null)
               _scanLine('Litres', result.liters!.toStringAsFixed(2)),
             if (result.pricePerLiter != null)
-              _scanLine('Prix/L', '${result.pricePerLiter!.toStringAsFixed(3)} €'),
+              _scanLine(
+                'Prix/L',
+                '${result.pricePerLiter!.toStringAsFixed(3)} €',
+              ),
             if (result.date != null)
-              _scanLine('Date',
-                  '${result.date!.day.toString().padLeft(2, '0')}/${result.date!.month.toString().padLeft(2, '0')}/${result.date!.year}'),
-            if (result.station != null)
-              _scanLine('Station', result.station!),
+              _scanLine(
+                'Date',
+                '${result.date!.day.toString().padLeft(2, '0')}/${result.date!.month.toString().padLeft(2, '0')}/${result.date!.year}',
+              ),
+            if (result.station != null) _scanLine('Station', result.station!),
             const SizedBox(height: 12),
-            Text('Camion : $_selectedTruck',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Camion : $_selectedTruck',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ],
         ),
         actions: [
@@ -353,12 +387,16 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Camion : $_selectedTruck',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                'Camion : $_selectedTruck',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Montant (€) *',
                   border: OutlineInputBorder(),
@@ -368,7 +406,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               const SizedBox(height: 12),
               TextField(
                 controller: litersCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Litres (optionnel)',
                   border: OutlineInputBorder(),
@@ -395,7 +435,8 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           FilledButton(
             onPressed: () {
               final amount = double.tryParse(
-                  amountCtrl.text.replaceAll(',', '.').trim());
+                amountCtrl.text.replaceAll(',', '.').trim(),
+              );
               if (amount == null || amount <= 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(content: Text('Montant invalide')),
@@ -412,10 +453,8 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
     if (confirmed != true || !mounted) return;
 
-    final amount = double.tryParse(
-        amountCtrl.text.replaceAll(',', '.').trim());
-    final liters = double.tryParse(
-        litersCtrl.text.replaceAll(',', '.').trim());
+    final amount = double.tryParse(amountCtrl.text.replaceAll(',', '.').trim());
+    final liters = double.tryParse(litersCtrl.text.replaceAll(',', '.').trim());
     final note = noteCtrl.text.trim();
 
     amountCtrl.dispose();
@@ -447,32 +486,39 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       type: ExpenseType.fuel,
       amount: amount,
       liters: liters,
-      note: '${source == 'scan' ? 'Scan' : 'Saisie'} chauffeur ${_driverName ?? ""}${station != null ? ' - $station' : ''}',
+      note:
+          '${source == 'scan' ? 'Scan' : 'Saisie'} chauffeur ${_driverName ?? ""}${station != null ? ' - $station' : ''}',
+      driverName: _driverName,
     );
 
     ref.read(appStateProvider).addExpense(expense);
 
     // Notifier le manager
-    ref.read(appStateProvider).addManagerAlert(ManagerAlert(
-      id: 'fuel_${expense.id}',
-      type: ManagerAlertType.fuelScan,
-      title: source == 'scan'
-          ? 'Ticket carburant scanné'
-          : 'Dépense carburant ajoutée',
-      message:
-          '${_driverName ?? "Chauffeur"} a ${source == 'scan' ? 'scanné' : 'saisi'} une dépense de ${amount.toStringAsFixed(2)} €'
-          '${liters != null ? ' (${liters.toStringAsFixed(1)} L)' : ''}'
-          ' pour le camion $_selectedTruck.'
-          '${station != null ? '\n$station' : ''}',
-      date: DateTime.now(),
-      driverName: _driverName,
-    ));
+    ref
+        .read(appStateProvider)
+        .addManagerAlert(
+          ManagerAlert(
+            id: 'fuel_${expense.id}',
+            type: ManagerAlertType.fuelScan,
+            title: source == 'scan'
+                ? 'Ticket carburant scanné'
+                : 'Dépense carburant ajoutée',
+            message:
+                '${_driverName ?? "Chauffeur"} a ${source == 'scan' ? 'scanné' : 'saisi'} une dépense de ${amount.toStringAsFixed(2)} €'
+                '${liters != null ? ' (${liters.toStringAsFixed(1)} L)' : ''}'
+                ' pour le camion $_selectedTruck.'
+                '${station != null ? '\n$station' : ''}',
+            date: DateTime.now(),
+            driverName: _driverName,
+          ),
+        );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Dépense enregistrée : ${amount.toStringAsFixed(2)} € — Manager notifié.'),
+            'Dépense enregistrée : ${amount.toStringAsFixed(2)} € — Manager notifié.',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -480,21 +526,25 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   }
 
   Widget _scanLine(String label, String value) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 80,
-              child: Text(label,
-                  style: const TextStyle(color: DC.textSecondary, fontSize: 13)),
-            ),
-            Expanded(
-              child: Text(value,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: const TextStyle(color: DC.textSecondary, fontSize: 13),
+          ),
         ),
-      );
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -506,40 +556,98 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       final assignment = ref.read(appStateProvider).getAssignment(driver.name);
       if (assignment != null) {
         _selectedTruck = assignment.truckPlate;
-        if (assignment.companyName != null && assignment.companyName!.isNotEmpty) {
+        if (assignment.companyName != null &&
+            assignment.companyName!.isNotEmpty) {
           _companyCtrl.text = assignment.companyName!;
         }
       }
     });
   }
 
-  Future<void> _demarrer() async {
+  /// Saisie à la main : le recours quand ni photo ni GPS ne sont possibles.
+  Future<void> _saisirKm() async {
+    final result = await _openDaySheet(measuredKm: null, source: null);
+    if (result == null) return;
+    await _saveDay(result, start: null, kmSource: 'saisie');
+  }
+
+  /// Choix recommandé : une photo du compteur le matin, une le soir.
+  Future<void> _photoDepart() async {
+    if (_selectedTruck == null) return;
+    final last = ref.read(appStateProvider).lastOdometer(_selectedTruck!);
+    final reading = await _captureOdometer(
+      title: 'Compteur au départ',
+      minKm: last?.km,
+    );
+    if (reading == null || !mounted) return;
+    ref
+        .read(appStateProvider)
+        .addOdometer(
+          OdometerReading(
+            id: '${DateTime.now().microsecondsSinceEpoch}_odo',
+            truckPlate: _selectedTruck!,
+            date: DateTime.now(),
+            km: reading.$1,
+            driverName: _driverName,
+            source: reading.$2,
+            isStart: true,
+          ),
+        );
     await DriverSession.startTour();
+    await DriverSession.setDay(mode: 'compteur', startKm: reading.$1);
     setState(() {
+      _dayMode = 'compteur';
+      _startKm = reading.$1;
       _tourStart = DriverSession.tourStartTime;
-      _kmManuallyEdited = false;
-      _gpsKm = 0.0;
     });
     _startTimer();
+  }
 
-    // Démarrer le GPS en arrière-plan
+  /// Le GPS compte les km jusqu'à « Terminer la journée ».
+  Future<void> _lancerGps() async {
+    if (_gpsStarting) return;
+    setState(() => _gpsStarting = true);
     _gps.onKmUpdate = _onGpsKmUpdate;
-    final started = await _gps.startTracking();
-    if (mounted) {
-      setState(() => _gpsActive = started);
-      if (!started) {
-        _snack('GPS indisponible — saisis les km manuellement.');
-      }
+    bool started;
+    try {
+      started = await _gps.startTracking();
+    } catch (_) {
+      started = false;
     }
+    if (!mounted) return;
+    if (!started) {
+      setState(() => _gpsStarting = false);
+      _snack(
+        'GPS indisponible : autorise la localisation, '
+        'ou prends le compteur en photo.',
+      );
+      return;
+    }
+    await DriverSession.startTour();
+    await DriverSession.setDay(mode: 'gps');
+    setState(() {
+      _gpsStarting = false;
+      _gpsActive = true;
+      _gpsKm = 0.0;
+      _dayMode = 'gps';
+      _tourStart = DriverSession.tourStartTime;
+    });
+    _startTimer();
   }
 
   Future<void> _annuler() async {
+    final gps = _dayMode == 'gps';
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Annuler le démarrage ?'),
-        content: const Text(
-            'La tournée sera annulée. Aucune donnée ne sera enregistrée.'),
+        title: Text(
+          gps ? 'Arrêter le GPS sans enregistrer ?' : 'Annuler la journée ?',
+        ),
+        content: Text(
+          gps
+              ? 'Les km comptés depuis le départ seront perdus.'
+              : 'Le relevé du matin est conservé ; la journée ne sera pas enregistrée.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -548,143 +656,262 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Annuler le démarrage'),
+            child: const Text('Annuler la journée'),
           ),
         ],
       ),
     );
     if (confirm != true) return;
-
-    // Arrêter le GPS
-    await _gps.stopTracking();
-
-    await DriverSession.endTour();
-    _timer?.cancel();
-    _kmCtrl.clear();
-    _clientsCtrl.clear();
-    _pickupCtrl.clear();
-    _weightCtrl.clear();
-    _handlingCtrl.clear();
-    _handlingCountCtrl.clear();
-    setState(() {
-      _tourStart = null;
-      _hasHandling = false;
-      _extraTour = false;
-      _gpsActive = false;
-      _gpsKm = 0.0;
-      _kmManuallyEdited = false;
-    });
+    if (gps) await _gps.stopTracking();
+    await _endSession();
   }
 
   Future<void> _terminer() async {
-    // Arrêter le GPS et récupérer le total
-    final gpsTotal = await _gps.stopTracking();
-
-    // Utiliser le GPS si pas édité manuellement, sinon la valeur saisie
-    if (!_kmManuallyEdited && gpsTotal > 0) {
-      _kmCtrl.text = gpsTotal.toStringAsFixed(1);
-    }
-
-    // Inline form validation
-    if (_selectedTruck == null) {
-      _snack('Choisis un camion.');
+    if (_dayMode == 'compteur' && _startKm != null) {
+      final reading = await _captureOdometer(
+        title: 'Compteur à l’arrivée',
+        minKm: _startKm,
+      );
+      if (reading == null || !mounted) return;
+      final km = (reading.$1 - _startKm!).toDouble();
+      final result = await _openDaySheet(measuredKm: km, source: 'compteur');
+      if (result == null) return;
+      ref
+          .read(appStateProvider)
+          .addOdometer(
+            OdometerReading(
+              id: '${DateTime.now().microsecondsSinceEpoch}_odo',
+              truckPlate: _selectedTruck!,
+              date: DateTime.now(),
+              km: reading.$1,
+              driverName: _driverName,
+              source: reading.$2,
+              isStart: false,
+            ),
+          );
+      await _saveDay(
+        result,
+        start: _tourStart,
+        kmSource: (result.km - km).abs() < 1 ? 'compteur' : 'saisie',
+      );
       return;
     }
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
 
-    final km = _d(_kmCtrl.text)!;
-    final clients = int.tryParse(_clientsCtrl.text.trim())!;
-    final pickups = int.tryParse(_pickupCtrl.text.trim()) ?? 0;
+    // GPS : il continue tant que le chauffeur n'a pas validé ; s'il referme
+    // la feuille, sa journée n'est pas coupée.
+    final gpsKm = _gps.currentKm;
+    final result = await _openDaySheet(measuredKm: gpsKm, source: 'gps');
+    if (result == null) return;
+    await _gps.stopTracking();
+    final edited = gpsKm > 0 && (result.km - gpsKm).abs() > gpsKm * 0.05;
+    await _saveDay(
+      result,
+      start: _tourStart,
+      kmSource: edited || gpsKm == 0 ? 'saisie' : 'gps',
+    );
+  }
 
+  /// Journée commencée un autre jour et jamais terminée.
+  ///
+  /// Au GPS, on l'enregistre avec les km comptés : mieux vaut une journée
+  /// mesurée qu'une journée perdue. Au compteur, on ne peut rien en dire :
+  /// le relevé du prochain départ du camion la complétera côté manager.
+  bool _closing = false;
+
+  Future<void> _closeForgottenDay() async {
+    final start = _tourStart;
+    if (start == null || _closing) return;
     final now = DateTime.now();
-    final start = _tourStart ?? now;
+    if (start.year == now.year &&
+        start.month == now.month &&
+        start.day == now.day) {
+      return;
+    }
+    _closing = true;
+    try {
+      await _closeDay(start);
+    } finally {
+      _closing = false;
+    }
+  }
 
-    final entry = DriverDayEntry(
-      id: now.microsecondsSinceEpoch.toString(),
-      date: now,
-      driverName: _driverName!,
-      truckPlate: _selectedTruck!,
-      kmTotal: km,
-      clientsCount: clients,
-      pickupCount: pickups,
-    );
+  Future<void> _closeDay(DateTime start) async {
+    if (_dayMode == 'gps') {
+      final km = await _gps.stopTracking();
+      if (km > 0 && _selectedTruck != null && _driverName != null) {
+        await _saveDay(
+          _DayResult(
+            km: km,
+            tourNumber: _tourNumberCtrl.text.trim(),
+            company: _companyCtrl.text.trim(),
+            pickups: 0,
+            handlingClient: null,
+            extraTour: false,
+          ),
+          start: start,
+          kmSource: 'gps-auto',
+          date: start,
+          quiet: true,
+        );
+        _snack(
+          'Ta journée du ${start.day}/${start.month} a été enregistrée '
+          'automatiquement : ${km.toStringAsFixed(0)} km au GPS.',
+        );
+        return;
+      }
+    } else {
+      _snack(
+        'Ta journée du ${start.day}/${start.month} n’a pas été terminée : '
+        'la photo du compteur de ce matin la complétera.',
+      );
+    }
+    await _endSession();
+  }
 
-    final tour = Tour(
-      id: '${now.microsecondsSinceEpoch}_tour',
-      tourNumber: _tourNumberCtrl.text.trim(),
-      date: now,
-      driverName: _driverName!,
-      truckPlate: _selectedTruck!,
-      companyName: _companyCtrl.text.trim().isEmpty
-          ? null
-          : _companyCtrl.text.trim(),
-      startTime: _fmtTime(start),
-      endTime: _fmtTime(now),
-      kmTotal: km,
-      clientsCount: clients,
-      pickupCount: pickups,
-      weightKg: _d(_weightCtrl.text),
-      hasHandling: _hasHandling,
-      handlingClientName: _hasHandling ? _handlingCtrl.text.trim() : null,
-      handlingDate: _hasHandling ? now : null,
-      extraTour: _extraTour,
-    );
-
-    ref.read(appStateProvider).addDriverDayEntry(entry);
-    ref.read(appStateProvider).addTour(tour);
-
-    // Sauvegarder n° tournée et client pour la prochaine fois
-    await DriverSession.saveLastTour(
-      _tourNumberCtrl.text.trim(),
-      _companyCtrl.text.trim(),
-    );
-
+  Future<void> _endSession() async {
     await DriverSession.endTour();
+    await DriverSession.clearDay();
     _timer?.cancel();
-
-    // Reset formulaire (garder tourNumber et company pré-remplis)
-    _kmCtrl.clear();
-    _clientsCtrl.clear();
-    _pickupCtrl.clear();
-    _weightCtrl.clear();
-    _handlingCtrl.clear();
-    _handlingCountCtrl.clear();
-
+    if (!mounted) return;
     setState(() {
       _tourStart = null;
-      _hasHandling = false;
-      _extraTour = false;
       _gpsActive = false;
       _gpsKm = 0.0;
-      _kmManuallyEdited = false;
+      _dayMode = null;
+      _startKm = null;
     });
+  }
 
-    _snack('Tournée ${tour.tourNumber} enregistrée — ${_fmtTime(start)} → ${_fmtTime(now)}');
+  /// Photo du compteur → chiffre lu automatiquement, que le chauffeur
+  /// confirme ou corrige. Renvoie (km, 'photo' | 'saisie').
+  Future<(int, String)?> _captureOdometer({required String title, int? minKm}) {
+    return showModalBottomSheet<(int, String)>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _OdometerSheet(title: title, minKm: minKm),
+    );
+  }
+
+  Future<_DayResult?> _openDaySheet({
+    required double? measuredKm,
+    required String? source,
+  }) {
+    final state = ref.read(appStateProvider);
+    final assignment = state.getAssignment(_driverName ?? '');
+    final lockedCompany =
+        assignment?.companyName != null && assignment!.companyName!.isNotEmpty;
+    return showModalBottomSheet<_DayResult>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _DaySheet(
+        measuredKm: measuredKm,
+        source: source,
+        tourNumber: _tourNumberCtrl.text.trim(),
+        company: _companyCtrl.text.trim(),
+        companyLocked: lockedCompany,
+        companies: [for (final c in state.clientPricings) c.companyName],
+      ),
+    );
+  }
+
+  Future<void> _saveDay(
+    _DayResult r, {
+    required DateTime? start,
+    required String kmSource,
+    DateTime? date,
+    bool quiet = false,
+  }) async {
+    if (_selectedTruck == null || _driverName == null) {
+      _snack('Choisis d’abord un camion.');
+      return;
+    }
+    final now = DateTime.now();
+    final day = date ?? now;
+    final state = ref.read(appStateProvider);
+
+    state.addDriverDayEntry(
+      DriverDayEntry(
+        id: now.microsecondsSinceEpoch.toString(),
+        date: day,
+        driverName: _driverName!,
+        truckPlate: _selectedTruck!,
+        kmTotal: r.km,
+        clientsCount: 0,
+        pickupCount: r.pickups,
+      ),
+    );
+    state.addTour(
+      Tour(
+        id: '${now.microsecondsSinceEpoch}_tour',
+        tourNumber: r.tourNumber,
+        date: day,
+        driverName: _driverName!,
+        truckPlate: _selectedTruck!,
+        companyName: r.company.isEmpty ? null : r.company,
+        startTime: start != null ? _fmtTime(start) : null,
+        endTime: start != null && date == null ? _fmtTime(now) : null,
+        kmTotal: r.km,
+        // Les points livrés viennent du relevé du commissionnaire, saisi
+        // par le manager : on ne les demande plus au chauffeur.
+        clientsCount: 0,
+        pickupCount: r.pickups,
+        hasHandling: r.handlingClient != null,
+        handlingClientName: r.handlingClient,
+        handlingDate: r.handlingClient != null ? day : null,
+        extraTour: r.extraTour,
+        status: 'terminée',
+        kmSource: kmSource,
+      ),
+    );
+
+    _tourNumberCtrl.text = r.tourNumber;
+    _companyCtrl.text = r.company;
+    await DriverSession.saveLastTour(r.tourNumber, r.company);
+    await _endSession();
+    if (!quiet) {
+      _snack(
+        'Journée enregistrée — ${r.km.toStringAsFixed(r.km % 1 == 0 ? 0 : 1)} km',
+      );
+    }
   }
 
   Future<void> _signalerPanne(List<Truck> trucks) async {
     // Motif obligatoire
     String? motif;
-    final motifs = ['Panne mécanique', 'Panne électrique', 'Crevaison', 'Accident', 'Autre'];
+    final motifs = [
+      'Panne mécanique',
+      'Panne électrique',
+      'Crevaison',
+      'Accident',
+      'Autre',
+    ];
 
     motif = await showDialog<String>(
       context: context,
       builder: (_) => SimpleDialog(
         title: const Text('Motif du changement'),
-        children: motifs.map((m) => SimpleDialogOption(
-          onPressed: () => Navigator.pop(context, m),
-          child: Text(m),
-        )).toList(),
+        children: motifs
+            .map(
+              (m) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, m),
+                child: Text(m),
+              ),
+            )
+            .toList(),
       ),
     );
     if (motif == null || !mounted) return;
 
     // Choisir le nouveau camion (flotte ou prêt)
-    final availableTrucks = trucks.where((t) =>
-        t.plate != _selectedTruck &&
-        t.truckStatus == TruckStatus.fonctionnel).toList();
+    final availableTrucks = trucks
+        .where(
+          (t) =>
+              t.plate != _selectedTruck &&
+              t.truckStatus == TruckStatus.fonctionnel,
+        )
+        .toList();
 
     final newTruck = await showDialog<String>(
       context: context,
@@ -694,15 +921,17 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           title: const Text('Camion de remplacement'),
           children: [
             // Camions de la flotte
-            ...availableTrucks.map((t) => SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, t.plate),
-              child: ListTile(
-                leading: const Icon(Icons.local_shipping_outlined),
-                title: Text(t.plate),
-                subtitle: Text(t.model),
-                contentPadding: EdgeInsets.zero,
+            ...availableTrucks.map(
+              (t) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, t.plate),
+                child: ListTile(
+                  leading: const Icon(Icons.local_shipping_outlined),
+                  title: Text(t.plate),
+                  subtitle: Text(t.model),
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
-            )),
+            ),
             // Séparateur
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
@@ -714,9 +943,14 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Camion de prêt (hors flotte)',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                          color: Colors.orange.shade700)),
+                  Text(
+                    'Camion de prêt (hors flotte)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: plateCtrl,
@@ -739,7 +973,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                         plateCtrl.dispose();
                         Navigator.pop(ctx, 'PRET:$plate');
                       },
-                      style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                      ),
                       icon: const Icon(Icons.car_rental_outlined, size: 18),
                       label: const Text('Utiliser ce camion de prêt'),
                     ),
@@ -758,16 +994,19 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     final String actualPlate = isPret ? newTruck.substring(5) : newTruck;
     final truckModel = isPret
         ? 'Prêt'
-        : (trucks.where((t) => t.plate == actualPlate).firstOrNull?.model ?? '');
+        : (trucks.where((t) => t.plate == actualPlate).firstOrNull?.model ??
+              '');
     final oldTruck = _selectedTruck;
 
     // Mettre l'ancien camion en panne
     final oldTruckObj = trucks.where((t) => t.plate == oldTruck).firstOrNull;
     if (oldTruckObj != null) {
-      ref.read(appStateProvider).updateTruck(
-        oldTruck!,
-        oldTruckObj.copyWith(truckStatus: TruckStatus.enPanne),
-      );
+      ref
+          .read(appStateProvider)
+          .updateTruck(
+            oldTruck!,
+            oldTruckObj.copyWith(truckStatus: TruckStatus.enPanne),
+          );
     }
 
     setState(() => _selectedTruck = actualPlate);
@@ -779,7 +1018,8 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       id: '${now.microsecondsSinceEpoch}_truck_change',
       type: ManagerAlertType.truckChange,
       title: '$_driverName — changement camion$pretLabel',
-      message: 'Changement : $oldTruck → $actualPlate${isPret ? ' (camion de prêt, hors flotte)' : ' ($truckModel)'}.\n'
+      message:
+          'Changement : $oldTruck → $actualPlate${isPret ? ' (camion de prêt, hors flotte)' : ' ($truckModel)'}.\n'
           'Motif : $motif.\n'
           'Le camion $oldTruck a été passé en statut "En panne".',
       date: now,
@@ -789,9 +1029,11 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     );
     ref.read(appStateProvider).addManagerAlert(alert);
 
-    _snack(isPret
-        ? 'Camion de prêt $actualPlate activé. Le manager a été alerté.'
-        : 'Camion changé → $actualPlate. Le manager a été alerté.');
+    _snack(
+      isPret
+          ? 'Camion de prêt $actualPlate activé. Le manager a été alerté.'
+          : 'Camion changé → $actualPlate. Le manager a été alerté.',
+    );
   }
 
   Future<void> _changerCamion(List<Truck> trucks) async {
@@ -802,21 +1044,24 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         title: const Text('Changer de camion'),
         children: trucks
             .where((t) => t.plate != _selectedTruck)
-            .map((t) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, t.plate),
-                  child: ListTile(
-                    leading: const Icon(Icons.local_shipping_outlined),
-                    title: Text(t.plate),
-                    subtitle: Text(t.model),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ))
+            .map(
+              (t) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, t.plate),
+                child: ListTile(
+                  leading: const Icon(Icons.local_shipping_outlined),
+                  title: Text(t.plate),
+                  subtitle: Text(t.model),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            )
             .toList(),
       ),
     );
     if (newTruck == null || !mounted) return;
 
-    final truckModel = trucks.where((t) => t.plate == newTruck).firstOrNull?.model ?? '';
+    final truckModel =
+        trucks.where((t) => t.plate == newTruck).firstOrNull?.model ?? '';
 
     // Étape 2 : confirmation
     final confirm = await showDialog<bool>(
@@ -850,7 +1095,8 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       id: '${now.microsecondsSinceEpoch}_truck_change',
       type: ManagerAlertType.truckChange,
       title: '$_driverName a changé de camion',
-      message: 'Changement temporaire : $oldTruck → $newTruck ($truckModel). '
+      message:
+          'Changement temporaire : $oldTruck → $newTruck ($truckModel). '
           'Motif probable : panne ou remplacement.',
       date: now,
       driverName: _driverName,
@@ -860,18 +1106,19 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     ref.read(appStateProvider).addManagerAlert(alert);
 
     // Mettre à jour les day entries du jour pour ce chauffeur
-    ref.read(appStateProvider).updateDriverDayEntryTruck(
-      driverName: _driverName!,
-      date: now,
-      newTruckPlate: newTruck,
-    );
+    ref
+        .read(appStateProvider)
+        .updateDriverDayEntryTruck(
+          driverName: _driverName!,
+          date: now,
+          newTruckPlate: newTruck,
+        );
 
     _snack('Camion changé → $newTruck ($truckModel)');
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // ── Stats chauffeur (sans CA) ─────────────────────────────────────────────
@@ -880,31 +1127,37 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     final now = DateTime.now();
     final name = _driverName!.toLowerCase();
 
-    final entries = ref.read(appStateProvider).driverDayEntries
-        .where((e) =>
-            e.driverName.toLowerCase() == name &&
-            e.date.year == now.year &&
-            e.date.month == now.month)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final entries =
+        ref
+            .read(appStateProvider)
+            .driverDayEntries
+            .where(
+              (e) =>
+                  e.driverName.toLowerCase() == name &&
+                  e.date.year == now.year &&
+                  e.date.month == now.month,
+            )
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
 
-    final allTours = ref.read(appStateProvider).tours
-        .where((t) =>
-            t.driverName.toLowerCase() == name &&
-            t.date.year == now.year &&
-            t.date.month == now.month)
+    final allTours = ref
+        .read(appStateProvider)
+        .tours
+        .where(
+          (t) =>
+              t.driverName.toLowerCase() == name &&
+              t.date.year == now.year &&
+              t.date.month == now.month,
+        )
         .toList();
 
     final kmTotal = entries.fold(0.0, (sum, e) => sum + e.kmTotal);
-    final clientsTotal = entries.fold(0, (sum, e) => sum + e.clientsCount);
     final jours = entries
         .map((e) => '${e.date.year}-${e.date.month}-${e.date.day}')
         .toSet()
         .length;
 
-    // Km/j et clients/j moyens
     final kmMoy = jours > 0 ? kmTotal / jours : 0.0;
-    final clientsMoy = jours > 0 ? clientsTotal / jours : 0.0;
 
     final monthLabel = _monthLabel(now.month);
 
@@ -926,9 +1179,15 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         const SizedBox(height: 10),
         Row(
           children: [
-            _StatBox(label: 'Km/jour (moy.)', value: '${kmMoy.toStringAsFixed(0)} km'),
+            _StatBox(
+              label: 'Km ce mois',
+              value: '${kmTotal.toStringAsFixed(0)} km',
+            ),
             const SizedBox(width: 10),
-            _StatBox(label: 'Colis/jour (moy.)', value: clientsMoy.toStringAsFixed(1)),
+            _StatBox(
+              label: 'Km/jour (moy.)',
+              value: '${kmMoy.toStringAsFixed(0)} km',
+            ),
           ],
         ),
         const SizedBox(height: 20),
@@ -941,7 +1200,10 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
         const SizedBox(height: 8),
 
         if (entries.isEmpty)
-          const Text('Aucune saisie ce mois.', style: TextStyle(color: DC.textSecondary))
+          const Text(
+            'Aucune saisie ce mois.',
+            style: TextStyle(color: DC.textSecondary),
+          )
         else
           ...entries.map((e) {
             final dayKey = '${e.date.year}-${e.date.month}-${e.date.day}';
@@ -949,7 +1211,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               return '${t.date.year}-${t.date.month}-${t.date.day}' == dayKey;
             }).toList();
 
-            final manutentionTours = dayTours.where((t) => t.hasHandling).toList();
+            final manutentionTours = dayTours
+                .where((t) => t.hasHandling)
+                .toList();
             final hasManu = manutentionTours.isNotEmpty;
 
             return Container(
@@ -970,24 +1234,26 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                     ),
                   ),
                   // Km
-                  Expanded(
-                    child: Text('${e.kmTotal.toStringAsFixed(0)} km'),
-                  ),
-                  // Colis
-                  Expanded(
-                    child: Text('${e.clientsCount} colis'),
-                  ),
+                  Expanded(child: Text('${e.kmTotal.toStringAsFixed(0)} km')),
                   // Ramasses
                   if (e.pickupCount > 0)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: Text('${e.pickupCount} ram.',
-                          style: TextStyle(fontSize: 12, color: Colors.orange.shade700)),
+                      child: Text(
+                        '${e.pickupCount} ram.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
                     ),
                   // Manutention
                   if (hasManu)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.blue.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
@@ -1011,8 +1277,19 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
 
   String _monthLabel(int m) {
     const months = [
-      '', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+      '',
+      'Janvier',
+      'Février',
+      'Mars',
+      'Avril',
+      'Mai',
+      'Juin',
+      'Juillet',
+      'Août',
+      'Septembre',
+      'Octobre',
+      'Novembre',
+      'Décembre',
     ];
     return months[m];
   }
@@ -1033,10 +1310,12 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
       return _buildProfileSelector();
     }
 
-    final unreadCount =
-        ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
-    final unreadMsgCount =
-        ref.watch(appStateProvider).unreadMessagesForDriver(_driverName!);
+    final unreadCount = ref
+        .watch(appStateProvider)
+        .unreadCountForDriver(_driverName!);
+    final unreadMsgCount = ref
+        .watch(appStateProvider)
+        .unreadMessagesForDriver(_driverName!);
 
     final pages = [
       _tourStart == null ? _buildIdle() : _buildActiveTour(),
@@ -1104,8 +1383,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   // ── Vue : Paramètres ───────────────────────────────────────────────────
 
   Widget _buildSettings() {
-    final unreadCount =
-        ref.watch(appStateProvider).unreadCountForDriver(_driverName!);
+    final unreadCount = ref
+        .watch(appStateProvider)
+        .unreadCountForDriver(_driverName!);
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -1124,50 +1404,60 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               const SizedBox(height: 10),
               Text(
                 _driverName!,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 6),
-              Builder(builder: (_) {
-                final driver = ref.read(appStateProvider).drivers
-                    .where((d) => d.name == _driverName)
-                    .firstOrNull;
-                if (driver == null) return const SizedBox.shrink();
-                final colorStr = driverStatusColor(driver.status);
-                final Color color;
-                switch (colorStr) {
-                  case 'green':
-                    color = Colors.green;
-                    break;
-                  case 'blue':
-                    color = Colors.blue;
-                    break;
-                  case 'orange':
-                    color = Colors.orange;
-                    break;
-                  case 'red':
-                    color = Colors.red;
-                    break;
-                  default:
-                    color = Colors.grey;
-                }
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: color.withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    driverStatusLabel(driver.status),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: color,
+              Builder(
+                builder: (_) {
+                  final driver = ref
+                      .read(appStateProvider)
+                      .drivers
+                      .where((d) => d.name == _driverName)
+                      .firstOrNull;
+                  if (driver == null) return const SizedBox.shrink();
+                  final colorStr = driverStatusColor(driver.status);
+                  final Color color;
+                  switch (colorStr) {
+                    case 'green':
+                      color = Colors.green;
+                      break;
+                    case 'blue':
+                      color = Colors.blue;
+                      break;
+                    case 'orange':
+                      color = Colors.orange;
+                      break;
+                    case 'red':
+                      color = Colors.red;
+                      break;
+                    default:
+                      color = Colors.grey;
+                  }
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
                     ),
-                  ),
-                );
-              }),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: color.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      driverStatusLabel(driver.status),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -1188,7 +1478,9 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
           title: 'Mes informations',
           subtitle: 'Identité, adresse, permis, contact',
           onTap: () {
-            final driver = ref.read(appStateProvider).drivers
+            final driver = ref
+                .read(appStateProvider)
+                .drivers
                 .where((d) => d.name == _driverName)
                 .firstOrNull;
             if (driver == null) return;
@@ -1269,13 +1561,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                 ],
               ),
             );
-            if (confirm == true) {
-              await DriverSession.clearDriverName();
-              setState(() {
-                _driverName = null;
-                _tabIndex = 0;
-              });
-            }
+            if (confirm == true) await _quitterProfil();
           },
         ),
         const SizedBox(height: 8),
@@ -1304,17 +1590,29 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                 ],
               ),
             );
-            if (confirm == true) {
-              await DriverSession.clearDriverName();
-              setState(() {
-                _driverName = null;
-                _tabIndex = 0;
-              });
-            }
+            if (confirm == true) await _quitterProfil();
           },
         ),
       ],
     );
+  }
+
+  /// Connecté avec un compte chauffeur, quitter son profil c'est se
+  /// déconnecter : le téléphone revient à la liste des chauffeurs du QR.
+  Future<void> _quitterProfil() async {
+    await DriverSession.clearDriverName();
+    if (widget.firebaseEmail != null) {
+      if (_tourStart != null) {
+        await _gps.stopTracking();
+        await DriverSession.endTour();
+      }
+      await AuthService.signOut();
+      return;
+    }
+    setState(() {
+      _driverName = null;
+      _tabIndex = 0;
+    });
   }
 
   // ── Vue : pas de tournée en cours ────────────────────────────────────────
@@ -1323,537 +1621,307 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     final now = DateTime.now();
     final day = now.day.toString().padLeft(2, '0');
     final month = _monthLabel(now.month);
-    final trucks = ref.read(appStateProvider).trucks;
+    final state = ref.watch(appStateProvider);
+    final today = state.tours
+        .where(
+          (t) =>
+              t.driverName == _driverName &&
+              t.date.year == now.year &&
+              t.date.month == now.month &&
+              t.date.day == now.day,
+        )
+        .toList();
+    final todayKm = today.fold<double>(0, (s, t) => s + t.kmTotal);
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        // Date
         Text(
           '$day $month ${now.year}',
-          style: const TextStyle(fontSize: 16, color: DC.textSecondary),
+          style: context.tBody(15, color: context.cInk2),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
 
-        // Sélection camion obligatoire
-        DropdownButtonFormField<String>(
-          value: _selectedTruck,
-          decoration: const InputDecoration(
-            labelText: 'Camion *',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.local_shipping_outlined),
+        _truckCard(state.trucks, allowChange: true),
+
+        if (today.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.cSuccessBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: DC.success, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Déjà enregistré aujourd’hui : ${todayKm.toStringAsFixed(0)} km',
+                    style: context.tBody(14, w: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
           ),
-          items: trucks
-              .map((t) => DropdownMenuItem(
-                    value: t.plate,
-                    child: Text('${t.plate} • ${t.model}'),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _selectedTruck = v),
-        ),
-        const SizedBox(height: 16),
+        ],
 
-        // Bouton démarrer
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _selectedTruck == null ? null : _demarrer,
-            icon: const Icon(Icons.play_arrow_rounded, size: 28),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'Démarrer la tournée',
-                style: TextStyle(fontSize: 18),
-              ),
+        const SizedBox(height: 22),
+        Text('Tes kilomètres', style: context.tTitle(20)),
+        const SizedBox(height: 10),
+        _ChoiceCard(
+          icon: Icons.photo_camera_outlined,
+          color: DC.primary,
+          title: 'Photo du compteur',
+          subtitle:
+              'Une photo au départ, une au retour : les km se calculent seuls',
+          badge: 'Le plus fiable',
+          onTap: _selectedTruck == null ? null : _photoDepart,
+        ),
+        const SizedBox(height: 10),
+        _ChoiceCard(
+          icon: Icons.gps_fixed,
+          color: DC.success,
+          title: 'Lancer le GPS',
+          subtitle: 'Les km se comptent tout seuls jusqu’à la fin',
+          busy: _gpsStarting,
+          onTap: _selectedTruck == null ? null : _lancerGps,
+        ),
+        Center(
+          child: TextButton(
+            onPressed: _selectedTruck == null ? null : _saisirKm,
+            child: const Text('Ou saisir mes km à la main'),
+          ),
+        ),
+        const SizedBox(height: 18),
+        OutlinedButton.icon(
+          onPressed: _selectedTruck == null || _isScanning
+              ? null
+              : _addFuelExpense,
+          icon: _isScanning
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.local_gas_station_outlined),
+          label: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              _isScanning ? 'Analyse en cours...' : 'Dépense carburant',
             ),
           ),
         ),
 
-        const SizedBox(height: 16),
-
-        // Dépense carburant
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _selectedTruck == null || _isScanning
-                ? null
-                : _addFuelExpense,
-            icon: _isScanning
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.local_gas_station_outlined),
-            label: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(
-                _isScanning
-                    ? 'Analyse en cours...'
-                    : 'Dépense carburant',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
         const Divider(),
         const SizedBox(height: 16),
-
-        // Stats du mois
         _buildStats(),
       ],
     );
   }
 
-  // ── Vue : tournée en cours ───────────────────────────────────────────────
+  /// Le camion du jour : celui du QR scanné, sinon celui de l'affectation.
+  Widget _truckCard(List<Truck> trucks, {required bool allowChange}) {
+    final truck = trucks.where((t) => t.plate == _selectedTruck).firstOrNull;
+    final company = _companyCtrl.text.trim();
+    final assignment = ref
+        .read(appStateProvider)
+        .getAssignment(_driverName ?? '');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: context.cSurface,
+        borderRadius: BorderRadius.circular(DC.rCard),
+        border: Border.all(color: context.cBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.local_shipping_outlined, color: context.cInk2),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  truck?.plate ?? 'Aucun camion choisi',
+                  style: context.tMono(
+                    17,
+                    w: FontWeight.w800,
+                    color: truck == null ? DC.error : context.cInk,
+                  ),
+                ),
+                if (truck != null && truck.model.isNotEmpty)
+                  Text(
+                    truck.model,
+                    style: context.tBody(12.5, color: context.cInk2),
+                  ),
+                if (company.isNotEmpty)
+                  Text(
+                    company,
+                    style: context.tBody(
+                      12.5,
+                      w: FontWeight.w600,
+                      color: context.cInk2,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (allowChange)
+            TextButton(
+              onPressed: trucks.isEmpty ? null : () => _pickTruck(trucks),
+              child: Text(truck == null ? 'Choisir' : 'Changer'),
+            )
+          else if (assignment != null)
+            TextButton.icon(
+              onPressed: () => _signalerPanne(trucks),
+              style: TextButton.styleFrom(foregroundColor: DC.warning),
+              icon: const Icon(Icons.warning_amber_rounded, size: 16),
+              label: const Text('Panne'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickTruck(List<Truck> trucks) async {
+    final plate = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Quel camion ?'),
+        children: [
+          for (final t in trucks)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, t.plate),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  t.plate == _selectedTruck
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                ),
+                title: Text(t.plate),
+                subtitle: t.model.isEmpty ? null : Text(t.model),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (plate != null) setState(() => _selectedTruck = plate);
+  }
+
+  // ── Vue : GPS en cours ───────────────────────────────────────────────────
 
   Widget _buildActiveTour() {
     final trucks = ref.read(appStateProvider).trucks;
+    final compteur = _dayMode == 'compteur';
+    final ok = compteur || _gpsActive;
+    final accent = compteur
+        ? DC.primary
+        : (_gpsActive ? DC.success : DC.warning);
 
     return Column(
       children: [
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Chrono
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.shade200),
-                    ),
-                    child: Row(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+                decoration: BoxDecoration(
+                  color: compteur
+                      ? context.cPrimaryBg
+                      : (ok ? context.cSuccessBg : context.cWarningBg),
+                  borderRadius: BorderRadius.circular(DC.rCard),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.timer_outlined, color: Colors.orange),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Démarré à ${_fmtTime(_tourStart!)}',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                'En cours : ${_elapsed()}',
-                                style: const TextStyle(color: Colors.orange, fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                            ],
+                        Icon(
+                          compteur
+                              ? Icons.speed
+                              : (_gpsActive ? Icons.gps_fixed : Icons.gps_off),
+                          size: 18,
+                          color: accent,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          compteur
+                              ? 'Journée en cours'
+                              : (_gpsActive
+                                    ? 'GPS en cours'
+                                    : 'GPS interrompu'),
+                          style: context.tBody(
+                            14,
+                            w: FontWeight.w700,
+                            color: accent,
                           ),
                         ),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // GPS live km
-                  if (_gpsActive)
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.gps_fixed, color: Colors.green.shade700, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${_gpsKm.toStringAsFixed(1)} km',
-                                  style: TextStyle(
-                                    color: Colors.green.shade800,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  'Suivi GPS en cours',
-                                  style: TextStyle(
-                                    color: Colors.green.shade600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Pastille pulsante
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.green.withValues(alpha: 0.4),
-                                  blurRadius: 6,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: DC.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: DC.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.gps_off, color: DC.textTertiary, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'GPS inactif — saisis les km manuellement',
-                              style: TextStyle(color: DC.textSecondary, fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 10),
+                    FittedBox(
+                      child: Text(
+                        compteur
+                            ? '${_startKm ?? '—'} km'
+                            : '${_gpsKm.toStringAsFixed(1)} km',
+                        style: context.tTitle(
+                          compteur ? 40 : 54,
+                          w: FontWeight.w800,
+                        ),
                       ),
                     ),
-
-                  const SizedBox(height: 20),
-
-                  // Affectation (camion + commissionnaire) — lecture seule, vient du manager
-                  Builder(builder: (_) {
-                    final assignment = ref.read(appStateProvider).getAssignment(_driverName ?? '');
-                    final truck = _selectedTruck != null
-                        ? trucks.where((t) => t.plate == _selectedTruck).firstOrNull
-                        : null;
-                    final companyName = _companyCtrl.text.trim();
-                    final pricing = companyName.isNotEmpty
-                        ? ref.read(appStateProvider).getClientPricing(companyName)
-                        : null;
-                    final commColor = pricing?.colorValue != null
-                        ? Color(pricing!.colorValue!)
-                        : Colors.indigo;
-
-                    return Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: commColor.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: commColor.withValues(alpha: 0.15)),
+                    if (compteur)
+                      Text(
+                        'au compteur ce matin',
+                        style: context.tBody(13, color: context.cInk2),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Commissionnaire
-                          if (companyName.isNotEmpty) ...[
-                            Row(
-                              children: [
-                                Icon(Icons.handshake_outlined, size: 16, color: commColor),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    companyName,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: commColor,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (pricing != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: commColor.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      billingModeLabel(pricing.billingMode),
-                                      style: TextStyle(
-                                          fontSize: 10, fontWeight: FontWeight.w600, color: commColor),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          // Camion
-                          Row(
-                            children: [
-                              const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.teal),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  truck != null
-                                      ? '${truck.plate} • ${truck.model}'
-                                      : _selectedTruck ?? 'Aucun camion',
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Indication + bouton panne
-                          if (assignment != null) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(Icons.lock_outline, size: 12, color: DC.textTertiary),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    'Affectation définie par le manager',
-                                    style: TextStyle(fontSize: 10, color: DC.textTertiary),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: () => _signalerPanne(trucks),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
-                                        SizedBox(width: 4),
-                                        Text('Panne / Changer',
-                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-
-                  // N° tournée (sauvegardé, auto-rempli, modifiable)
-                  TextFormField(
-                    controller: _tourNumberCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Numéro de tournée *',
-                      border: const OutlineInputBorder(),
-                      helperText: _tourNumberCtrl.text.isNotEmpty
-                          ? 'Enregistré — modifiable si besoin'
-                          : null,
-                      helperStyle: TextStyle(fontSize: 11, color: DC.textTertiary),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Départ ${_fmtTime(_tourStart!)} · ${_elapsed()}',
+                      style: context.tBody(14, color: context.cInk2),
                     ),
-                    keyboardType: TextInputType.number,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Numéro de tournée requis' : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Km
-                  TextFormField(
-                    controller: _kmCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => _kmManuallyEdited = true,
-                    decoration: InputDecoration(
-                      labelText: _gpsActive
-                          ? 'Km (GPS auto — modifiable)'
-                          : 'Kilomètres parcourus *',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: _gpsActive && _kmManuallyEdited
-                          ? IconButton(
-                              icon: const Icon(Icons.refresh, size: 20),
-                              tooltip: 'Remettre la valeur GPS',
-                              onPressed: () {
-                                setState(() {
-                                  _kmManuallyEdited = false;
-                                  _kmCtrl.text = _gpsKm.toStringAsFixed(1);
-                                });
-                              },
-                            )
-                          : null,
-                    ),
-                    validator: (v) {
-                      final km = _d(v ?? '');
-                      if (km == null || km <= 0) return 'Kilomètres requis';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Section Fiches / Colis + Ramasses ──────────────────────────
-                  Builder(builder: (_) {
-                    final companyName = _companyCtrl.text.trim();
-                    final pricing = companyName.isNotEmpty
-                        ? ref.read(appStateProvider).getClientPricing(companyName)
-                        : null;
-                    final isFiche = pricing?.billingMode == BillingMode.aLaFiche;
-                    final commColor = pricing?.colorValue != null
-                        ? Color(pricing!.colorValue!)
-                        : (isFiche ? Colors.teal : Colors.indigo);
-
-                    return Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: commColor.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: commColor.withValues(alpha: 0.15)),
+                    if (!ok) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tu pourras corriger les km en terminant la journée.',
+                        textAlign: TextAlign.center,
+                        style: context.tBody(12.5, color: context.cInk2),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                isFiche ? Icons.description_outlined : Icons.inventory_2_outlined,
-                                size: 16,
-                                color: commColor,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                isFiche ? 'Fiches & Ramasses' : 'Colis & Ramasses',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: commColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _clientsCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: isFiche
-                                  ? 'Nombre de fiches *'
-                                  : 'Nombre de colis *',
-                              border: const OutlineInputBorder(),
-                              prefixIcon: Icon(isFiche
-                                  ? Icons.description_outlined
-                                  : Icons.inventory_2_outlined),
-                            ),
-                            validator: (v) {
-                              final n = int.tryParse(v?.trim() ?? '');
-                              if (n == null || n < 0) return 'Nombre de clients requis';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _pickupCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Nombre de ramasses',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.move_to_inbox_outlined),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-
-                  // Poids
-                  TextFormField(
-                    controller: _weightCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Poids chargé (kg) — optionnel',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.scale_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Manutention
-                  SwitchListTile(
-                    value: _hasHandling,
-                    title: const Text('Manutention'),
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (v) => setState(() => _hasHandling = v),
-                  ),
-                  if (_hasHandling) ...[
-                    TextFormField(
-                      controller: _handlingCountCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre de manutentions *',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.numbers),
-                      ),
-                      validator: (v) {
-                        if (!_hasHandling) return null;
-                        final n = int.tryParse(v?.trim() ?? '');
-                        if (n == null || n <= 0) return 'Nombre de manutentions invalide';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _handlingCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Nom du client manutention *',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.business),
-                      ),
-                      validator: (v) {
-                        if (!_hasHandling) return null;
-                        if (v == null || v.trim().isEmpty) return 'Nom du client manutention obligatoire';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
+                    ],
                   ],
-
-                  // Tournée supplémentaire
-                  SwitchListTile(
-                    value: _extraTour,
-                    title: const Text('Tournée supplémentaire'),
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (v) => setState(() => _extraTour = v),
-                  ),
-                  // Extra bottom padding so content doesn't hide behind sticky bar
-                  const SizedBox(height: 8),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 12),
+              _truckCard(trucks, allowChange: false),
+              const SizedBox(height: 12),
+              Text(
+                compteur
+                    ? 'Au retour, touche « Terminer » et photographie le compteur : '
+                          'les km de la journée se calculent seuls.'
+                    : 'Garde l’application ouverte pendant la tournée : '
+                          'sur certains téléphones, le GPS s’arrête quand l’écran est verrouillé.',
+                style: context.tBody(12.5, color: context.cInk3),
+              ),
+            ],
           ),
         ),
-        // ── Sticky bottom action buttons ──────────────────────────────────
         DCStickyBottomBar(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
+              child: OutlinedButton(
                 onPressed: _annuler,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: const BorderSide(color: Colors.red),
+                  foregroundColor: DC.error,
+                  side: const BorderSide(color: DC.error),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                icon: const Icon(Icons.cancel_outlined, size: 18),
-                label: const Text('Annuler', style: TextStyle(fontSize: 14)),
+                child: const Text('Annuler'),
               ),
             ),
             const SizedBox(width: 12),
@@ -1862,11 +1930,17 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               child: FilledButton.icon(
                 onPressed: _terminer,
                 style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: compteur ? DC.primary : DC.success,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                icon: const Icon(Icons.stop_circle_outlined, size: 20),
-                label: const Text('Terminer la tournée', style: TextStyle(fontSize: 16)),
+                icon: Icon(
+                  compteur ? Icons.photo_camera_outlined : Icons.flag_outlined,
+                  size: 20,
+                ),
+                label: const Text(
+                  'Terminer la journée',
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
             ),
           ],
@@ -1900,8 +1974,7 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                   padding: EdgeInsets.fromLTRB(24, 32, 24, 8),
                   child: Text(
                     'Qui es-tu ?',
-                    style: TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const Padding(
@@ -1926,13 +1999,19 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                           title: Text(
                             d.name,
                             style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w600),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.arrow_forward_ios, size: 16, color: DC.textSecondary),
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: DC.textSecondary,
+                              ),
                             ],
                           ),
                           onTap: () => _selectProfile(d),
@@ -1969,8 +2048,7 @@ class _StatBox extends StatelessWidget {
           children: [
             Text(
               value,
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             Text(
               label,
@@ -2004,29 +2082,73 @@ class _DriverInfoPage extends StatelessWidget {
           // ── Identité
           _section('Identité'),
           _infoRow(Icons.person_outline, 'Nom', driver.name),
-          _infoRow(Icons.person_outline, 'Prénom', driver.firstName ?? 'Non renseigné'),
-          _infoRow(Icons.cake_outlined, 'Date de naissance', _fmt(driver.birthDate)),
-          _infoRow(Icons.flag_outlined, 'Nationalité', driver.nationality ?? 'Non renseignée'),
+          _infoRow(
+            Icons.person_outline,
+            'Prénom',
+            driver.firstName ?? 'Non renseigné',
+          ),
+          _infoRow(
+            Icons.cake_outlined,
+            'Date de naissance',
+            _fmt(driver.birthDate),
+          ),
+          _infoRow(
+            Icons.flag_outlined,
+            'Nationalité',
+            driver.nationality ?? 'Non renseignée',
+          ),
           const SizedBox(height: 16),
 
           // ── Contact
           _section('Contact'),
-          _infoRow(Icons.phone_outlined, 'Téléphone', driver.phone ?? 'Non renseigné'),
-          _infoRow(Icons.email_outlined, 'Email', driver.email ?? 'Non renseigné'),
-          _infoRow(Icons.home_outlined, 'Adresse', driver.address ?? 'Non renseignée'),
+          _infoRow(
+            Icons.phone_outlined,
+            'Téléphone',
+            driver.phone ?? 'Non renseigné',
+          ),
+          _infoRow(
+            Icons.email_outlined,
+            'Email',
+            driver.email ?? 'Non renseigné',
+          ),
+          _infoRow(
+            Icons.home_outlined,
+            'Adresse',
+            driver.address ?? 'Non renseignée',
+          ),
           const SizedBox(height: 16),
 
           // ── Administratif
           _section('Administratif'),
-          _infoRow(Icons.badge_outlined, 'N° Sécurité sociale', driver.socialSecurityNumber ?? 'Non renseigné'),
-          _infoRow(Icons.work_outline, 'Statut', driverStatusLabel(driver.status)),
-          _infoRow(Icons.calendar_today_outlined, 'Date d\'embauche', _fmt(driver.hireDate)),
+          _infoRow(
+            Icons.badge_outlined,
+            'N° Sécurité sociale',
+            driver.socialSecurityNumber ?? 'Non renseigné',
+          ),
+          _infoRow(
+            Icons.work_outline,
+            'Statut',
+            driverStatusLabel(driver.status),
+          ),
+          _infoRow(
+            Icons.calendar_today_outlined,
+            'Date d\'embauche',
+            _fmt(driver.hireDate),
+          ),
           const SizedBox(height: 16),
 
           // ── Permis de conduire
           _section('Permis de conduire'),
-          _infoRow(Icons.credit_card_outlined, 'N° de permis', driver.licenseNumber ?? 'Non renseigné'),
-          _infoRow(Icons.event_busy_outlined, 'Expiration permis', _fmt(driver.licenseExpiryDate)),
+          _infoRow(
+            Icons.credit_card_outlined,
+            'N° de permis',
+            driver.licenseNumber ?? 'Non renseigné',
+          ),
+          _infoRow(
+            Icons.event_busy_outlined,
+            'Expiration permis',
+            _fmt(driver.licenseExpiryDate),
+          ),
           const SizedBox(height: 8),
           Card(
             child: Padding(
@@ -2034,8 +2156,10 @@ class _DriverInfoPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Catégories détenues',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const Text(
+                    'Catégories détenues',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -2056,8 +2180,16 @@ class _DriverInfoPage extends StatelessWidget {
 
           // ── Contact d'urgence
           _section('Contact d\'urgence'),
-          _infoRow(Icons.emergency_outlined, 'Nom', driver.emergencyContact ?? 'Non renseigné'),
-          _infoRow(Icons.phone_outlined, 'Téléphone', driver.emergencyPhone ?? 'Non renseigné'),
+          _infoRow(
+            Icons.emergency_outlined,
+            'Nom',
+            driver.emergencyContact ?? 'Non renseigné',
+          ),
+          _infoRow(
+            Icons.phone_outlined,
+            'Téléphone',
+            driver.emergencyPhone ?? 'Non renseigné',
+          ),
 
           const SizedBox(height: 24),
 
@@ -2088,11 +2220,12 @@ class _DriverInfoPage extends StatelessWidget {
   }
 
   Widget _section(String title) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(title,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      title,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+    ),
+  );
 
   Widget _infoRow(IconData icon, String label, String value) {
     final isDefault = value == 'Non renseigné' || value == 'Non renseignée';
@@ -2104,8 +2237,10 @@ class _DriverInfoPage extends StatelessWidget {
           const SizedBox(width: 10),
           SizedBox(
             width: 140,
-            child: Text(label,
-                style: const TextStyle(fontSize: 13, color: DC.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: DC.textSecondary),
+            ),
           ),
           Expanded(
             child: Text(
@@ -2127,10 +2262,14 @@ class _DriverInfoPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: has ? Colors.green.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.08),
+        color: has
+            ? Colors.green.withValues(alpha: 0.12)
+            : Colors.grey.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: has ? Colors.green.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.3),
+          color: has
+              ? Colors.green.withValues(alpha: 0.4)
+              : Colors.grey.withValues(alpha: 0.3),
         ),
       ),
       child: Text(
@@ -2203,3 +2342,561 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+// ── Les deux choix du matin ──────────────────────────────────────────────────
+
+class _ChoiceCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title, subtitle;
+  final bool busy;
+  final String? badge;
+  final VoidCallback? onTap;
+
+  const _ChoiceCard({
+    this.badge,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    this.busy = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !busy;
+    return Opacity(
+      opacity: onTap == null ? 0.5 : 1,
+      child: Material(
+        color: context.cSurface,
+        borderRadius: BorderRadius.circular(DC.rCard),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(DC.rCard),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(DC.rCard),
+              border: Border.all(
+                color: color.withValues(alpha: 0.45),
+                width: 1.4,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: busy
+                      ? Padding(
+                          padding: const EdgeInsets.all(15),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: color,
+                          ),
+                        )
+                      : Icon(icon, color: color, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: context.tTitle(19)),
+                      if (badge != null) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            badge!,
+                            style: context.tBody(
+                              10.5,
+                              w: FontWeight.w700,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                      ],
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: context.tBody(13.5, color: context.cInk2),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: context.cInk3),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Fin de journée ───────────────────────────────────────────────────────────
+
+class _DayResult {
+  final double km;
+  final String tourNumber, company;
+  final int pickups;
+  final String? handlingClient;
+  final bool extraTour;
+  const _DayResult({
+    required this.km,
+    required this.tourNumber,
+    required this.company,
+    required this.pickups,
+    required this.handlingClient,
+    required this.extraTour,
+  });
+}
+
+/// Les km, et c'est tout. Le reste — n° de tournée, commissionnaire, options
+/// facturables — est prérempli et replié dans « Détails ».
+class _DaySheet extends StatefulWidget {
+  /// Km mesurés (GPS ou compteur) ; null en saisie manuelle.
+  final double? measuredKm;
+
+  /// 'gps' ou 'compteur' ; null en saisie manuelle.
+  final String? source;
+  final String tourNumber, company;
+  final bool companyLocked;
+  final List<String> companies;
+
+  const _DaySheet({
+    required this.measuredKm,
+    required this.source,
+    required this.tourNumber,
+    required this.company,
+    required this.companyLocked,
+    required this.companies,
+  });
+
+  @override
+  State<_DaySheet> createState() => _DaySheetState();
+}
+
+class _DaySheetState extends State<_DaySheet> {
+  late final _km = TextEditingController(
+    text: widget.measuredKm != null && widget.measuredKm! > 0
+        ? widget.measuredKm!.toStringAsFixed(widget.source == 'gps' ? 1 : 0)
+        : '',
+  );
+  late final _tour = TextEditingController(text: widget.tourNumber);
+  late final _company = TextEditingController(text: widget.company);
+  final _pickups = TextEditingController();
+  final _handling = TextEditingController();
+  bool _hasHandling = false;
+  bool _extraTour = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _km.dispose();
+    _tour.dispose();
+    _company.dispose();
+    _pickups.dispose();
+    _handling.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final km = double.tryParse(_km.text.replaceAll(',', '.').trim());
+    if (km == null || km <= 0) {
+      setState(() => _error = 'Indique les kilomètres parcourus');
+      return;
+    }
+    if (km > 2000) {
+      setState(
+        () => _error = 'Plus de 2 000 km en une journée ? Vérifie le chiffre.',
+      );
+      return;
+    }
+    if (_hasHandling && _handling.text.trim().isEmpty) {
+      setState(() => _error = 'Indique le client de la manutention');
+      return;
+    }
+    Navigator.pop(
+      context,
+      _DayResult(
+        km: km,
+        tourNumber: _tour.text.trim(),
+        company: _company.text.trim(),
+        pickups: int.tryParse(_pickups.text.trim()) ?? 0,
+        handlingClient: _hasHandling ? _handling.text.trim() : null,
+        extraTour: _extraTour,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gps = widget.measuredKm != null;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              gps ? 'Fin de journée' : 'Mes km du jour',
+              style: context.tTitle(22),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              gps
+                  ? (widget.source == 'compteur'
+                        ? 'D’après le compteur : ${widget.measuredKm!.toStringAsFixed(0)} km.'
+                        : 'Le GPS a compté ${widget.measuredKm!.toStringAsFixed(1)} km. '
+                              'Corrige si besoin.')
+                  : 'Le total parcouru aujourd’hui avec le camion.',
+              style: context.tBody(13.5, color: context.cInk2),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _km,
+              autofocus: !gps,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              textAlign: TextAlign.center,
+              style: context.tTitle(34, w: FontWeight.w800),
+              onChanged: (_) => setState(() => _error = null),
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                hintText: '0',
+                suffixText: 'km',
+                errorText: _error,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Theme(
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'Détails (facultatif)',
+                  style: context.tBody(14, w: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  [
+                    if (_tour.text.isNotEmpty) 'Tournée ${_tour.text}',
+                    if (_company.text.isNotEmpty) _company.text,
+                  ].join(' · '),
+                  style: context.tBody(12, color: context.cInk3),
+                ),
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                children: [
+                  TextField(
+                    controller: _tour,
+                    decoration: const InputDecoration(
+                      labelText: 'N° de tournée',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (widget.companyLocked)
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Commissionnaire (affecté par le manager)',
+                        border: OutlineInputBorder(),
+                      ),
+                      child: Text(_company.text),
+                    )
+                  else
+                    Autocomplete<String>(
+                      initialValue: TextEditingValue(text: _company.text),
+                      optionsBuilder: (v) => widget.companies.where(
+                        (c) => c.toLowerCase().contains(v.text.toLowerCase()),
+                      ),
+                      onSelected: (v) => _company.text = v,
+                      fieldViewBuilder: (ctx, ctrl, focus, onSubmit) =>
+                          TextField(
+                            controller: ctrl,
+                            focusNode: focus,
+                            onChanged: (v) => _company.text = v,
+                            decoration: const InputDecoration(
+                              labelText: 'Commissionnaire',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                    ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _pickups,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Ramasses',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Manutention'),
+                    value: _hasHandling,
+                    onChanged: (v) => setState(() => _hasHandling = v),
+                  ),
+                  if (_hasHandling)
+                    TextField(
+                      controller: _handling,
+                      decoration: const InputDecoration(
+                        labelText: 'Client de la manutention',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Tournée supplémentaire'),
+                    value: _extraTour,
+                    onChanged: (v) => setState(() => _extraTour = v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _submit,
+              icon: const Icon(Icons.check),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text(
+                  'Enregistrer la journée',
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Photo du compteur ────────────────────────────────────────────────────────
+
+/// Le chauffeur photographie le compteur ; le chiffre est lu tout seul et il
+/// n'a qu'à confirmer. Sans lecture possible (pas de réseau, photo floue),
+/// il tape le chiffre : la journée n'est jamais bloquée.
+class _OdometerSheet extends StatefulWidget {
+  final String title;
+
+  /// Dernier relevé connu du camion : un compteur ne recule pas.
+  final int? minKm;
+
+  const _OdometerSheet({required this.title, this.minKm});
+
+  @override
+  State<_OdometerSheet> createState() => _OdometerSheetState();
+}
+
+class _OdometerSheetState extends State<_OdometerSheet> {
+  final _km = TextEditingController();
+  Uint8List? _photo;
+  bool _reading = false;
+  bool _fromPhoto = false;
+  String? _info;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // On ouvre directement l'appareil photo : c'est le geste attendu.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _shoot());
+  }
+
+  @override
+  void dispose() {
+    _km.dispose();
+    super.dispose();
+  }
+
+  Future<void> _shoot() async {
+    final x = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+      maxWidth: 1400,
+    );
+    if (x == null || !mounted) return;
+    final bytes = await x.readAsBytes();
+    setState(() {
+      _photo = bytes;
+      _reading = true;
+      _info = null;
+      _error = null;
+    });
+    final mime = x.name.toLowerCase().endsWith('.png')
+        ? 'image/png'
+        : 'image/jpeg';
+    final r = await OcrService.readOdometer(bytes, mime);
+    if (!mounted) return;
+    setState(() {
+      _reading = false;
+      if (r.km != null) {
+        _km.text = '${r.km}';
+        _fromPhoto = true;
+        _info = 'Lu sur la photo — vérifie le chiffre.';
+      } else {
+        _info = 'Chiffre non reconnu : tape-le ci-dessous.';
+      }
+    });
+  }
+
+  void _submit() {
+    final km = int.tryParse(_km.text.replaceAll(RegExp(r'\s'), ''));
+    if (km == null || km <= 0) {
+      setState(() => _error = 'Indique le kilométrage du compteur');
+      return;
+    }
+    final min = widget.minKm;
+    if (min != null && km < min) {
+      setState(
+        () => _error =
+            'Plus petit que le dernier relevé ($min km). '
+            'Un compteur ne recule pas : vérifie.',
+      );
+      return;
+    }
+    if (min != null && km - min > 3000) {
+      setState(
+        () => _error =
+            '${km - min} km depuis le dernier relevé ? '
+            'Vérifie le chiffre.',
+      );
+      return;
+    }
+    Navigator.pop(context, (km, _fromPhoto ? 'photo' : 'saisie'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.title, style: context.tTitle(22)),
+            const SizedBox(height: 4),
+            Text(
+              'Le compteur kilométrique total, pas le compteur journalier.',
+              style: context.tBody(13.5, color: context.cInk2),
+            ),
+            const SizedBox(height: 14),
+            InkWell(
+              onTap: _reading ? null : _shoot,
+              borderRadius: BorderRadius.circular(DC.rCard),
+              child: Container(
+                height: 160,
+                decoration: BoxDecoration(
+                  color: context.cSurface2,
+                  borderRadius: BorderRadius.circular(DC.rCard),
+                  border: Border.all(color: context.cBorder),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _photo == null
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.photo_camera_outlined,
+                            size: 40,
+                            color: DC.primary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Photographier le compteur',
+                            style: context.tBody(
+                              15,
+                              w: FontWeight.w600,
+                              color: DC.primary,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(_photo!, fit: BoxFit.cover),
+                          if (_reading)
+                            Container(
+                              color: Colors.black45,
+                              alignment: Alignment.center,
+                              child: const Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Lecture du compteur…',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+            if (_info != null) ...[
+              const SizedBox(height: 8),
+              Text(_info!, style: context.tBody(12.5, color: context.cInk2)),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _km,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: context.tTitle(30, w: FontWeight.w800),
+              onChanged: (_) => setState(() {
+                _error = null;
+                _fromPhoto = false;
+              }),
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                hintText: widget.minKm != null ? '${widget.minKm}' : '000000',
+                suffixText: 'km',
+                errorText: _error,
+                errorMaxLines: 3,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _reading ? null : _submit,
+              icon: const Icon(Icons.check),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text('Valider', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

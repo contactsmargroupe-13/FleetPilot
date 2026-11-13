@@ -51,7 +51,6 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
 
     // Stats du mois — source unique : tours
     final totalKm = monthTours.fold(0.0, (s, t) => s + t.kmTotal);
-    final totalClients = monthTours.fold(0, (s, t) => s + t.clientsCount);
     final joursT = monthTours
         .map((t) => '${t.date.year}-${t.date.month}-${t.date.day}')
         .toSet()
@@ -187,8 +186,8 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
             _statCard('Km total', '${totalKm.toStringAsFixed(0)}',
                 Icons.speed_outlined, Colors.teal),
             const SizedBox(width: 10),
-            _statCard('Colis / Fiches', '$totalClients',
-                Icons.inventory_2_outlined, Colors.indigo),
+            _statCard('Jours', '$joursT',
+                Icons.calendar_today_outlined, Colors.indigo),
           ],
         ),
         const SizedBox(height: 10),
@@ -591,7 +590,7 @@ class _DriverDashboardPageState extends ConsumerState<DriverDashboardPage> {
                       fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 Text(
-                  '${t.clientsCount} cl.${t.pickupCount > 0 ? ' · ${t.pickupCount} ram.' : ''}',
+                  t.pickupCount > 0 ? '${t.pickupCount} ram.' : (t.companyName ?? ''),
                   style: TextStyle(fontSize: 10, color: DC.textSecondary),
                 ),
               ],

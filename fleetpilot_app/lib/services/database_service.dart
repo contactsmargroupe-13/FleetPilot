@@ -18,6 +18,10 @@ import '../screens/models/expense.dart';
 import '../screens/models/equipment.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/message.dart';
+import '../screens/models/monthly_points.dart';
+import '../screens/models/client_statement.dart';
+import '../screens/models/absence.dart';
+import '../screens/models/odometer_reading.dart';
 import '../screens/models/tour.dart';
 import '../screens/models/user_access.dart';
 import 'company_settings.dart';
@@ -41,7 +45,7 @@ class DatabaseService {
 
     final db = await openDatabase(
       path,
-      version: 6,
+      version: 9,
       onCreate: (db, version) async {
         await db.execute(
             'CREATE TABLE drivers (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
@@ -71,6 +75,16 @@ class DatabaseService {
             'CREATE TABLE driver_assignments (name TEXT PRIMARY KEY, data TEXT NOT NULL)');
         await db.execute(
             'CREATE TABLE messages (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE user_accesses (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE monthly_points (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE client_statements (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE absences (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        await db.execute(
+            'CREATE TABLE odometer_readings (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -92,6 +106,23 @@ class DatabaseService {
         if (oldVersion < 6) {
           await db.execute(
               'CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 7) {
+          // user_accesses n'avait jamais été créée.
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS user_accesses (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS monthly_points (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 8) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS client_statements (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS absences (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+        }
+        if (oldVersion < 9) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS odometer_readings (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
         }
       },
     );
@@ -416,4 +447,43 @@ class DatabaseService {
 
   Future<void> deleteUserAccess(String id) =>
       _delete('user_accesses', 'id', id);
+
+  // ── Points mensuels (commissionnaires au point) ─────────────────────
+
+  Future<List<MonthlyPoints>> loadMonthlyPoints() =>
+      _loadAll('monthly_points', MonthlyPoints.fromJson);
+
+  Future<void> saveMonthlyPoints(MonthlyPoints p) =>
+      _upsert('monthly_points', 'id', p.id, p.toJson());
+
+  Future<void> deleteMonthlyPoints(String id) =>
+      _delete('monthly_points', 'id', id);
+
+  // ── Relevés commissionnaires ────────────────────────────────────────
+
+  Future<List<ClientStatement>> loadStatements() =>
+      _loadAll('client_statements', ClientStatement.fromJson);
+
+  Future<void> saveStatement(ClientStatement s) =>
+      _upsert('client_statements', 'id', s.id, s.toJson());
+
+  Future<void> deleteStatement(String id) =>
+      _delete('client_statements', 'id', id);
+
+  // ── Absences ────────────────────────────────────────────────────────
+
+  Future<List<Absence>> loadAbsences() => _loadAll('absences', Absence.fromJson);
+
+  Future<void> saveAbsence(Absence a) =>
+      _upsert('absences', 'id', a.id, a.toJson());
+
+  Future<void> deleteAbsence(String id) => _delete('absences', 'id', id);
+
+  // ── Relevés compteur ────────────────────────────────────────────────
+
+  Future<List<OdometerReading>> loadOdometer() =>
+      _loadAll('odometer_readings', OdometerReading.fromJson);
+
+  Future<void> saveOdometer(OdometerReading r) =>
+      _upsert('odometer_readings', 'id', r.id, r.toJson());
 }

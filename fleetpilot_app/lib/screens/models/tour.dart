@@ -27,6 +27,12 @@ class Tour {
 
   final String status;
 
+  /// D'où viennent les km : 'compteur' (photos du compteur), 'gps',
+  /// 'gps-auto' (journée close automatiquement), 'saisie' (tapés à la main),
+  /// 'reconstitue' (déduits du relevé compteur suivant). Null = ancienne
+  /// saisie, comptée comme déclarée.
+  final String? kmSource;
+
   const Tour({
     required this.id,
     required this.tourNumber,
@@ -48,7 +54,15 @@ class Tour {
     this.extraKm = 0,
     this.extraTour = false,
     this.status = 'planifiée',
+    this.kmSource,
   });
+
+  /// Km mesurés par un instrument plutôt que déclarés de mémoire.
+  bool get kmMeasured =>
+      kmSource == 'compteur' ||
+      kmSource == 'gps' ||
+      kmSource == 'gps-auto' ||
+      kmSource == 'reconstitue';
 
   Tour copyWith({
     String? driverName,
@@ -77,6 +91,7 @@ class Tour {
       extraKm: extraKm,
       extraTour: extraTour,
       status: status ?? this.status,
+      kmSource: kmSource,
     );
   }
 
@@ -101,6 +116,7 @@ class Tour {
     'extraKm': extraKm,
     'extraTour': extraTour,
     'status': status,
+    'kmSource': kmSource,
   };
 
   factory Tour.fromJson(Map<String, dynamic> json) => Tour(
@@ -126,5 +142,6 @@ class Tour {
     extraKm: (json['extraKm'] as num).toDouble(),
     extraTour: json['extraTour'] as bool,
     status: json['status'] as String? ?? 'planifiée',
+    kmSource: json['kmSource'] as String?,
   );
 }

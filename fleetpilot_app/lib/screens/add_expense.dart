@@ -22,6 +22,8 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   String? _selectedPlate;
   ExpenseType _type = ExpenseType.fuel;
   DateTime _selectedDate = DateTime.now();
+  double? _vatRate; // null = taux habituel du type
+  String? _driverName;
 
   final _amountCtrl = TextEditingController();
   final _litersCtrl = TextEditingController();
@@ -43,6 +45,8 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
       _amountCtrl.text = e.amount.toStringAsFixed(2);
       if (e.liters != null) _litersCtrl.text = e.liters!.toStringAsFixed(2);
       if (e.note != null) _noteCtrl.text = e.note!;
+      _vatRate = e.vatRate;
+      _driverName = e.driverName;
     } else if (ref.read(appStateProvider).trucks.isNotEmpty) {
       _selectedPlate = ref.read(appStateProvider).trucks.first.plate;
     }
@@ -143,6 +147,8 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
       amount: amount,
       liters: _type == ExpenseType.fuel ? liters : null,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      vatRate: _vatRate,
+      driverName: _driverName,
     );
 
     Navigator.pop(context, expense);
@@ -226,16 +232,39 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                   labelText: 'Type de dépense',
                   border: OutlineInputBorder(),
                 ),
-                items: ExpenseType.values
+                items: expenseTypesOrdered
                     .map((t) => DropdownMenuItem(
                           value: t,
                           child: Text(expenseTypeLabel(t)),
                         ))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _type = v ?? ExpenseType.fuel),
+                onChanged: (v) => setState(() {
+                  _type = v ?? ExpenseType.fuel;
+                  _vatRate = null;
+                }),
               ),
               const SizedBox(height: 12),
+
+              // ── Chauffeur (amende : à désigner) ─────────────────────────
+              if (_type == ExpenseType.fine || _type == ExpenseType.claim) ...[
+                DropdownButtonFormField<String>(
+                  value: _driverName,
+                  decoration: InputDecoration(
+                    labelText: _type == ExpenseType.fine
+                        ? 'Chauffeur à désigner'
+                        : 'Chauffeur au volant',
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                        value: null, child: Text('Non renseigné')),
+                    for (final d in ref.read(appStateProvider).drivers)
+                      DropdownMenuItem(value: d.name, child: Text(d.fullName)),
+                  ],
+                  onChanged: (v) => setState(() => _driverName = v),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // ── Montant ──────────────────────────────────────────────────
               TextFormField(
@@ -243,15 +272,38 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  labelText: 'Montant (€)',
+                  labelText: 'Montant payé TTC (€)',
                   border: OutlineInputBorder(),
                 ),
+                onChanged: (_) => setState(() {}),
                 validator: (v) {
                   final val = _d(v ?? '');
                   if (val == null || val <= 0) return 'Montant invalide';
                   return null;
                 },
               ),
+              const SizedBox(height: 12),
+
+              // ── TVA ─────────────────────────────────────────────────────
+              Builder(builder: (_) {
+                final rate = _vatRate ?? defaultVatRate(_type);
+                final ttc = _d(_amountCtrl.text);
+                return DropdownButtonFormField<double>(
+                  value: rate,
+                  decoration: InputDecoration(
+                    labelText: 'TVA',
+                    border: const OutlineInputBorder(),
+                    helperText: ttc == null
+                        ? 'La TVA est récupérée : seul le HT compte dans le résultat'
+                        : 'Soit ${(ttc / (1 + rate)).toStringAsFixed(2).replaceAll('.', ',')} € HT',
+                  ),
+                  items: [
+                    for (final r in vatRates)
+                      DropdownMenuItem(value: r, child: Text(vatLabel(r))),
+                  ],
+                  onChanged: (v) => setState(() => _vatRate = v),
+                );
+              }),
               const SizedBox(height: 12),
 
               // ── Litres ───────────────────────────────────────────────────

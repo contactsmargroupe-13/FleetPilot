@@ -81,6 +81,10 @@ class Driver {
   // PIN hashé (SHA-256) pour l'authentification chauffeur
   final String? pinHash;
 
+  // Identifiant de connexion du compte « QR + PIN ». Le mot de passe
+  // Firebase est dérivé du PIN : rien n'est vérifié côté client.
+  final String? pinLoginEmail;
+
   // Statut contractuel
   final DriverStatus status;
 
@@ -109,6 +113,7 @@ class Driver {
     this.licenseExpiryDate,
     this.assignedTourNumber,
     this.pinHash,
+    this.pinLoginEmail,
     this.status = DriverStatus.cdi,
     this.hireDate,
   });
@@ -116,6 +121,14 @@ class Driver {
   double get totalSalary => fixedSalary + bonus;
 
   bool get hasPinSet => pinHash != null && pinHash!.isNotEmpty;
+
+  bool get hasQrAccess => pinLoginEmail != null && pinLoginEmail!.isNotEmpty;
+
+  /// L'email sous lequel ce chauffeur s'authentifie — celui que les règles
+  /// Firestore comparent au `driverEmail` dénormalisé.
+  String? get accessEmail => hasQrAccess
+      ? pinLoginEmail
+      : (email != null && email!.isNotEmpty ? email : null);
 
   /// Vérifie le PIN saisi contre le hash stocké
   bool checkPin(String pin) {
@@ -159,6 +172,7 @@ class Driver {
     DateTime? licenseExpiryDate,
     String? assignedTourNumber,
     String? pinHash,
+    String? pinLoginEmail,
     DriverStatus? status,
     DateTime? hireDate,
   }) {
@@ -185,6 +199,7 @@ class Driver {
       licenseExpiryDate: licenseExpiryDate ?? this.licenseExpiryDate,
       assignedTourNumber: assignedTourNumber ?? this.assignedTourNumber,
       pinHash: pinHash ?? this.pinHash,
+      pinLoginEmail: pinLoginEmail ?? this.pinLoginEmail,
       status: status ?? this.status,
       hireDate: hireDate ?? this.hireDate,
     );
@@ -207,6 +222,7 @@ class Driver {
       hasPermisD: hasPermisD, hasPermisEB: hasPermisEB,
       licenseNumber: licenseNumber, licenseExpiryDate: licenseExpiryDate,
       assignedTourNumber: assignedTourNumber, pinHash: null,
+      pinLoginEmail: pinLoginEmail,
       status: status, hireDate: hireDate,
     );
   }
@@ -233,6 +249,7 @@ class Driver {
         'licenseExpiryDate': licenseExpiryDate?.toIso8601String(),
         'assignedTourNumber': assignedTourNumber,
         'pinHash': pinHash,
+        'pinLoginEmail': pinLoginEmail,
         'status': status.name,
         'hireDate': hireDate?.toIso8601String(),
       };
@@ -263,6 +280,7 @@ class Driver {
             : null,
         assignedTourNumber: json['assignedTourNumber'] as String?,
         pinHash: json['pinHash'] as String?,
+        pinLoginEmail: json['pinLoginEmail'] as String?,
         status: json['status'] != null
             ? DriverStatus.values.firstWhere(
                 (e) => e.name == json['status'],

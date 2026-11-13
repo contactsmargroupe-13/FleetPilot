@@ -125,7 +125,7 @@ class _DepotPageState extends ConsumerState<DepotPage> {
           _SheetAction('Ouvrir la fiche camion', primary: true,
               run: () => _editTruck(t)),
           _SheetAction('Ses dépenses',
-              run: () => widget.onNavigate('argent', tab: 0)),
+              run: () => widget.onNavigate('rentabilite', tab: 2)),
         ],
       );
     }
@@ -150,9 +150,9 @@ class _DepotPageState extends ConsumerState<DepotPage> {
         ],
         actions: [
           _SheetAction('Sa fiche', primary: true,
-              run: () => widget.onNavigate('equipe', tab: 0)),
+              run: () => widget.onNavigate('gestion', tab: 1)),
           _SheetAction('L’affecter',
-              run: () => widget.onNavigate('journee', tab: 0)),
+              run: () => widget.onNavigate('gestion', tab: 1)),
         ],
       );
     }
@@ -185,9 +185,9 @@ class _DepotPageState extends ConsumerState<DepotPage> {
           ],
           actions: [
             _SheetAction('Facturation', primary: true,
-                run: () => widget.onNavigate('argent', tab: 1)),
+                run: () => widget.onNavigate('rentabilite', tab: 3)),
             _SheetAction('Administratif',
-                run: () => widget.onNavigate('equipe', tab: 2)),
+                run: () => widget.onNavigate('reglages', tab: 2)),
           ],
         );
       case 'bld:atelier':
@@ -204,9 +204,9 @@ class _DepotPageState extends ConsumerState<DepotPage> {
           ],
           actions: [
             _SheetAction('Voir le matériel', primary: true,
-                run: () => widget.onNavigate('depot', tab: 2)),
+                run: () => widget.onNavigate('gestion', tab: 2)),
             _SheetAction('Coût des réparations',
-                run: () => widget.onNavigate('argent', tab: 0)),
+                run: () => widget.onNavigate('rentabilite', tab: 2)),
           ],
         );
       case 'bld:pompe':
@@ -226,7 +226,7 @@ class _DepotPageState extends ConsumerState<DepotPage> {
           ],
           actions: [
             _SheetAction('Dépenses carburant', primary: true,
-                run: () => widget.onNavigate('argent', tab: 0)),
+                run: () => widget.onNavigate('rentabilite', tab: 2)),
           ],
         );
     }
@@ -386,7 +386,7 @@ class _DepotPageState extends ConsumerState<DepotPage> {
                   '${t.tour?.startTime != null ? " · départ ${t.tour!.startTime}" : ""}',
               pill: 'En tournée',
               pillColor: DC.primary,
-              onTap: () => widget.onNavigate('journee', tab: 1),
+              onTap: () => widget.onNavigate('rentabilite', tab: 1),
             ),
           for (final t in down)
             _MoveRow(

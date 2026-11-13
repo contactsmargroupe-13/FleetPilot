@@ -14,6 +14,10 @@ import '../screens/models/equipment.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/message.dart';
+import '../screens/models/monthly_points.dart';
+import '../screens/models/client_statement.dart';
+import '../screens/models/absence.dart';
+import '../screens/models/odometer_reading.dart';
 import '../screens/models/tour.dart';
 import '../screens/models/user_access.dart';
 import '../services/database_service.dart';
@@ -55,8 +59,23 @@ class AppState extends ChangeNotifier {
   List<DriverAssignment> assignments = [];
   List<Message> messages = [];
   List<UserAccess> userAccesses = [];
+  List<MonthlyPoints> monthlyPoints = [];
+  List<ClientStatement> statements = [];
+  List<Absence> absences = [];
+  List<OdometerReading> odometer = [];
+
+  /// Charges patronales, en fraction du salaire brut. Sans elles, le
+  /// résultat affiché serait bien trop optimiste.
+  static const defaultEmployerChargeRate = 0.42;
+  double employerChargeRate = defaultEmployerChargeRate;
+
+  /// Faux tant que le manager n'a pas validé le taux : on le lui rappelle.
+  bool chargeRateConfirmed = false;
 
   AppState(this._db);
+
+  /// Firestore connecté (null en local / démo).
+  FirestoreService? get firestore => _fs;
 
   /// Connecte Firestore après le login
   void connectFirestore(FirestoreService fs) {
@@ -122,32 +141,69 @@ class AppState extends ChangeNotifier {
       managerAlerts = [];
       equipment = [];
       userAccesses = [];
+      monthlyPoints = [];
+      statements = [];
+      absences = [];
+      try {
+        odometer = await _fs!.loadRecentOdometer();
+      } catch (_) {
+        odometer = [];
+      }
     } else {
+      final isManager = asUser == null || asUser.role == AccessRole.manager;
+
+      // Le comptable n'a pas accès aux données RH et administratives : on ne
+      // les demande pas, et une collection refusée ne bloque pas le reste.
+      Future<List<T>> load<T>(Future<List<T>> Function() f,
+          {bool managerOnly = false}) async {
+        if (managerOnly && !isManager) return [];
+        try {
+          return await f();
+        } catch (_) {
+          return [];
+        }
+      }
+
       drivers = await _fs!.loadDrivers();
       // Alimente le cache name→email pour dénormaliser `driverEmail` au save
       _fs!.cacheDriverEmails(drivers);
 
-      // Migration one-shot : backfill driverEmail sur les docs existants
-      // pour que les règles Firestore côté chauffeur fonctionnent.
-      try {
-        await _fs!.backfillDriverEmails();
-      } catch (_) {
-        // non bloquant — logué silencieusement, le manager continue
+      if (isManager) {
+        // Migration one-shot : backfill driverEmail sur les docs existants
+        // pour que les règles Firestore côté chauffeur fonctionnent.
+        try {
+          await _fs!.backfillDriverEmails();
+        } catch (_) {
+          // non bloquant — logué silencieusement, le manager continue
+        }
       }
 
-      tours = await _fs!.loadTours();
-      expenses = await _fs!.loadExpenses();
-      driverDayEntries = await _fs!.loadDayEntries();
-      clientPricings = await _fs!.loadClientPricings();
-      driverDocuments = await _fs!.loadDriverDocuments();
-      candidates = await _fs!.loadCandidates();
-      adminDocuments = await _fs!.loadAdminDocuments();
-      driverNotifications = await _fs!.loadDriverNotifications();
-      managerAlerts = await _fs!.loadManagerAlerts();
-      equipment = await _fs!.loadEquipment();
-      assignments = await _fs!.loadAssignments();
-      userAccesses = await _fs!.loadUserAccesses();
-      messages = await _fs!.loadMessages();
+      tours = await load(_fs!.loadTours);
+      expenses = await load(_fs!.loadExpenses);
+      driverDayEntries = await load(_fs!.loadDayEntries);
+      clientPricings = await load(_fs!.loadClientPricings);
+      equipment = await load(_fs!.loadEquipment);
+      assignments = await load(_fs!.loadAssignments);
+      monthlyPoints = await load(_fs!.loadMonthlyPoints);
+      statements = await load(_fs!.loadStatements);
+      absences = await load(_fs!.loadAbsences);
+      odometer = await load(_fs!.loadOdometer);
+      driverDocuments = await load(_fs!.loadDriverDocuments, managerOnly: true);
+      candidates = await load(_fs!.loadCandidates, managerOnly: true);
+      adminDocuments = await load(_fs!.loadAdminDocuments, managerOnly: true);
+      driverNotifications =
+          await load(_fs!.loadDriverNotifications, managerOnly: true);
+      managerAlerts = await load(_fs!.loadManagerAlerts, managerOnly: true);
+      userAccesses = await load(_fs!.loadUserAccesses, managerOnly: true);
+      messages = await load(_fs!.loadMessages, managerOnly: true);
+      try {
+        final company = await _fs!.loadCompanySettings();
+        employerChargeRate =
+            (company?['employerChargeRate'] as num?)?.toDouble() ??
+                defaultEmployerChargeRate;
+        chargeRateConfirmed = company?['employerChargeRate'] != null;
+        if (isManager) await _fs!.loadQrKey();
+      } catch (_) {}
     }
 
     notifyListeners();
@@ -169,6 +225,10 @@ class AppState extends ChangeNotifier {
     assignments = await _db.loadAssignments();
     messages = await _db.loadMessages();
     userAccesses = await _db.loadUserAccesses();
+    monthlyPoints = await _db.loadMonthlyPoints();
+    statements = await _db.loadStatements();
+    absences = await _db.loadAbsences();
+    odometer = await _db.loadOdometer();
     notifyListeners();
   }
 
@@ -207,6 +267,7 @@ class AppState extends ChangeNotifier {
     _db.saveDriver(driver);
     _fs?.saveDriver(driver);
     _fs?.cacheDriverEmails(drivers);
+    _syncQrRoster();
     notifyListeners();
   }
 
@@ -227,6 +288,7 @@ class AppState extends ChangeNotifier {
           truckPlate: entry.truckPlate,
           kmTotal: entry.kmTotal,
           clientsCount: entry.clientsCount,
+          pickupCount: entry.pickupCount,
         );
       }
     }
@@ -248,12 +310,15 @@ class AppState extends ChangeNotifier {
           breakTime: tour.breakTime,
           kmTotal: tour.kmTotal,
           clientsCount: tour.clientsCount,
+          pickupCount: tour.pickupCount,
           weightKg: tour.weightKg,
           hasHandling: tour.hasHandling,
           handlingClientName: tour.handlingClientName,
           handlingDate: tour.handlingDate,
           extraKm: tour.extraKm,
           extraTour: tour.extraTour,
+          status: tour.status,
+          kmSource: tour.kmSource,
         );
       }
     }
@@ -271,7 +336,30 @@ class AppState extends ChangeNotifier {
     _fs?.saveAllDayEntries(driverDayEntries);
     _db.saveAllTours(tours);
     _fs?.saveAllTours(tours);
+    _syncQrRoster();
     notifyListeners();
+  }
+
+  /// Le chauffeur vient d'obtenir (ou de changer) son accès « QR + PIN » :
+  /// son identifiant de connexion remplace son email sur tous ses documents,
+  /// sinon les règles Firestore lui refuseraient ses propres tournées.
+  Future<void> setDriverQrAccess(String name, String loginEmail) async {
+    final i = drivers.indexWhere((d) => d.name == name);
+    if (i == -1) return;
+    final updated = drivers[i].copyWith(pinLoginEmail: loginEmail);
+    drivers[i] = updated;
+    _db.saveDriver(updated);
+    notifyListeners();
+    if (_fs == null) return;
+    await _fs!.saveDriver(updated);
+    _fs!.cacheDriverEmails(drivers);
+    await _fs!.syncQrRoster(drivers);
+    await _fs!.backfillDriverEmails(onlyDriver: name);
+  }
+
+  void _syncQrRoster() {
+    if (_fs == null || !drivers.any((d) => d.hasQrAccess)) return;
+    _fs!.syncQrRoster(drivers).catchError((_) {});
   }
 
   void deleteDriver(String name) {
@@ -280,6 +368,7 @@ class AppState extends ChangeNotifier {
     );
     _db.deleteDriver(name);
     _fs?.deleteDriver(name);
+    _syncQrRoster();
 
     // Cascade : supprimer les day entries orphelines
     final orphanEntries = driverDayEntries
@@ -466,16 +555,19 @@ class AppState extends ChangeNotifier {
       cost: expense.amount,
     );
 
-    // Réparations → historique réparations
-    if (expense.type == ExpenseType.repair) {
+    // Seuls réparations et entretiens racontent l'histoire du camion : un
+    // plein ou un péage n'y ont pas leur place, et un « entretien » fictif
+    // fausserait le compteur de la prochaine vidange.
+    if (expense.type == ExpenseType.repair || expense.type == ExpenseType.claim) {
       trucks[truckIdx] = truck.copyWith(
         repairs: [...truck.repairs, entry],
       );
-    } else {
-      // Carburant, matériel, autre → historique entretiens
+    } else if (expense.type == ExpenseType.maintenance) {
       trucks[truckIdx] = truck.copyWith(
         maintenances: [...truck.maintenances, entry],
       );
+    } else {
+      return;
     }
     _db.saveTruck(trucks[truckIdx]);
     _fs?.saveTruck(trucks[truckIdx]);
@@ -934,6 +1026,118 @@ class AppState extends ChangeNotifier {
     userAccesses.removeWhere((u) => u.id == id);
     _db.deleteUserAccess(id);
     _fs?.deleteUserAccess(id);
+    notifyListeners();
+  }
+
+  // ─── Points mensuels (commissionnaires au point) ──────────────────
+
+  MonthlyPoints? getMonthlyPoints(
+      DateTime month, String companyName, String driverName) {
+    final id = MonthlyPoints.idFor(
+        MonthlyPoints.monthKey(month), companyName, driverName);
+    for (final p in monthlyPoints) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  /// [points] null efface la saisie : on retombe alors sur l'ancien
+  /// comptage des chauffeurs, s'il existe.
+  void setMonthlyPoints(
+      DateTime month, String companyName, String driverName, int? points) {
+    final key = MonthlyPoints.monthKey(month);
+    final id = MonthlyPoints.idFor(key, companyName, driverName);
+    monthlyPoints.removeWhere((p) => p.id == id);
+    if (points == null) {
+      _db.deleteMonthlyPoints(id);
+      _fs?.deleteMonthlyPoints(id);
+    } else {
+      final p = MonthlyPoints(
+        month: key,
+        companyName: companyName,
+        driverName: driverName,
+        points: points,
+      );
+      monthlyPoints.add(p);
+      _db.saveMonthlyPoints(p);
+      _fs?.saveMonthlyPoints(p);
+    }
+    notifyListeners();
+  }
+
+  // ─── Charges patronales ───────────────────────────────────────────
+
+  void setEmployerChargeRate(double rate) {
+    employerChargeRate = rate;
+    chargeRateConfirmed = true;
+    _fs?.saveEmployerChargeRate(rate);
+    notifyListeners();
+  }
+
+  // ─── Relevés commissionnaires ─────────────────────────────────────
+
+  ClientStatement? getStatement(DateTime month, String companyName) {
+    final id =
+        ClientStatement.idFor(MonthlyPoints.monthKey(month), companyName);
+    for (final s in statements) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// [statement] null efface le relevé : le mois redevient estimé.
+  void setStatement(DateTime month, String companyName,
+      ClientStatement? statement) {
+    final id =
+        ClientStatement.idFor(MonthlyPoints.monthKey(month), companyName);
+    statements.removeWhere((s) => s.id == id);
+    if (statement == null) {
+      _db.deleteStatement(id);
+      _fs?.deleteStatement(id);
+    } else {
+      statements.add(statement);
+      _db.saveStatement(statement);
+      _fs?.saveStatement(statement);
+    }
+    notifyListeners();
+  }
+
+  // ─── Absences ─────────────────────────────────────────────────────
+
+  List<Absence> absencesOn(DateTime day) =>
+      absences.where((a) => a.covers(day)).toList();
+
+  void saveAbsence(Absence a) {
+    absences.removeWhere((x) => x.id == a.id);
+    absences.add(a);
+    _db.saveAbsence(a);
+    _fs?.saveAbsence(a);
+    notifyListeners();
+  }
+
+  void deleteAbsence(String id) {
+    absences.removeWhere((x) => x.id == id);
+    _db.deleteAbsence(id);
+    _fs?.deleteAbsence(id);
+    notifyListeners();
+  }
+
+  // ─── Relevés compteur ─────────────────────────────────────────────
+
+  /// Dernier relevé connu d'un camion, tous chauffeurs confondus.
+  OdometerReading? lastOdometer(String plate) {
+    OdometerReading? last;
+    for (final r in odometer) {
+      if (r.truckPlate != plate) continue;
+      if (last == null || r.date.isAfter(last.date)) last = r;
+    }
+    return last;
+  }
+
+  void addOdometer(OdometerReading r) {
+    odometer.add(r);
+    _db.saveOdometer(r);
+    _fs?.saveOdometer(r);
     notifyListeners();
   }
 }

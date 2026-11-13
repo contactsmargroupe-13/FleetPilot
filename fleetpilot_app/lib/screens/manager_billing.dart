@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
 import '../services/pdf_invoice_service.dart';
+import '../services/profitability.dart';
+import 'manager_statements.dart';
 import 'models/client_pricing.dart';
-import 'models/tour.dart';
 
 class ManagerBillingPage extends ConsumerStatefulWidget {
   const ManagerBillingPage({super.key});
@@ -32,72 +33,11 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
   }
 
   List<ClientBillingData> _computeBilling() {
-    final Map<String, ClientBillingData> billing = {};
-
-    for (final Tour tour in ref.read(appStateProvider).tours) {
-      if (tour.date.year != _selectedMonth.year ||
-          tour.date.month != _selectedMonth.month) {
-        continue;
-      }
-
-      final company = tour.companyName ?? '—';
-      final appState = ref.read(appStateProvider);
-      final pricing = appState.getClientPricing(company);
-
-      // Chercher un tarif spécifique sur l'affectation chauffeur
-      final assignment = appState.getAssignment(tour.driverName);
-      final dailyRate = assignment?.customDailyRate ?? pricing?.dailyRate ?? 0.0;
-      final pricePerPoint = assignment?.customPricePerPoint ?? pricing?.pricePerPoint ?? 0.0;
-      final mode = pricing?.billingMode ?? BillingMode.aLaFiche;
-
-      billing.putIfAbsent(
-          company,
-          () => ClientBillingData(
-                companyName: company,
-                dailyRate: dailyRate,
-                fuelIndexPercent: pricing?.fuelIndexPercent,
-                siret: pricing?.siret,
-                tvaIntra: pricing?.tvaIntra,
-                address: pricing?.address,
-                phone: pricing?.phone,
-                contactName: pricing?.contactName,
-                billingMode: mode,
-                pricePerPoint: pricePerPoint,
-              ));
-      final client = billing[company]!;
-
-      client.tours++;
-      if (mode == BillingMode.auPoint) {
-        client.totalPoints += tour.clientsCount;
-        client.baseAmount += tour.clientsCount * pricePerPoint;
-      } else {
-        client.baseAmount += dailyRate;
-      }
-
-      if (tour.hasHandling && pricing != null && pricing.handlingEnabled) {
-        client.handlingCount++;
-        client.handlingAmount += pricing.handlingPrice ?? 0.0;
-      }
-
-      if (tour.extraKm > 0 && pricing != null && pricing.extraKmEnabled) {
-        client.extraKm += tour.extraKm;
-        client.extraKmAmount += tour.extraKm * (pricing.extraKmPrice ?? 0.0);
-      }
-
-      if (tour.extraTour && pricing != null && pricing.extraTourEnabled) {
-        client.extraTours++;
-        client.extraTourAmount += pricing.extraTourPrice ?? 0.0;
-      }
-    }
-
-    final clients = billing.values.toList()
-      ..sort((a, b) => b.totalHT.compareTo(a.totalHT));
-
-    // Assign invoice numbers
+    final clients =
+        Profitability.billing(ref.read(appStateProvider), _selectedMonth);
     for (int i = 0; i < clients.length; i++) {
       clients[i].invoiceNumber = _invoiceNumber(i);
     }
-
     return clients;
   }
 
@@ -119,6 +59,7 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(appStateProvider);
     final clients = _computeBilling();
     final grandTotalHT = clients.fold(0.0, (s, c) => s + c.totalHT);
 
@@ -283,10 +224,24 @@ class _ManagerBillingPageState extends ConsumerState<ManagerBillingPage> {
             const SizedBox(height: 10),
 
             // Base
-            if (c.billingMode == BillingMode.auPoint)
+            if (c.billingMode == BillingMode.auPoint) ...[
               _line('Points livrés',
-                  '${c.totalPoints} x ${c.pricePerPoint.toStringAsFixed(2)} € = ${c.baseAmount.toStringAsFixed(2)} € HT')
-            else
+                  '${c.totalPoints} x ${c.pricePerPoint.toStringAsFixed(2)} € = ${c.baseAmount.toStringAsFixed(2)} € HT'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ManagerStatementsPage(
+                          month: _selectedMonth, company: c.companyName),
+                    ),
+                  ),
+                  icon: const Icon(Icons.edit_note, size: 18),
+                  label: const Text('Saisir le relevé (points, montant payé)'),
+                ),
+              ),
+            ] else
               _line('Tournées',
                   '${c.tours} x ${c.dailyRate.toStringAsFixed(0)} € = ${c.baseAmount.toStringAsFixed(2)} € HT'),
 

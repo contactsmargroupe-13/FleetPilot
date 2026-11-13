@@ -109,8 +109,10 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
                 const SizedBox(width: 6),
                 _kpiChip('${totalKm.toStringAsFixed(0)}', 'km', Icons.speed_outlined, Colors.teal),
                 const SizedBox(width: 6),
-                _kpiChip('$totalClients', 'clients', Icons.people_outline, Colors.indigo),
-                const SizedBox(width: 6),
+                if (totalClients > 0) ...[
+                  _kpiChip('$totalClients', 'clients', Icons.people_outline, Colors.indigo),
+                  const SizedBox(width: 6),
+                ],
                 _kpiChip('$handlingCount', 'manut.', Icons.pan_tool_outlined, Colors.deepOrange),
                 if (extraTourCount > 0) ...[
                   const SizedBox(width: 6),
@@ -232,7 +234,8 @@ class _ManagerToursState extends ConsumerState<ManagerTours> {
               _dl('Client', t.companyName ?? '—'),
               _dl('Horaires', '${t.startTime ?? '—'} → ${t.endTime ?? '—'}'),
               _dl('Km', '${t.kmTotal.toStringAsFixed(0)} km'),
-              _dl('Colis / Fiches', '${t.clientsCount}'),
+              if (t.clientsCount > 0)
+                _dl('Colis / Fiches', '${t.clientsCount}'),
               if (t.pickupCount > 0)
                 _dl('Ramasses', '${t.pickupCount}'),
               if (t.weightKg != null)
@@ -438,9 +441,11 @@ class _TruckDetailCardState extends State<_TruckDetailCard> {
                       _miniStat(Icons.speed_outlined,
                           totalKm.toStringAsFixed(0), 'km', Colors.teal),
                       const SizedBox(width: 8),
-                      _miniStat(Icons.people_outline, '$totalClients',
-                          'clients', Colors.indigo),
-                      const SizedBox(width: 8),
+                      if (totalClients > 0) ...[
+                        _miniStat(Icons.people_outline, '$totalClients',
+                            'clients', Colors.indigo),
+                        const SizedBox(width: 8),
+                      ],
                       _miniStat(Icons.pan_tool_outlined, '$handlingCount',
                           'manut.', Colors.deepOrange),
                       if (extraTourCount > 0) ...[
@@ -525,10 +530,12 @@ class _TruckDetailCardState extends State<_TruckDetailCard> {
                           Text('${t.kmTotal.toStringAsFixed(0)} km',
                               style: const TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.w600)),
-                          const SizedBox(width: 6),
-                          Text('${t.clientsCount} cl.',
-                              style: const TextStyle(
-                                  fontSize: 11, color: DC.textSecondary)),
+                          if (t.clientsCount > 0) ...[
+                            const SizedBox(width: 6),
+                            Text('${t.clientsCount} cl.',
+                                style: const TextStyle(
+                                    fontSize: 11, color: DC.textSecondary)),
+                          ],
                           if (t.pickupCount > 0) ...[
                             const SizedBox(width: 4),
                             Text('${t.pickupCount} ram.',
@@ -713,9 +720,11 @@ class _ClientDetailCardState extends State<_ClientDetailCard> {
                       _miniStat(Icons.speed_outlined,
                           totalKm.toStringAsFixed(0), 'km', Colors.purple),
                       const SizedBox(width: 8),
-                      _miniStat(Icons.people_outline, '$totalClients',
-                          'clients', Colors.indigo),
-                      const SizedBox(width: 8),
+                      if (totalClients > 0) ...[
+                        _miniStat(Icons.people_outline, '$totalClients',
+                            'clients', Colors.indigo),
+                        const SizedBox(width: 8),
+                      ],
                       _miniStat(Icons.pan_tool_outlined, '$handlingCount',
                           'manut.', Colors.deepOrange),
                     ],
@@ -796,10 +805,12 @@ class _ClientDetailCardState extends State<_ClientDetailCard> {
                           Text('${t.kmTotal.toStringAsFixed(0)} km',
                               style: const TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.w600)),
-                          const SizedBox(width: 6),
-                          Text('${t.clientsCount} cl.',
-                              style: const TextStyle(
-                                  fontSize: 11, color: DC.textSecondary)),
+                          if (t.clientsCount > 0) ...[
+                            const SizedBox(width: 6),
+                            Text('${t.clientsCount} cl.',
+                                style: const TextStyle(
+                                    fontSize: 11, color: DC.textSecondary)),
+                          ],
                           if (t.pickupCount > 0) ...[
                             const SizedBox(width: 4),
                             Text('${t.pickupCount} ram.',

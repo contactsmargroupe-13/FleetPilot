@@ -39,7 +39,8 @@ class TourDetailPage extends StatelessWidget {
 
             _sectionTitle('Transport'),
             _row('KM total', '${tour.kmTotal.toStringAsFixed(0)} km'),
-            _row('Colis / Fiches', '${tour.clientsCount}'),
+            if (tour.clientsCount > 0)
+              _row('Colis / Fiches', '${tour.clientsCount}'),
             if (tour.pickupCount > 0)
               _row('Ramasses', '${tour.pickupCount}'),
             _row('Poids',

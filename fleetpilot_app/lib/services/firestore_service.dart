@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../screens/add_truck.dart';
@@ -13,6 +15,10 @@ import '../screens/models/equipment.dart';
 import '../screens/models/expense.dart';
 import '../screens/models/manager_alert.dart';
 import '../screens/models/message.dart';
+import '../screens/models/monthly_points.dart';
+import '../screens/models/client_statement.dart';
+import '../screens/models/absence.dart';
+import '../screens/models/odometer_reading.dart';
 import '../screens/models/tour.dart';
 import '../screens/models/user_access.dart';
 
@@ -36,8 +42,7 @@ class FirestoreService {
   void cacheDriverEmails(List<Driver> drivers) {
     _driverEmailByName = {
       for (final d in drivers)
-        if (d.email != null && d.email!.isNotEmpty)
-          d.name: d.email!.toLowerCase(),
+        if (d.accessEmail != null) d.name: d.accessEmail!.toLowerCase(),
     };
   }
 
@@ -90,9 +95,15 @@ class FirestoreService {
   /// Charge uniquement la fiche chauffeur correspondant à l'email donné
   /// (utilisé côté chauffeur pour respecter les règles Firestore).
   Future<List<Driver>> loadDriversForEmail(String email) async {
-    final snap = await _col('drivers')
-        .where('email', isEqualTo: email.toLowerCase())
-        .get();
+    final lower = email.toLowerCase();
+    // Un compte « QR + PIN » est retrouvé par son identifiant de connexion,
+    // un compte classique par son email.
+    final byPin =
+        await _col('drivers').where('pinLoginEmail', isEqualTo: lower).get();
+    if (byPin.docs.isNotEmpty) {
+      return byPin.docs.map((d) => Driver.fromJson(d.data())).toList();
+    }
+    final snap = await _col('drivers').where('email', isEqualTo: lower).get();
     return snap.docs.map((d) => Driver.fromJson(d.data())).toList();
   }
   Future<void> saveDriver(Driver d) => _upsert('drivers', d.name, d.toJson());
@@ -215,6 +226,52 @@ class FirestoreService {
       _upsert('equipment', e.id, e.toJson());
   Future<void> deleteEquipment(String id) => _deleteDoc('equipment', id);
 
+  // ── Points mensuels ─────────────────────────────────────────────────────
+
+  Future<List<MonthlyPoints>> loadMonthlyPoints() =>
+      _loadAll('monthly_points', MonthlyPoints.fromJson);
+  Future<void> saveMonthlyPoints(MonthlyPoints p) =>
+      _upsert('monthly_points', p.id, p.toJson());
+  Future<void> deleteMonthlyPoints(String id) =>
+      _deleteDoc('monthly_points', id);
+
+  // ── Relevés commissionnaires ────────────────────────────────────────────
+
+  Future<List<ClientStatement>> loadStatements() =>
+      _loadAll('client_statements', ClientStatement.fromJson);
+  Future<void> saveStatement(ClientStatement s) =>
+      _upsert('client_statements', s.id, s.toJson());
+  Future<void> deleteStatement(String id) =>
+      _deleteDoc('client_statements', id);
+
+  // ── Absences ────────────────────────────────────────────────────────────
+
+  Future<List<Absence>> loadAbsences() => _loadAll('absences', Absence.fromJson);
+  Future<void> saveAbsence(Absence a) => _upsert('absences', a.id, a.toJson());
+  Future<void> deleteAbsence(String id) => _deleteDoc('absences', id);
+
+  // ── Relevés compteur ────────────────────────────────────────────────────
+
+  Future<List<OdometerReading>> loadOdometer() =>
+      _loadAll('odometer_readings', OdometerReading.fromJson);
+
+  /// Côté chauffeur : les relevés récents suffisent pour enchaîner les km.
+  Future<List<OdometerReading>> loadRecentOdometer({int days = 45}) async {
+    final since = DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    final snap = await _col('odometer_readings')
+        .where('date', isGreaterThanOrEqualTo: since)
+        .get();
+    return snap.docs.map((d) => OdometerReading.fromJson(d.data())).toList();
+  }
+
+  Future<void> saveOdometer(OdometerReading r) => _upsert('odometer_readings',
+      r.id, _withDriverEmail(r.driverName ?? '', r.toJson()));
+
+  Future<void> saveEmployerChargeRate(double rate) => _fs
+      .collection('companies')
+      .doc(companyId)
+      .set({'employerChargeRate': rate}, SetOptions(merge: true));
+
   // ── Assignments ─────────────────────────────────────────────────────────
 
   Future<List<DriverAssignment>> loadAssignments() =>
@@ -288,6 +345,79 @@ class FirestoreService {
     await batch.commit();
   }
 
+  // ── Accès chauffeur par QR code ─────────────────────────────────────────
+  //
+  // Chaque QR code collé dans un camion pointe vers `qr_access/{qrKey}` :
+  // un document lisible sans être connecté, qui ne contient que la liste
+  // des chauffeurs ayant un accès « QR + PIN » et leur identifiant de
+  // connexion. La clé fait office de secret ; la renouveler invalide tous
+  // les QR imprimés. Le PIN, lui, n'est jamais stocké : il est vérifié par
+  // Firebase Auth, qui limite les tentatives.
+
+  String? _qrKey;
+  String? get qrKey => _qrKey;
+
+  Future<String?> loadQrKey() async {
+    final settings = await loadCompanySettings();
+    _qrKey = settings?['qrKey'] as String?;
+    return _qrKey;
+  }
+
+  static String _newQrKey() {
+    const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+    final rnd = Random.secure();
+    return List.generate(20, (_) => alphabet[rnd.nextInt(alphabet.length)])
+        .join();
+  }
+
+  /// Renvoie la clé QR de la company, en la créant au premier appel.
+  Future<String> ensureQrKey(List<Driver> drivers) async {
+    final existing = _qrKey ?? await loadQrKey();
+    if (existing != null) return existing;
+    return rotateQrKey(drivers);
+  }
+
+  /// Nouvelle clé : les anciens QR codes cessent de fonctionner.
+  Future<String> rotateQrKey(List<Driver> drivers) async {
+    final old = _qrKey;
+    final key = _newQrKey();
+    _qrKey = key;
+    await syncQrRoster(drivers);
+    await _fs
+        .collection('companies')
+        .doc(companyId)
+        .set({'qrKey': key}, SetOptions(merge: true));
+    if (old != null) {
+      await _fs.collection('qr_access').doc(old).delete();
+    }
+    return key;
+  }
+
+  Future<void> syncQrRoster(List<Driver> drivers) async {
+    final key = _qrKey;
+    if (key == null) return;
+    const gone = {
+      DriverStatus.finDeMission,
+      DriverStatus.vire,
+      DriverStatus.demission,
+    };
+    final company = await loadCompanySettings();
+    await _fs.collection('qr_access').doc(key).set({
+      'companyId': companyId,
+      'companyName': company?['name'] ?? '',
+      'drivers': [
+        for (final d in drivers)
+          if (d.hasQrAccess && !gone.contains(d.status))
+            {
+              'name': d.name,
+              'label': d.fullName,
+              'loginEmail': d.pinLoginEmail,
+            },
+      ],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // ── Company settings ────────────────────────────────────────────────────
 
   Future<void> saveCompanySettings(Map<String, dynamic> settings) =>
@@ -307,11 +437,17 @@ class FirestoreService {
   /// valeur, et ceux dont le chauffeur n'a pas d'email sont ignorés.
   /// Marque un flag `driverEmailBackfilled=true` dans les settings company
   /// pour ne pas ré-exécuter à chaque login.
-  Future<void> backfillDriverEmails() async {
+  ///
+  /// [onlyDriver] relance la migration pour un seul chauffeur, quel que soit
+  /// le flag : c'est le cas quand il passe à un accès « QR + PIN », dont
+  /// l'identifiant de connexion remplace son email.
+  Future<void> backfillDriverEmails({String? onlyDriver}) async {
     if (_driverEmailByName.isEmpty) return; // cache pas encore alimenté
 
-    final settings = await loadCompanySettings();
-    if (settings?['driverEmailBackfilled'] == true) return;
+    if (onlyDriver == null) {
+      final settings = await loadCompanySettings();
+      if (settings?['driverEmailBackfilled'] == true) return;
+    }
 
     // Collections utilisant `driverName` comme clé de rattachement
     final driverNameCollections = [
@@ -332,6 +468,7 @@ class FirestoreService {
         final data = doc.data();
         final name = data['driverName'] as String?;
         if (name == null) continue;
+        if (onlyDriver != null && name != onlyDriver) continue;
         final email = _driverEmailByName[name];
         if (email == null) continue;
         if (data['driverEmail'] == email) continue;
@@ -353,6 +490,7 @@ class FirestoreService {
         final driverName =
             sender == 'manager' ? receiver : sender;
         if (driverName == null) continue;
+        if (onlyDriver != null && driverName != onlyDriver) continue;
         final email = _driverEmailByName[driverName];
         if (email == null) continue;
         if (data['driverEmail'] == email) continue;

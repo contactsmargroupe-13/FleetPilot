@@ -110,4 +110,72 @@ class OcrService {
       return OcrResult(error: 'Erreur réseau : $e');
     }
   }
+
+  /// Lit le compteur kilométrique total (pas le compteur journalier) sur la
+  /// photo d'un tableau de bord. Null si illisible : le chauffeur tape alors
+  /// le chiffre lui-même.
+  static Future<OdometerOcr> readOdometer(
+      Uint8List imageBytes, String mimeType) async {
+    final apiKey = CompanySettings.claudeApiKey;
+    if (apiKey.isEmpty) {
+      return const OdometerOcr(error: 'Lecture automatique indisponible.');
+    }
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.anthropic.com/v1/messages'),
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({
+          'model': 'claude-haiku-4-5-20251001',
+          'max_tokens': 64,
+          'messages': [
+            {
+              'role': 'user',
+              'content': [
+                {
+                  'type': 'image',
+                  'source': {
+                    'type': 'base64',
+                    'media_type': mimeType,
+                    'data': base64Encode(imageBytes),
+                  },
+                },
+                {
+                  'type': 'text',
+                  'text':
+                      'Photo du tableau de bord d\'un utilitaire. Lis le compteur '
+                      'kilométrique TOTAL (odomètre), pas le compteur journalier '
+                      '(trip) ni l\'autonomie. Réponds UNIQUEMENT avec ce JSON :\n'
+                      '{"km": <nombre entier ou null si illisible>}',
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      if (response.statusCode != 200) {
+        return OdometerOcr(error: 'Erreur API ${response.statusCode}.');
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final text = (data['content'] as List).first['text'] as String;
+      final m = RegExp(r'\{[\s\S]*?\}').firstMatch(text);
+      if (m == null) return const OdometerOcr(error: 'Compteur illisible.');
+      final km = (jsonDecode(m.group(0)!) as Map<String, dynamic>)['km'];
+      return km is num
+          ? OdometerOcr(km: km.round())
+          : const OdometerOcr(error: 'Compteur illisible.');
+    } catch (e) {
+      return OdometerOcr(error: 'Erreur réseau : $e');
+    }
+  }
+}
+
+class OdometerOcr {
+  final int? km;
+  final String? error;
+  const OdometerOcr({this.km, this.error});
 }
